@@ -1,4 +1,4 @@
-version: 2.1
+version: 2
 
 executors:
   default:
@@ -10,32 +10,10 @@ executors:
       - GO111MODULE: "on"
 
 jobs:
-  setup:
+  build:
     executor:
       name: default
     steps:
       - checkout
       - run: go mod download
-      - persist_to_workspace:
-        root: /go
-        paths:
-          - src
-          - bin
-          - pkg/mod/cache
-
-  build:
-    executor:
-      name: default
-    steps:
-      - attach_workspace:
-        at: /go
       - run: make ci
-
-workflows:
-  build-and-test:
-    jobs:
-      - setup
-      - build:
-          requires:
-            - setup
-
