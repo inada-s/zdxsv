@@ -11,6 +11,5 @@ jobs:
     working_directory: ~/zdxsv
     steps:
       - checkout
-      - run: GO111MODULE=on make
-      - run: ls -la bin
+      - run: GO111MODULE=on make ci
 
