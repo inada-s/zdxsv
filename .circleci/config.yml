@@ -1,15 +1,33 @@
-# Golang CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-go/ for more details
-version: 2
-jobs:
-  build:
-    docker:
-      # specify the version
-      - image: circleci/golang:1.9
+version: 2.1
 
-    working_directory: ~/zdxsv
+executors:
+  default:
+    docker:
+      # CircleCI Go images available at: https://hub.docker.com/r/circleci/golang/
+      - image: circleci/golang:1.12.2
+    working_directory: /go/src/github.com/inada-s/zdxsv
+    environment:
+      - GO111MODULE: "on"
+
+jobs:
+  setup:
+    executor:
+      name: default
     steps:
       - checkout
-      - run: GO111MODULE=on make ci
+      - run: go mod download
+
+  build:
+    executor:
+      name: default
+    steps:
+      - run: make ci
+
+workflows:
+  build-and-test:
+    jobs:
+      - setup
+      - build:
+          requires:
+            - setup
 
