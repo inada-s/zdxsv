@@ -1,5 +1,9 @@
 all: build
 
+.PHONY: download
+download:
+	go mod download
+
 .PHONY: build
 build:
 	mkdir -p bin
