@@ -54,16 +54,20 @@ func main() {
 	prepareOption()
 
 	args := flag.Args()
-	if len(args) != 2 {
+	glog.Infoln(args, len(args))
+
+	if len(args) < 1 {
 		printUsage()
 		os.Exit(1)
 	}
 
-	err := config.LoadFile(args[1])
-	if err != nil {
-		glog.Fatalln(err)
+	if len(args) >= 2 {
+		err := config.LoadFile(args[1])
+		if err == nil {
+			glog.Fatal(err)
+		}
+		conf = config.Conf
 	}
-	conf = config.Conf
 
 	switch args[0] {
 	case "battle":

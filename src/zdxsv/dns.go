@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/miekg/dns"
 	"log"
+	"os"
+
+	"github.com/miekg/dns"
 )
 
 func makeHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
@@ -23,11 +25,20 @@ func makeHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
 
 func mainDNS() {
 	// dnassvIP := "149.56.101.45"
-	dnassvIP := "194.135.89.81"
-	log.Println("Login server ", conf.Login.PublicAddr)
+	dnassvIP := os.Getenv("ZDXSV_DNAS_IP")
+	if dnassvIP == "" {
+		dnassvIP = "194.135.89.81"
+	}
+
+	loginPublicIP := os.Getenv("ZDXSV_LOGIN_PUBLIC_IP")
+	if loginPublicIP == "" {
+		loginPublicIP = conf.Login.PublicAddr
+	}
+
+	log.Println("Login server ", loginPublicIP)
 	log.Println("DNAS server ", dnassvIP)
-	dns.HandleFunc("kddi-mmbb.jp", makeHandler("www01.kddi-mmbb.jp. 3600 IN A "+conf.Login.PublicAddr))
-	dns.HandleFunc("playstation.org", makeHandler("gate1.jp.dnas.playstation.org. 3600 IN A " + dnassvIP))
+	dns.HandleFunc("kddi-mmbb.jp", makeHandler("www01.kddi-mmbb.jp. 3600 IN A "+loginPublicIP))
+	dns.HandleFunc("playstation.org", makeHandler("gate1.jp.dnas.playstation.org. 3600 IN A "+dnassvIP))
 	server := &dns.Server{Addr: ":53", Net: "udp"}
 	err := server.ListenAndServe()
 	log.Println(err)
