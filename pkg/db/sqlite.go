@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	_ "github.com/golang/glog"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sqlite/sqlite3"
 	"time"
 )
 
