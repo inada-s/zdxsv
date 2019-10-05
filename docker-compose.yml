@@ -1,17 +1,12 @@
-version: '3'
+version: '3.6'
 services:
   tlsrouter:
     build: "./docker/tlsrouter"
-    ports:
-      - "443:443"
-  dnas:
-    build: "./docker/dnas"
-  dns:
-    build: "./docker/zdxsv"
     environment:
       - ZDXSV_DNAS_IP=192.168.0.3
       - ZDXSV_LOGIN_PUBLIC_IP=192.168.0.3
-    command:
-      - dns
     ports:
+      - "443:443"
       - "53:53/udp"
+  dnas:
+    build: "./docker/dnas"
