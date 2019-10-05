@@ -22,7 +22,7 @@ var profile = flag.Int("profile", 0, "0: no profile, 1: enable http pprof, 2: en
 var conf config.Config
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[login, lobby, battle, dns]", "config.toml")
+	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]", "config.toml")
 }
 
 func prepareDB() {
@@ -72,8 +72,6 @@ func main() {
 	switch args[0] {
 	case "battle":
 		mainBattle()
-	case "dns":
-		mainDNS()
 	case "lobby":
 		prepareDB()
 		mainLobby()
