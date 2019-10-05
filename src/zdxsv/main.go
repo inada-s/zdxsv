@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
+
 	"github.com/golang/glog"
 
 	"zdxsv/pkg/config"
@@ -63,13 +65,15 @@ func main() {
 
 	if len(args) >= 2 {
 		err := config.LoadFile(args[1])
-		if err == nil {
+		if err != nil {
 			glog.Fatal(err)
 		}
 		conf = config.Conf
 	}
 
 	switch args[0] {
+	case "dns":
+		mainDNS()
 	case "battle":
 		mainBattle()
 	case "lobby":

@@ -9,7 +9,8 @@ RUN wget https://github.com/FogNo23/DNASrep/archive/master.zip \
   && mv DNASrep-master DNASrep \
   && rm master.zip
 RUN echo "extension=mcrypt.so" > /etc/php/7.0/mods-available/mcrypt.ini \
-  && a2enmod ssl && a2ensite default-ssl && phpenmod mcrypt
+  && a2enmod ssl && a2ensite default-ssl && phpenmod mcrypt \
+  && a2enmod proxy && a2enmod proxy_http && a2enmod proxy_connect
 RUN cp -r /work/DNASrep/www/dnas /var/www/dnas \
   && cp -r /work/DNASrep/etc/dnas /etc/dnas \
   && ln -s /etc/apache2/sites-available/dnas.conf /etc/apache2/sites-enabled/dnas.conf \

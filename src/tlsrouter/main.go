@@ -34,9 +34,6 @@ var (
 func main() {
 	flag.Parse()
 
-	// edit for zdxsv
-	go dnsMain()
-
 	p := &Proxy{}
 	if err := p.Config.ReadFile(*cfgFile); err != nil {
 		log.Fatalf("Failed to read config %q: %s", *cfgFile, err)
@@ -127,7 +124,7 @@ func (c *Conn) proxy() {
 	c.hostname, c.tlsMinor, err = extractSNI(io.TeeReader(c, &handshakeBuf))
 	if err == errGameConsoleAccess {
 		// edit for zdxsv
-		c.hostname = lastResolved.Get(c.TCPConn.RemoteAddr().(*net.TCPAddr).IP.String())
+		c.hostname = "gameconsole"
 	} else if err != nil {
 		c.internalError("Extracting SNI: %s", err)
 		return

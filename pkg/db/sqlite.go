@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	_ "github.com/golang/glog"
-	_ "github.com/go-sqlite/sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 	"time"
 )
 
@@ -113,7 +113,6 @@ WHERE
 		a.LoginKey)
 	return err
 }
-
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
 	userId := genUserId()
@@ -287,4 +286,3 @@ WHERE
 		user.UserId)
 	return err
 }
-

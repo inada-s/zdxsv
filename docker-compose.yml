@@ -2,11 +2,28 @@ version: '3.6'
 services:
   tlsrouter:
     build: "./docker/tlsrouter"
+    ports:
+      - "443:443"
+  legacyweb:
+    build: "./docker/legacyweb"
+  dns:
+    build: "./docker/zdxsv"
     environment:
       - ZDXSV_DNAS_IP=192.168.0.3
       - ZDXSV_LOGIN_PUBLIC_IP=192.168.0.3
+    volumes:
+      - ./local.toml:/local.toml
+    entrypoint:
+      - /zdxsv
+      - dns
+      - /local.toml
     ports:
-      - "443:443"
       - "53:53/udp"
-  dnas:
-    build: "./docker/dnas"
+  login:
+    build: "./docker/zdxsv"
+    volumes:
+      - ./local.toml:/local.toml
+    entrypoint:
+      - /zdxsv
+      - login
+      - /local.toml
