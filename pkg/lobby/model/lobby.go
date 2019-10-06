@@ -81,6 +81,9 @@ func (l *Lobby) CanBattleStart() bool {
 	if l.Id == uint16(2) {
 		return 1 <= a && 1 <= b
 	}
+	if l.Id == uint16(3) {
+		return 1 <= a || 1 <= b
+	}
 	return 2 <= a && 2 <= b
 }
 

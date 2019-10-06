@@ -1,4 +1,4 @@
-version: '3.6'
+version: '3'
 services:
   tlsrouter:
     build: "./docker/tlsrouter"
@@ -57,6 +57,6 @@ services:
       - ./local.toml:/local.toml
     entrypoint:
       - /zdxsv
-      - lobby
+      - battle
       - /local.toml
 
