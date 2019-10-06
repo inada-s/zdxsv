@@ -5,9 +5,12 @@ services:
     ports:
       - "443:443"
   legacyweb:
+    restart: always
     build: "./docker/legacyweb"
   dns:
-    build: "./docker/zdxsv"
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
     environment:
       - ZDXSV_DNAS_IP=192.168.0.3
       - ZDXSV_LOGIN_PUBLIC_IP=192.168.0.3
@@ -20,10 +23,40 @@ services:
     ports:
       - "53:53/udp"
   login:
-    build: "./docker/zdxsv"
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
     volumes:
       - ./local.toml:/local.toml
+      - ./zdxsv.db:/zdxsv.db
     entrypoint:
       - /zdxsv
       - login
       - /local.toml
+  lobby:
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./local.toml:/local.toml
+      - ./zdxsv.db:/zdxsv.db
+    entrypoint:
+      - /zdxsv
+      - lobby
+      - /local.toml
+  battle:
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
+    ports:
+      - "8210:8210"
+      - "8210:8210/udp"
+    volumes:
+      - ./local.toml:/local.toml
+    entrypoint:
+      - /zdxsv
+      - lobby
+      - /local.toml
+

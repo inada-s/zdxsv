@@ -1,18 +1,18 @@
 [login]
 addr = ":80"
-public_addr = "192.168.0.2"
+public_addr = "192.168.0.3"
 #public_addr = "35.187.205.34"
 
 [lobby]
 addr = ":8200"
 rpc_addr = ":8201"
-public_addr = "192.168.0.2:8200"
+public_addr = "192.168.0.3:8200"
 backdoor = ":8200"
 
 [battle]
 addr = ":8210"
-rpc_addr = ":3080"
-public_addr = "192.168.0.2:8210"
+rpc_addr = "battle:3080"
+public_addr = "192.168.0.3:8210"
 
 [status]
 addr = ":8080"
