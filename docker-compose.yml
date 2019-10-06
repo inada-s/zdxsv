@@ -4,6 +4,13 @@ services:
     build: "./docker/tlsrouter"
     ports:
       - "443:443"
+  web:
+    restart: always
+    build: "./docker/web"
+    volumes:
+      - ./website:/var/www/html
+    ports:
+      - "1080:80"
   legacyweb:
     restart: always
     build: "./docker/legacyweb"
@@ -59,4 +66,13 @@ services:
       - /zdxsv
       - battle
       - /local.toml
-
+  status:
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
+    volumes:
+      - ./local.toml:/local.toml
+    entrypoint:
+      - /zdxsv
+      - status
+      - /local.toml

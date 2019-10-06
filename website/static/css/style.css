@@ -1,0 +1,71 @@
+.jumbotron { 
+background:url(../img/title.png) center no-repeat;
+background-size: cover;
+background-position: center center;
+margin-bottom: 0px;
+}
+
+.jumbotron h1, .jumbotron p { 
+color: #eeeeee;
+text-shadow: 1px 1px 2px black, 0 0 25px blue, 0 0 5px darkblue;
+}
+
+body {
+background-color: #202223;
+margin-bottom: 20px;
+}
+
+.main-contents {
+padding-top: 12px;
+margin-top: 0px;
+color: #cccccc;
+}
+
+h1, h2, h3, h4, h5, h6 {
+margin-top: 12px;
+color: #5cb85c;
+}
+
+p {
+padding-left :10px;
+}
+
+.panel {
+background-color: #333333;
+}
+
+.panel > .panel-heading {
+background-color: #333333;
+color: #5cb85c;
+border-bottom: thin solid #ffffff;
+}
+
+.danger {
+color: #FF9999;
+}
+
+.z-user-id {
+color: gold;
+font-family: "monospace sans-serif";
+}
+
+.z-user-name {
+color: darkorange;
+}
+
+div.links > a {
+background-color: #333333;
+color: skyblue;
+border: none;
+}
+
+.mini-font {
+font-size: 80%;
+}
+
+.mini-table > tbody > tr > td {
+margin: 0 0 ;
+padding-top: 0px;
+padding-bottom: 5px;
+border: none;
+}
