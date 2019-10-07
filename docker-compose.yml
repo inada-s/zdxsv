@@ -1,7 +1,7 @@
 version: '3'
 services:
-  tlsrouter:
-    build: "./docker/tlsrouter"
+  router:
+    build: "./docker/router"
     ports:
       - "443:443"
   web:

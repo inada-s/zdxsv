@@ -1,3 +1,6 @@
+// This code is created with reference to a project tcpproxy.
+// c.f. https://github.com/google/tcpproxy
+//
 // Copyright 2016 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +19,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -26,30 +30,21 @@ import (
 )
 
 var (
-	cfgFile      = flag.String("conf", "", "configuration file")
 	listen       = flag.String("listen", ":443", "listening port")
 	helloTimeout = flag.Duration("hello-timeout", 3*time.Second, "how long to wait for the TLS ClientHello")
 )
 
 func main() {
 	flag.Parse()
+	log.Fatal(listenAndServe(*listen))
+}
 
-	p := &Proxy{}
-	if err := p.Config.ReadFile(*cfgFile); err != nil {
-		log.Fatalf("Failed to read config %q: %s", *cfgFile, err)
+func listenAndServe(addr string) error {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("create listener: %s", err)
 	}
 
-	log.Fatalf("%s", p.ListenAndServe(*listen))
-}
-
-// Proxy routes connections to backends based on a Config.
-type Proxy struct {
-	Config Config
-	l      net.Listener
-}
-
-// Serve accepts connections from l and routes them according to TLS SNI.
-func (p *Proxy) Serve(l net.Listener) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -58,30 +53,38 @@ func (p *Proxy) Serve(l net.Listener) error {
 
 		conn := &Conn{
 			TCPConn: c.(*net.TCPConn),
-			config:  &p.Config,
 		}
 		go conn.proxy()
 	}
 }
 
-// ListenAndServe creates a listener on addr calls Serve on it.
-func (p *Proxy) ListenAndServe(addr string) error {
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("create listener: %s", err)
-	}
-	return p.Serve(l)
-}
-
-// A Conn handles the TLS proxying of one user connection.
 type Conn struct {
 	*net.TCPConn
-	config *Config
 
-	tlsMinor    int
-	hostname    string
 	backend     string
+	tlsMinor    int
 	backendConn *net.TCPConn
+}
+
+func isGameConsoleConnection(r io.Reader) bool {
+	var hdr struct {
+		Type         uint8
+		Major, Minor uint8
+		Length       uint16
+	}
+
+	if err := binary.Read(r, binary.BigEndian, &hdr); err != nil {
+		return false
+	}
+
+	log.Println("hdr:", hdr)
+
+	// bad hack for old console.
+	if hdr.Type == 128 && hdr.Major == 100 && hdr.Minor == 1 && hdr.Length == 769 {
+		return true
+	}
+
+	return false
 }
 
 func (c *Conn) logf(msg string, args ...interface{}) {
@@ -106,8 +109,9 @@ func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
 	}
 }
 
-func (c *Conn) internalError(msg string, args ...interface{}) { c.abort(80, msg, args...) }
-func (c *Conn) sniFailed(msg string, args ...interface{})     { c.abort(112, msg, args...) }
+func (c *Conn) internalError(msg string, args ...interface{}) {
+	c.abort(80, msg, args...)
+}
 
 func (c *Conn) proxy() {
 	defer c.Close()
@@ -118,45 +122,32 @@ func (c *Conn) proxy() {
 	}
 
 	var (
-		err          error
-		handshakeBuf bytes.Buffer
+		err    error
+		tmpBuf bytes.Buffer
 	)
-	c.hostname, c.tlsMinor, err = extractSNI(io.TeeReader(c, &handshakeBuf))
-	if err == errGameConsoleAccess {
-		// edit for zdxsv
-		c.hostname = "gameconsole"
-	} else if err != nil {
-		c.internalError("Extracting SNI: %s", err)
-		return
-	}
 
-	c.logf("extracted SNI %s", c.hostname)
+	isGameConsole := isGameConsoleConnection(io.TeeReader(c, &tmpBuf))
 
 	if err = c.SetReadDeadline(time.Time{}); err != nil {
 		c.internalError("Clearing read deadline for ClientHello: %s", err)
 		return
 	}
 
-	addProxyHeader := false
-	c.backend, addProxyHeader = c.config.Match(c.hostname)
-	if c.backend == "" {
-		c.sniFailed("no backend found for %q", c.hostname)
-		return
+	c.backend = "web:443"
+	if isGameConsole {
+		c.backend = "legacyweb:443"
 	}
 
-	c.logf("routing %q to %q", c.hostname, c.backend)
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
 	if err != nil {
-		c.internalError("failed to dial backend %q for %q: %s", c.backend, c.hostname, err)
+		c.internalError("failed to dial backend %q: %s", c.backend, err)
 		return
 	}
 	defer backend.Close()
 
 	c.backendConn = backend.(*net.TCPConn)
 
-	// If the backend supports the HAProxy PROXY protocol, give it the
-	// real source information about the connection.
-	if addProxyHeader {
+	if !isGameConsole {
 		remote := c.TCPConn.RemoteAddr().(*net.TCPAddr)
 		local := c.TCPConn.LocalAddr().(*net.TCPAddr)
 		family := "TCP6"
@@ -171,7 +162,7 @@ func (c *Conn) proxy() {
 
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.
-	n, err := io.Copy(c.backendConn, &handshakeBuf)
+	n, err := io.Copy(c.backendConn, &tmpBuf)
 	log.Println("written ", n, "bytes")
 	if err != nil {
 		c.internalError("failed to replay handshake to %q: %s", c.backend, err)
