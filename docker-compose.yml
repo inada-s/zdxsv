@@ -18,9 +18,6 @@ services:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    environment:
-      - ZDXSV_DNAS_IP=192.168.0.3
-      - ZDXSV_LOGIN_PUBLIC_IP=192.168.0.3
     volumes:
       - ./local.toml:/local.toml
     entrypoint:

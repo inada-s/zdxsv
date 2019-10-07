@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
+
+	"zdxsv/pkg/config"
 
 	"github.com/miekg/dns"
 )
@@ -30,14 +31,14 @@ func makeDNSHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
 }
 
 func mainDNS() {
-	dnassvIP := os.Getenv("ZDXSV_DNAS_IP")
-	if *dnasip != "" {
-		dnassvIP = *dnasip
+	dnassvIP := *dnasip
+	if *dnasip == "" {
+		dnassvIP = config.Conf.DNAS.PublicAddr
 	}
 
-	loginPublicIP := os.Getenv("ZDXSV_LOGIN_PUBLIC_IP")
-	if *loginsvip != "" {
-		loginPublicIP = *loginsvip
+	loginPublicIP := *loginsvip
+	if *loginsvip == "" {
+		loginPublicIP = config.Conf.Login.PublicAddr
 	}
 
 	log.Println("DNAS server ", dnassvIP)

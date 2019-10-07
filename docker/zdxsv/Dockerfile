@@ -2,6 +2,7 @@ FROM golang:latest as builder
 WORKDIR /work
 COPY go.mod go.sum ./
 RUN go mod download
+RUN go build ...
 ADD src src
 ADD pkg pkg
 ADD Makefile ./

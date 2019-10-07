@@ -51,7 +51,7 @@ type statusParam struct {
 }
 
 func pollLobby() {
-	c := gorpc.NewTCPClient(conf.Lobby.RPCAddr)
+	c := gorpc.NewTCPClient("lobby" + conf.Lobby.RPCAddr)
 	c.Start()
 	defer c.Stop()
 	for {

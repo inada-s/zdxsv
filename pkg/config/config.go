@@ -5,11 +5,16 @@ import "github.com/BurntSushi/toml"
 var Conf Config
 
 type Config struct {
+	DNAS   DNASConfig   `toml:"dnas"`
 	Login  LoginConfig  `toml:"login"`
 	Lobby  LobbyConfig  `toml:"lobby"`
 	Battle BattleConfig `toml:"battle"`
 	Status StatusConfig `toml:"status"`
 	DB     DBConfig     `toml:"db"`
+}
+
+type DNASConfig struct {
+	PublicAddr string `toml:"public_addr"`
 }
 
 type LoginConfig struct {
