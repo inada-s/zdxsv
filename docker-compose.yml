@@ -1,6 +1,7 @@
 version: '3'
 services:
   router:
+    restart: always
     build: "./docker/router"
     ports:
       - "443:443"
@@ -9,8 +10,6 @@ services:
     build: "./docker/web"
     volumes:
       - ./website:/var/www/html
-    ports:
-      - "1080:80"
   legacyweb:
     restart: always
     build: "./docker/legacyweb"
@@ -18,12 +17,10 @@ services:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    volumes:
-      - ./local.toml:/local.toml
     entrypoint:
       - /zdxsv
       - dns
-      - /local.toml
+      - /config.toml
     ports:
       - "53:53/udp"
   login:
@@ -31,12 +28,11 @@ services:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
     volumes:
-      - ./local.toml:/local.toml
       - ./zdxsv.db:/zdxsv.db
     entrypoint:
       - /zdxsv
       - login
-      - /local.toml
+      - /config.toml
   lobby:
     build:
       context: .
@@ -44,12 +40,11 @@ services:
     ports:
       - "8200:8200"
     volumes:
-      - ./local.toml:/local.toml
       - ./zdxsv.db:/zdxsv.db
     entrypoint:
       - /zdxsv
       - lobby
-      - /local.toml
+      - /config.toml
   battle:
     build:
       context: .
@@ -57,19 +52,15 @@ services:
     ports:
       - "8210:8210"
       - "8210:8210/udp"
-    volumes:
-      - ./local.toml:/local.toml
     entrypoint:
       - /zdxsv
       - battle
-      - /local.toml
+      - /config.toml
   status:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    volumes:
-      - ./local.toml:/local.toml
     entrypoint:
       - /zdxsv
       - status
-      - /local.toml
+      - /config.toml

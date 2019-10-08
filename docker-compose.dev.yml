@@ -1,0 +1,17 @@
+version: '3'
+services:
+  dns:
+    volumes:
+      - ./dev.toml:/config.toml
+  login:
+    volumes:
+      - ./dev.toml:/config.toml
+  lobby:
+    volumes:
+      - ./dev.toml:/config.toml
+  battle:
+    volumes:
+      - ./dev.toml:/config.toml
+  status:
+    volumes:
+      - ./dev.toml:/config.toml
