@@ -19,6 +19,7 @@ RUN cp -r /work/DNASrep/www/dnas /var/www/dnas \
   && ln -sf /proc/self/fd/1 /var/log/apache2/access.log \
   && ln -sf /proc/self/fd/1 /var/log/apache2/error.log
 ADD ./dnas.conf /etc/apache2/sites-available/dnas.conf
+ADD ./entrypoint /entrypoint
 
 EXPOSE 443
-CMD ["apachectl", "-D", "FOREGROUND"]
+CMD ["/entrypoint"]
