@@ -33,6 +33,7 @@ services:
       - /zdxsv
       - login
       - /config.toml
+      - -vvv
   lobby:
     build:
       context: .
@@ -45,6 +46,7 @@ services:
       - /zdxsv
       - lobby
       - /config.toml
+      - -vvv
   battle:
     build:
       context: .
@@ -56,6 +58,7 @@ services:
       - /zdxsv
       - battle
       - /config.toml
+      - -vvv
   status:
     build:
       context: .
@@ -64,3 +67,4 @@ services:
       - /zdxsv
       - status
       - /config.toml
+      - -vvv
