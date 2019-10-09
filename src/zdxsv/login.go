@@ -19,7 +19,7 @@ var (
 
 // assets
 func handleAssets(w http.ResponseWriter, r *http.Request) {
-	if _, err := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since")); err == nil  {
+	if _, err := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since")); err == nil {
 		h := w.Header()
 		delete(h, "Content-Type")
 		delete(h, "Content-Length")
@@ -100,7 +100,7 @@ func mainLogin() {
 	router.HandleFunc("/login", login.HandleLoginPage)
 	router.HandleFunc("/register", login.HandleRegisterPage)
 	//router.HandleFunc("/00000020/CRS-game-start.jsp", handleGameStart)
-	err := http.ListenAndServe(conf.Login.Addr, wrapHandler(router))
+	err := http.ListenAndServe(stripHost(conf.Login.Addr), wrapHandler(router))
 	if err != nil {
 		glog.Fatalln(err)
 	}

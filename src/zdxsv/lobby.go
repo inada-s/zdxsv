@@ -10,8 +10,8 @@ func mainLobby() {
 	app := lobby.NewApp()
 	go app.Serve()
 	sv := lobby.NewServer(app)
-	go sv.ListenAndServe(conf.Lobby.Addr)
-	go sv.ServeUDPStunServer(conf.Lobby.RPCAddr)
+	go sv.ListenAndServe(stripHost(conf.Lobby.Addr))
+	go sv.ServeUDPStunServer(stripHost(conf.Lobby.RPCAddr))
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)

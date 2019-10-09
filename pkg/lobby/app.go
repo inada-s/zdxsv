@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"fmt"
 	"net"
 	"net/rpc"
 	"time"
@@ -59,8 +60,8 @@ type AppPeer struct {
 	proxyUDPAddrs     []string
 	proxyP2PConnected map[string]struct{}
 
-	proxyRegTime    time.Time
-	proxyUseTime    time.Time
+	proxyRegTime time.Time
+	proxyUseTime time.Time
 
 	lastRecvTime time.Time
 }
@@ -147,10 +148,18 @@ func (a *App) connectToBattleServer() {
 	}
 }
 
+func stripHost(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		glog.Fatal("err in splitPort", err)
+	}
+	return ":" + fmt.Sprint(port)
+}
+
 func (a *App) Serve() {
 	aliveCheck := time.Tick(10 * time.Second)
 	go runCMS(a)
-	err := newLobbyRPCServer(a, config.Conf.Lobby.RPCAddr).Start()
+	err := newLobbyRPCServer(a, stripHost(config.Conf.Lobby.RPCAddr)).Start()
 	if err != nil {
 		glog.Errorln(err)
 	}

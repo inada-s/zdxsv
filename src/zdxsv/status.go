@@ -51,7 +51,7 @@ type statusParam struct {
 }
 
 func pollLobby() {
-	c := gorpc.NewTCPClient("lobby" + conf.Lobby.RPCAddr)
+	c := gorpc.NewTCPClient(conf.Lobby.RPCAddr)
 	c.Start()
 	defer c.Stop()
 	for {
@@ -164,7 +164,7 @@ func mainStatus() {
 	}
 	router := http.NewServeMux()
 	router.HandleFunc("/api/stat", getApiStat)
-	err := http.ListenAndServe(conf.Status.Addr, router)
+	err := http.ListenAndServe(stripHost(conf.Status.Addr), router)
 	if err != nil {
 		glog.Fatalln(err)
 	}
