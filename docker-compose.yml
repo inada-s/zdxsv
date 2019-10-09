@@ -40,6 +40,8 @@ services:
       dockerfile: "./docker/zdxsv/Dockerfile"
     ports:
       - "8200:8200"
+      - "8201:8201"     # for UDP proxy
+      - "8201:8201/udp" # for UDP proxy
     volumes:
       - ./zdxsv.db:/zdxsv.db
     entrypoint:
