@@ -1,5 +1,6 @@
 all: build
 
+
 # all build for comiling check
 .PHONY: build
 build:
@@ -15,6 +16,12 @@ router:
 		--ldflags '-extldflags "-static"' \
 		-o docker/router/router ./src/router
 		docker-compose build router
+
+# all build for comiling check
+.PHONY: assets
+assets:
+	go-bindata -pkg=assets -o=pkg/assets/assets.go ./assets/...
+
 
 .PHONY: ci
 ci:
