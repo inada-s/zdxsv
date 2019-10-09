@@ -1,3 +1,4 @@
+# configs for local development
 [dnas]
 public_addr = "192.168.0.13"
 
@@ -9,7 +10,6 @@ public_addr = "192.168.0.13"
 addr = ":8200"
 rpc_addr = "lobby:8201"
 public_addr = "192.168.0.13:8200"
-backdoor = ":8200"
 
 [battle]
 addr = ":8210"

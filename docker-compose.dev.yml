@@ -7,11 +7,15 @@ services:
     volumes:
       - ./dev.toml:/config.toml
   lobby:
+    network_mode: "host"
     volumes:
       - ./dev.toml:/config.toml
   battle:
+    network_mode: "host"
     volumes:
       - ./dev.toml:/config.toml
   status:
+    environment:
+      - ZDXSV_ON_DOCKER_HOST=lobby,battle
     volumes:
       - ./dev.toml:/config.toml

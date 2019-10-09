@@ -19,6 +19,7 @@ services:
       dockerfile: "./docker/zdxsv/Dockerfile"
     entrypoint:
       - /zdxsv
+      - -v=1
       - dns
       - /config.toml
     ports:
@@ -31,9 +32,9 @@ services:
       - ./zdxsv.db:/zdxsv.db
     entrypoint:
       - /zdxsv
+      - -v=1
       - login
       - /config.toml
-      - -vvv
   lobby:
     build:
       context: .
@@ -46,9 +47,9 @@ services:
       - ./zdxsv.db:/zdxsv.db
     entrypoint:
       - /zdxsv
+      - -v=1
       - lobby
       - /config.toml
-      - -vvv
   battle:
     build:
       context: .
@@ -58,15 +59,15 @@ services:
       - "8210:8210/udp"
     entrypoint:
       - /zdxsv
+      - -v=1
       - battle
       - /config.toml
-      - -vvv
   status:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
     entrypoint:
       - /zdxsv
+      - -v=1
       - status
       - /config.toml
-      - -vvv

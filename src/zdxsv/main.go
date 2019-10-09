@@ -10,7 +10,9 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+        "os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -24,6 +26,15 @@ import (
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
 var profile = flag.Int("profile", 0, "0: no profile, 1: enable http pprof, 2: enable blocking profile")
 var conf config.Config
+
+func resolveDockerHostAddr() string {
+	out, err := exec.Command("sh", "-c", "ip route | awk '/default/ { print $3 }'").Output()
+	if err != nil {
+		glog.Warning("err in resolve gw addr", err)
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
 
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)

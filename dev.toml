@@ -1,0 +1,23 @@
+# configs for development server
+[dnas]
+public_addr = "34.85.80.230"
+
+[login]
+addr = ":80"
+public_addr = "34.85.80.230"
+
+[lobby]
+addr = ":8200"
+rpc_addr = ":8201"
+public_addr = "34.85.80.230:8200"
+
+[battle]
+addr = ":8210"
+rpc_addr = ":3080"
+public_addr = "34.85.80.230:8210"
+
+[status]
+addr = ":8080"
+
+[db]
+name = "zdxsv.db"

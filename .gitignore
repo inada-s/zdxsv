@@ -1,3 +1,5 @@
 .DS_Store
 zdxsv.db
 bin/
+local.toml
+dev.toml
