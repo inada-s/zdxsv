@@ -5,6 +5,8 @@ services:
     build: "./docker/router"
     ports:
       - "443:443"
+  https-portal:
+    image: hello-world
   web:
     restart: always
     build: "./docker/web"

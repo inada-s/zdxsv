@@ -15,7 +15,7 @@ router:
 		-tags netgo \
 		--ldflags '-extldflags "-static"' \
 		-o docker/router/router ./src/router
-		docker-compose build router
+	docker-compose build router
 
 # all build for comiling check
 .PHONY: assets

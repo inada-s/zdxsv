@@ -1,5 +1,14 @@
 version: '3'
 services:
+  https-portal:
+    build: "./docker/https-portal"
+    restart: always
+    environment:
+      DOMAINS: 'zdxsv.example.com -> http://web:80'
+      STAGE: 'local'
+  web:
+    ports:
+      - "80:80"
   dns:
     volumes:
       - ./dev.toml:/config.toml

@@ -133,7 +133,7 @@ func (c *Conn) proxy() {
 		return
 	}
 
-	c.backend = "web:443"
+	c.backend = "https-portal:443"
 	if isGameConsole {
 		c.backend = "legacyweb:443"
 	}
