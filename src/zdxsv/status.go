@@ -27,7 +27,7 @@ const (
 
 func init() {
 	current = statusParam{
-		NowDate:         time.Now().Format(timeFormat),
+		NowDate:         time.Now().In(jst).Format(timeFormat),
 		LobbyUserCount:  0,
 		LobbyUsers:      []statusUser{},
 		BattleUserCount: 0,
