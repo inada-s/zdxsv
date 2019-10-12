@@ -3,3 +3,5 @@ zdxsv.db
 bin/
 local.toml
 dev.toml
+prod.toml
+docker-compose.prod.yml

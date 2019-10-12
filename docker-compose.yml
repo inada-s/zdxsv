@@ -12,9 +12,13 @@ services:
     build: "./docker/web"
     volumes:
       - ./website:/var/www/html
+    environment:
+      - TZ=Asia/Tokyo
   legacyweb:
     restart: always
     build: "./docker/legacyweb"
+    environment:
+      - TZ=Asia/Tokyo
   dns:
     build:
       context: .
@@ -26,6 +30,8 @@ services:
       - /config.toml
     ports:
       - "53:53/udp"
+    environment:
+      - TZ=Asia/Tokyo
   login:
     build:
       context: .
@@ -37,6 +43,8 @@ services:
       - -v=1
       - login
       - /config.toml
+    environment:
+      - TZ=Asia/Tokyo
   lobby:
     build:
       context: .
@@ -52,6 +60,8 @@ services:
       - -v=1
       - lobby
       - /config.toml
+    environment:
+      - TZ=Asia/Tokyo
   battle:
     build:
       context: .
@@ -64,6 +74,8 @@ services:
       - -v=1
       - battle
       - /config.toml
+    environment:
+      - TZ=Asia/Tokyo
   status:
     build:
       context: .
@@ -73,3 +85,5 @@ services:
       - -v=1
       - status
       - /config.toml
+    environment:
+      - TZ=Asia/Tokyo
