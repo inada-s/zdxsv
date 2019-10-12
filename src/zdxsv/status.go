@@ -18,6 +18,7 @@ import (
 
 var (
 	current statusParam
+	jst     = time.FixedZone("Asia/Tokyo", 9*60*60)
 )
 
 const (
@@ -70,7 +71,7 @@ func pollLobby() {
 
 		if res, ok := rawResp.(*StatusResponse); ok {
 			current.Lock()
-			current.NowDate = time.Now().Format(timeFormat)
+			current.NowDate = time.Now().In(jst).Format(timeFormat)
 			current.LobbyUsers = current.LobbyUsers[:0]
 			checked := map[string]bool{}
 
