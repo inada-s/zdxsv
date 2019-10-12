@@ -1,7 +1,6 @@
 all: build
 
-
-# all build for comiling check
+# all build for local environment.
 .PHONY: build
 build:
 	mkdir -p bin
@@ -9,6 +8,7 @@ build:
 	go build -o ./bin/bench ./src/bench
 	go build -o ./bin/zproxy ./src/zproxy
 
+# build router binary.
 .PHONY: router
 router:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
@@ -17,12 +17,12 @@ router:
 		-o docker/router/router ./src/router
 	docker-compose build router
 
-# all build for comiling check
+# run go-bindata to pack all assets into a go package.
 .PHONY: assets
 assets:
 	go-bindata -pkg=assets -o=pkg/assets/assets.go ./assets/...
 
-
+# all build for ci environment.
 .PHONY: ci
 ci:
 	mkdir -p bin
