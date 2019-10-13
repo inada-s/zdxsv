@@ -160,17 +160,6 @@
     <table class="table mini-font mini-table table-inverse" id="battle-users-table"></table>
   </div>
 </div>  <!-- end of panel -->
-
-<div class="panel">
-  <div class="panel-heading">チャット
-    <a target="_blank" href="//discord.gg/0nQecfIg4HKnx258" class="btn btn-primary btn-sm btn-primary" role="button">参加する</a>
-    <a target="_blank" href="//discordapp.com/channels/142729493566586880/142729493566586880" class="btn btn-primary btn-sm btn-success" role="button">開く</a>
-  </div>
-  <div class="panel-body">
-    <p id="chat-user-count">取得中</p>
-    <table class="table mini-font mini-table table-inverse" id="chat-users"></table>
-  </div>
-</div>  <!-- end of panel -->
 </div>  <!-- end of col  -->
 
 </div>  <!-- end of row -->
@@ -225,11 +214,6 @@ function pollStat(){
     document.getElementById("battle-user-count").innerHTML = "対戦中 " + res.BattleUsers.length + " 人"
     updateOnlineUser(document.getElementById("lobby-users-table"), res.LobbyUsers)
     updateOnlineUser(document.getElementById("battle-users-table"), res.BattleUsers)
-
-    document.getElementById("chat-user-count").innerHTML = 
-      "オンライン " + (res.OnlineChatUsers ? res.OnlineChatUsers.length : "0") + " 人 " + 
-      "オフライン " + (res.OfflineChatUsers ? res.OfflineChatUsers.length : "0") + " 人"
-    updateChatUser(document.getElementById("chat-users"), res.OnlineChatUsers)
   });
 }
 pollStat();
