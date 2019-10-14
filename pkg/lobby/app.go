@@ -139,6 +139,7 @@ func (a *App) AddHandler(id uint16, name string, f MessageHandler) {
 }
 
 func (a *App) connectToBattleServer() {
+
 	client, err := rpc.DialHTTP("tcp", config.Conf.Battle.RPCAddr)
 	if err != nil {
 		glog.Errorln("Faild to connect BattleServer. ", err)

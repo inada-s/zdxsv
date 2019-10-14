@@ -2,6 +2,8 @@ github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/axgle/mahonia v0.0.0-20180208002826-3358181d7394 h1:OYA+5W64v3OgClL+IrOD63t4i/RW7RqrAVl9LTZ9UqQ=
 github.com/axgle/mahonia v0.0.0-20180208002826-3358181d7394/go.mod h1:Q8n74mJTIgjX4RBBcHnJ05h//6/k6foqmgE45jTQtxg=
+github.com/codingconcepts/env v0.0.0-20190614135724-bb4545dff6a4 h1:gJhrSCObRkICl578uy2wMWo0ZcFBR3c40To42XGaghs=
+github.com/codingconcepts/env v0.0.0-20190614135724-bb4545dff6a4/go.mod h1:TM9ug+H/2cI3EjyIDr5xKCkFGyNE59URgH1wu5NyU8E=
 github.com/equinox-io/equinox v1.2.0 h1:bBS7Ou+Y7Jwgmy8TWSYxEh85WctuFn7FPlgbUzX4DBA=
 github.com/equinox-io/equinox v1.2.0/go.mod h1:6s3HJB0PYUNgs0mxmI8fHdfVl3TQ25ieA/PVfr+eyVo=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekfRL6a582T4P37/31XEstQ5p58=

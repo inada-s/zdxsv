@@ -10,7 +10,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-        "os/exec"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -84,13 +84,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(args) >= 2 {
-		err := config.LoadFile(args[1])
-		if err != nil {
-			glog.Fatal(err)
-		}
-		conf = config.Conf
-	}
+	config.LoadConfig()
 
 	switch args[0] {
 	case "dns":
