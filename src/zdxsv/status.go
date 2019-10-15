@@ -13,6 +13,7 @@ import (
 	"github.com/valyala/gorpc"
 
 	"zdxsv/pkg/assets"
+	"zdxsv/pkg/config"
 	. "zdxsv/pkg/lobby/lobbyrpc"
 )
 
@@ -54,11 +55,11 @@ type statusParam struct {
 }
 
 func pollLobby() {
-	lobbyRpcAddr := conf.Lobby.RPCAddr
+	lobbyRPCAddr := config.Conf.Lobby.RPCAddr
 	if strings.Contains(os.Getenv("ZDXSV_ON_DOCKER_HOST"), "lobby") {
-		lobbyRpcAddr = resolveDockerHostAddr() + stripHost(conf.Lobby.RPCAddr)
+		lobbyRPCAddr = resolveDockerHostAddr() + stripHost(config.Conf.Lobby.RPCAddr)
 	}
-	c := gorpc.NewTCPClient(lobbyRpcAddr)
+	c := gorpc.NewTCPClient(lobbyRPCAddr)
 	c.Start()
 	defer c.Stop()
 	for {
@@ -171,7 +172,7 @@ func mainStatus() {
 	}
 	router := http.NewServeMux()
 	router.HandleFunc("/api/stat", getApiStat)
-	err := http.ListenAndServe(stripHost(conf.Status.Addr), router)
+	err := http.ListenAndServe(stripHost(config.Conf.Status.Addr), router)
 	if err != nil {
 		glog.Fatalln(err)
 	}

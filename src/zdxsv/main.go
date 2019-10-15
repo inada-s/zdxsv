@@ -25,7 +25,6 @@ import (
 
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
 var profile = flag.Int("profile", 0, "0: no profile, 1: enable http pprof, 2: enable blocking profile")
-var conf config.Config
 
 func resolveDockerHostAddr() string {
 	out, err := exec.Command("sh", "-c", "ip route | awk '/default/ { print $3 }'").Output()
@@ -39,7 +38,7 @@ func resolveDockerHostAddr() string {
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		glog.Fatal("err in splitPort", err)
+		glog.FatalDepth(1, "err in splitPort ", addr, err)
 	}
 	return ":" + fmt.Sprint(port)
 }
@@ -49,7 +48,7 @@ func printUsage() {
 }
 
 func prepareDB() {
-	conn, err := sql.Open("sqlite3", conf.DB.Name)
+	conn, err := sql.Open("sqlite3", config.Conf.DB.Name)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -100,7 +99,7 @@ func main() {
 	case "status":
 		mainStatus()
 	case "initdb":
-		os.Remove(conf.DB.Name)
+		os.Remove(config.Conf.DB.Name)
 		prepareDB()
 		db.DefaultDB.Init()
 	default:

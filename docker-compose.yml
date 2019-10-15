@@ -1,4 +1,18 @@
-version: '3'
+version: '3.7'
+
+x-zdxsv-environment: &zdxsv-environment
+  - ZDXSV_DNAS_PUBLIC_ADDR=${ZDXSV_DNAS_PUBLIC_ADDR}
+  - ZDXSV_LOGIN_ADDR=${ZDXSV_LOGIN_ADDR}
+  - ZDXSV_LOGIN_PUBLIC_ADDR=${ZDXSV_LOGIN_PUBLIC_ADDR}
+  - ZDXSV_LOBBY_ADDR=${ZDXSV_LOBBY_ADDR}
+  - ZDXSV_LOBBY_RPC_ADDR=${ZDXSV_LOBBY_RPC_ADDR}
+  - ZDXSV_LOBBY_PUBLIC_ADDR=${ZDXSV_LOBBY_PUBLIC_ADDR}
+  - ZDXSV_BATTLE_ADDR=${ZDXSV_BATTLE_ADDR}
+  - ZDXSV_BATTLE_RPC_ADDR=${ZDXSV_BATTLE_RPC_ADDR}
+  - ZDXSV_BATTLE_PUBLIC_ADDR=${ZDXSV_BATTLE_PUBLIC_ADDR}
+  - ZDXSV_STATUS_ADDR=${ZDXSV_STATUS_ADDR}
+  - ZDXSV_DB_NAME=${ZDXSV_DB_NAME}
+
 services:
   router:
     restart: always
@@ -12,78 +26,49 @@ services:
     build: "./docker/web"
     volumes:
       - ./website:/var/www/html
-    environment:
-      - TZ=Asia/Tokyo
   legacyweb:
     restart: always
     build: "./docker/legacyweb"
-    environment:
-      - TZ=Asia/Tokyo
   dns:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    entrypoint:
-      - /zdxsv
-      - -v=1
-      - dns
-      - /config.toml
+    command: dns
     ports:
       - "53:53/udp"
-    environment:
-      - TZ=Asia/Tokyo
+    environment: *zdxsv-environment
   login:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
+    command: login
     volumes:
       - ./zdxsv.db:/zdxsv.db
-    entrypoint:
-      - /zdxsv
-      - -v=1
-      - login
-      - /config.toml
-    environment:
-      - TZ=Asia/Tokyo
+    environment: *zdxsv-environment
   lobby:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
+    command: lobby
     ports:
       - "8200:8200"
       - "8201:8201"     # for UDP proxy
       - "8201:8201/udp" # for UDP proxy
     volumes:
       - ./zdxsv.db:/zdxsv.db
-    entrypoint:
-      - /zdxsv
-      - -v=1
-      - lobby
-      - /config.toml
-    environment:
-      - TZ=Asia/Tokyo
+    environment: *zdxsv-environment
   battle:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
+    command: battle 
     ports:
       - "8210:8210"
       - "8210:8210/udp"
-    entrypoint:
-      - /zdxsv
-      - -v=1
-      - battle
-      - /config.toml
-    environment:
-      - TZ=Asia/Tokyo
+    environment: *zdxsv-environment
   status:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    entrypoint:
-      - /zdxsv
-      - -v=1
-      - status
-      - /config.toml
-    environment:
-      - TZ=Asia/Tokyo
+    command: status
+    environment: *zdxsv-environment

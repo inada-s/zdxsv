@@ -31,7 +31,7 @@ func LoadConfig() {
 	if err := env.Set(&c.DB); err != nil {
 		log.Fatal(err)
 	}
-	glog.Info(c)
+	glog.Infof("%+v", c)
 	Conf = c
 }
 
