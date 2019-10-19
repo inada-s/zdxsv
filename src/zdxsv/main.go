@@ -24,7 +24,24 @@ import (
 )
 
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
-var profile = flag.Int("profile", 0, "0: no profile, 1: enable http pprof, 2: enable blocking profile")
+var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof, 2: enable blocking profile")
+
+func pprofPort(mode string) int {
+	switch mode {
+	case "lobby":
+		return 16061
+	case "battle":
+		return 16062
+	case "dns":
+		return 16063
+	case "login":
+		return 16064
+	case "status":
+		return 16065
+	default:
+		return 16060
+	}
+}
 
 func resolveDockerHostAddr() string {
 	out, err := exec.Command("sh", "-c", "ip route | awk '/default/ { print $3 }'").Output()
@@ -55,11 +72,13 @@ func prepareDB() {
 	db.DefaultDB = db.SQLiteDB{conn}
 }
 
-func prepareOption() {
+func prepareOption(command string) {
 	runtime.GOMAXPROCS(*cpu)
 	if *profile >= 1 {
 		go func() {
-			log.Println(http.ListenAndServe(":6060", nil))
+			port := pprofPort(command)
+			addr := fmt.Sprintf(":%v", port)
+			log.Println(http.ListenAndServe(addr, nil))
 		}()
 	}
 	if *profile >= 2 {
@@ -73,8 +92,6 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
-	prepareOption()
-
 	args := flag.Args()
 	glog.Infoln(args, len(args))
 
@@ -85,7 +102,10 @@ func main() {
 
 	config.LoadConfig()
 
-	switch args[0] {
+	command := args[0]
+	prepareOption(command)
+
+	switch command {
 	case "dns":
 		mainDNS()
 	case "battle":
