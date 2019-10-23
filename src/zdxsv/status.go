@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,11 +53,7 @@ type statusParam struct {
 }
 
 func pollLobby() {
-	lobbyRPCAddr := config.Conf.Lobby.RPCAddr
-	if strings.Contains(os.Getenv("ZDXSV_ON_DOCKER_HOST"), "lobby") {
-		lobbyRPCAddr = resolveDockerHostAddr() + stripHost(config.Conf.Lobby.RPCAddr)
-	}
-	c := gorpc.NewTCPClient(lobbyRPCAddr)
+	c := gorpc.NewTCPClient(config.Conf.Lobby.RPCAddr)
 	c.Start()
 	defer c.Stop()
 	for {

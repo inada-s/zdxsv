@@ -10,9 +10,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -43,15 +41,6 @@ func pprofPort(mode string) int {
 	}
 }
 
-func resolveDockerHostAddr() string {
-	out, err := exec.Command("sh", "-c", "ip route | awk '/default/ { print $3 }'").Output()
-	if err != nil {
-		glog.Warning("err in resolve gw addr", err)
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -61,7 +50,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]", "config.toml")
+	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]")
 }
 
 func prepareDB() {

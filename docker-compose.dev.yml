@@ -11,8 +11,14 @@ services:
       - "80:80"
   lobby:
     network_mode: "host"
+    environment:
+      - ZDXSV_BATTLE_RPC_ADDR=":3080"
+      - ZDXSV_LOBBY_RPC_ADDR=":8201"
   battle:
     network_mode: "host"
+      - ZDXSV_BATTLE_RPC_ADDR=":3080"
+      - ZDXSV_LOBBY_RPC_ADDR=":8201"
   status:
     environment:
-      - ZDXSV_ON_DOCKER_HOST=lobby,battle
+      - ZDXSV_BATTLE_RPC_ADDR=":3080"
+      - ZDXSV_LOBBY_RPC_ADDR=":8201"
