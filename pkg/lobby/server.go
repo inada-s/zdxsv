@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"context"
 	"net"
 	"sync"
 	"time"
@@ -122,20 +123,23 @@ func NewConn(conn *net.TCPConn) *Conn {
 		conn:       conn,
 		chWrite:    make(chan bool, 1),
 		chDispatch: make(chan bool, 1),
-		chQuit:     make(chan interface{}, 1),
 		outbuf:     make([]byte, 0, 1024),
 		inbuf:      make([]byte, 0, 1024),
 	}
 }
 
 func (c *Conn) serve() {
+	defer c.conn.Close()
+	defer c.peer.OnClose()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go c.dispatchLoop(ctx, cancel)
+	go c.writeLoop(ctx, cancel)
+	go c.readLoop(ctx, cancel)
+
 	c.peer.OnOpen()
-	go c.dispatchLoop()
-	go c.writeLoop()
-	c.readLoop()
-	c.peer.OnClose()
-	close(c.chQuit)
-	c.conn.Close()
+	<-ctx.Done()
 }
 
 func (c *Conn) SendMessage(msg *message.Message) {
@@ -153,18 +157,31 @@ func (c *Conn) Address() string {
 	return c.conn.RemoteAddr().String()
 }
 
-func (c *Conn) readLoop() {
+func (c *Conn) readLoop(ctx context.Context, cancel func()) {
+	defer cancel()
+
 	buf := make([]byte, 4096)
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 30))
 		n, err := c.conn.Read(buf)
 		if err != nil {
 			glog.Infoln("TCP conn error:", err)
 			return
 		}
+		if n == 0 {
+			glog.Infoln("TCP read zero")
+			return
+		}
 		c.mInbuf.Lock()
 		c.inbuf = append(c.inbuf, buf[:n]...)
 		c.mInbuf.Unlock()
+
 		select {
 		case c.chDispatch <- true:
 		default:
@@ -172,11 +189,13 @@ func (c *Conn) readLoop() {
 	}
 }
 
-func (c *Conn) writeLoop() {
+func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
+	defer cancel()
+
 	buf := make([]byte, 0, 128)
 	for {
 		select {
-		case <-c.chQuit:
+		case <-ctx.Done():
 			return
 		case <-c.chWrite:
 			c.mOutbuf.Lock()
@@ -204,19 +223,26 @@ func (c *Conn) writeLoop() {
 	}
 }
 
-func (c *Conn) dispatchLoop() {
+func (c *Conn) dispatchLoop(ctx context.Context, cancel func()) {
+	defer cancel()
+
 	for {
 		select {
-		case <-c.chQuit:
+		case <-ctx.Done():
 			return
 		case <-c.chDispatch:
 			c.mInbuf.Lock()
 			for len(c.inbuf) >= message.HeaderSize {
 				n, msg := message.Deserialize(c.inbuf)
 				c.inbuf = c.inbuf[n:]
+
 				if msg != nil {
 					glog.V(2).Infof("\t<-%v %v\n", c.Address(), msg)
 					c.peer.OnMessage(msg)
+				}
+				if n == 0 {
+					glog.Errorf("Got zero byte msg", c.Address())
+					return
 				}
 			}
 			c.mInbuf.Unlock()
