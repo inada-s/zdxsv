@@ -3,7 +3,7 @@ package config
 import (
 	"log"
 
-	"github.com/codingconcepts/env"
+	"github.com/caarlos0/env/v6"
 	"github.com/golang/glog"
 )
 
@@ -13,22 +13,22 @@ var Conf Config
 // LoadConfig loads environmental variable into Conf.
 func LoadConfig() {
 	var c Config
-	if err := env.Set(&c.DNAS); err != nil {
+	if err := env.Parse(&c.DNAS); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Set(&c.Login); err != nil {
+	if err := env.Parse(&c.Login); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Set(&c.Lobby); err != nil {
+	if err := env.Parse(&c.Lobby); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Set(&c.Battle); err != nil {
+	if err := env.Parse(&c.Battle); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Set(&c.Status); err != nil {
+	if err := env.Parse(&c.Status); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Set(&c.DB); err != nil {
+	if err := env.Parse(&c.DB); err != nil {
 		log.Fatal(err)
 	}
 	glog.Infof("%+v", c)
