@@ -40,7 +40,6 @@ func (sv *PS2Server) Listen(addr string) error {
 		}
 		sv.chNewConn <- &PS2Conn{conn}
 	}
-	return nil
 }
 
 func (sv *PS2Server) Accept() <-chan *PS2Conn {

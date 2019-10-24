@@ -12,7 +12,7 @@ import (
 var (
 	// These variables are automatically assigned during release process.
 	// `-s -w -X main.releaseVersion ={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
-	releaseVersion = "0.0.0"
+	releaseVersion = "local"
 	releaseCommit  = "local"
 	releaseDate    = "local"
 )
@@ -24,6 +24,9 @@ func printReleaseInfo() {
 }
 
 func doSelfUpdate() {
+	if releaseVersion == "local" {
+		return
+	}
 	log.Println("アップデートチェックを行います")
 
 	latest, found, err := selfupdate.DetectLatest("inada-s/zdxsv")

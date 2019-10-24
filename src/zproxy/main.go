@@ -498,6 +498,14 @@ func (z *Zproxy) ServeBattle() error {
 		case <-chFlush:
 			lastSend = time.Now()
 			pkt := proto.GetPacket()
+			{
+				data, seq, ack := svRudp.GetSendData()
+				pkt.Type = proto.MessageType_Battle.Enum()
+				pkt.BattleData = data
+				pkt.Seq = pb.Uint32(seq)
+				pkt.Ack = pb.Uint32(ack)
+				z.udpcl.SendPacketTo(pkt, z.svAddr)
+			}
 			for _, rudpBuf := range p2pRudp {
 				data, seq, ack := rudpBuf.GetSendData()
 				pkt.Type = proto.MessageType_Battle.Enum()
@@ -510,12 +518,6 @@ func (z *Zproxy) ServeBattle() error {
 				}
 				z.udpcl.SendPacketTo(pkt, addr)
 			}
-			data, seq, ack := svRudp.GetSendData()
-			pkt.Type = proto.MessageType_Battle.Enum()
-			pkt.BattleData = data
-			pkt.Seq = pb.Uint32(seq)
-			pkt.Ack = pb.Uint32(ack)
-			z.udpcl.SendPacketTo(pkt, z.svAddr)
 			proto.PutPacket(pkt)
 		}
 	}
