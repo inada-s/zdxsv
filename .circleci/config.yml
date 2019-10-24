@@ -26,9 +26,9 @@ jobs:
 
 workflows:
   version: 2
-  default:
+  build-release:
     jobs:
-      - build:
+      - build
       - release:
           filters:
             branches:
