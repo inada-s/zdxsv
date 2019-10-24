@@ -9,7 +9,19 @@ import (
 	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
 
-const releaseVersion = "0.1.0"
+var (
+	// These variables are automatically assigned during release process.
+	// `-s -w -X main.releaseVersion ={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
+	releaseVersion = "0.0.0"
+	releaseCommit  = "local"
+	releaseDate    = "local"
+)
+
+func printReleaseInfo() {
+	log.Println("releaseVersion", releaseVersion)
+	log.Println("releaseCommit", releaseCommit)
+	log.Println("releaseDate", releaseDate)
+}
 
 func doSelfUpdate() {
 	log.Println("アップデートチェックを行います")
@@ -19,7 +31,8 @@ func doSelfUpdate() {
 		log.Println("アップデートチェックに失敗しました", err)
 	}
 
-	log.Println(latest, found, err)
+	log.Println("最新版>", latest.Version)
+
 	v := semver.MustParse(releaseVersion)
 	if !found || latest.Version.LTE(v) {
 		log.Println("既に最新版です")
@@ -40,6 +53,6 @@ func doSelfUpdate() {
 
 	log.Println("アップデートに成功しました")
 	log.Println("再起動してください")
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 	os.Exit(0)
 }
