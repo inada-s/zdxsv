@@ -1,8 +1,10 @@
 .DS_Store
 .env
 zdxsv.db
-bin/
 local.toml
 dev.toml
 prod.toml
 docker-compose.prod.yml
+
+bin/
+dist/

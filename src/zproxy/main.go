@@ -19,7 +19,7 @@ import (
 	pb "github.com/golang/protobuf/proto"
 )
 
-const version = 1006
+const protocolVersion = 1006
 
 func isSameAddr(a, b *net.UDPAddr) bool {
 	return a.Port == b.Port && a.IP.Equal(b.IP)
@@ -31,7 +31,7 @@ func isPS2FirstData(data []byte) bool {
 
 func main() {
 	log.Println("===========================================================")
-	log.Printf("ガンダムvs.Zガンダム RUDP-ProxyClient           ver.%d\n", version)
+	log.Printf("zproxy - ガンダムvs.Zガンダム RUDP-Proxy (v%v, ver.%v)\n", releaseVersion, protocolVersion)
 	log.Println("===========================================================")
 	log.Println("初めて使用する場合, 必ず接続テスト対戦を行ってください.")
 	log.Println("ケネディポートの自動選抜に入ることでテスト対戦を開始します.")
@@ -39,10 +39,8 @@ func main() {
 	log.Println("対戦中はソフトを終了しないでください.")
 
 	if conf.CheckUpdate {
-		err := equinoxUpdate()
-		if err != nil {
-			log.Println(err)
-		}
+		printReleaseInfo()
+		doSelfUpdate()
 	}
 
 	if conf.ProfileLevel >= 1 {
@@ -274,7 +272,7 @@ func (z *Zproxy) PollLobby() error {
 		mtx.Unlock()
 
 		resp, err := registerProxy(&lobbyrpc.RegisterProxyRequest{
-			CurrentVersion: version,
+			CurrentVersion: protocolVersion,
 			UserId:         conf.RegisterUserId,
 			Port:           conf.TCPListenPort,
 			LocalIP:        z.selfLocalIP,
@@ -500,6 +498,14 @@ func (z *Zproxy) ServeBattle() error {
 		case <-chFlush:
 			lastSend = time.Now()
 			pkt := proto.GetPacket()
+			{
+				data, seq, ack := svRudp.GetSendData()
+				pkt.Type = proto.MessageType_Battle.Enum()
+				pkt.BattleData = data
+				pkt.Seq = pb.Uint32(seq)
+				pkt.Ack = pb.Uint32(ack)
+				z.udpcl.SendPacketTo(pkt, z.svAddr)
+			}
 			for _, rudpBuf := range p2pRudp {
 				data, seq, ack := rudpBuf.GetSendData()
 				pkt.Type = proto.MessageType_Battle.Enum()
@@ -512,12 +518,6 @@ func (z *Zproxy) ServeBattle() error {
 				}
 				z.udpcl.SendPacketTo(pkt, addr)
 			}
-			data, seq, ack := svRudp.GetSendData()
-			pkt.Type = proto.MessageType_Battle.Enum()
-			pkt.BattleData = data
-			pkt.Seq = pb.Uint32(seq)
-			pkt.Ack = pb.Uint32(ack)
-			z.udpcl.SendPacketTo(pkt, z.svAddr)
 			proto.PutPacket(pkt)
 		}
 	}

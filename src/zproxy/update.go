@@ -5,50 +5,57 @@ import (
 	"os"
 	"time"
 
-	"github.com/equinox-io/equinox"
+	"github.com/blang/semver"
+	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
 
-const appID = "app_4Lz3DqAf1d4"
+var (
+	// These variables are automatically assigned during release process.
+	// `-s -w -X main.releaseVersion ={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
+	releaseVersion = "local"
+	releaseCommit  = "local"
+	releaseDate    = "local"
+)
 
-var publicKey = []byte(`
------BEGIN ECDSA PUBLIC KEY-----
-MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAECnv0D106fXZ7iVzcRCSjHO15EO5sBBeY
-Y1pqovBC52/yJZguNhq3U7oMmbVzpbpYwnA/iVAKUvUghdn6mfFNip7vTezhrFKx
-2mVbrtlGuM/NRDsP7wpYYa5V6e31YmW7
------END ECDSA PUBLIC KEY-----
-`)
+func printReleaseInfo() {
+	log.Println("releaseVersion", releaseVersion)
+	log.Println("releaseCommit", releaseCommit)
+	log.Println("releaseDate", releaseDate)
+}
 
-func equinoxUpdate() error {
+func doSelfUpdate() {
+	if releaseVersion == "local" {
+		return
+	}
 	log.Println("アップデートチェックを行います")
-	var opts equinox.Options
-	if err := opts.SetPublicKeyPEM(publicKey); err != nil {
-		log.Println("鍵エラー")
-		return err
-	}
 
-	// check for the update
-	resp, err := equinox.Check(appID, opts)
-	switch {
-	case err == equinox.NotAvailableErr:
-		log.Println("既に最新版です")
-		return nil
-	case err != nil:
-		log.Println("アップデートチェックに失敗しました")
-		return err
-	}
-
-	// fetch the update and apply it
-	log.Println("アップデート中...")
-	err = resp.Apply()
+	latest, found, err := selfupdate.DetectLatest("inada-s/zdxsv")
 	if err != nil {
-		log.Println("アップデートに失敗しました")
-		return err
+		log.Println("アップデートチェックに失敗しました", err)
+	}
+
+	log.Println("最新版>", latest.Version)
+
+	v := semver.MustParse(releaseVersion)
+	if !found || latest.Version.LTE(v) {
+		log.Println("既に最新版です")
+		return
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		log.Println("アップデートチェックに失敗しました", err)
+		return
+	}
+
+	log.Println("アップデート中...")
+	if err := selfupdate.UpdateTo(latest.AssetURL, exe); err != nil {
+		log.Println("アップデートに失敗しました", err)
+		return
 	}
 
 	log.Println("アップデートに成功しました")
 	log.Println("再起動してください")
 	time.Sleep(time.Second)
 	os.Exit(0)
-	return nil
 }
-
