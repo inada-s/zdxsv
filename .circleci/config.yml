@@ -17,3 +17,23 @@ jobs:
       - checkout
       - run: go mod download
       - run: make ci
+  release:
+    executor:
+      name: default
+    steps:
+      - checkout
+      - run: curl -sL https://git.io/goreleaser | bash
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      - build:
+      - release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /v[0-9]+(\.[0-9]+)*(-.*)*/
+          requires:
+            - build
