@@ -241,7 +241,10 @@ func (z *Zproxy) PollLobby() error {
 			mtx.Lock()
 			myUserId := z.userId
 			mtx.Unlock()
-			z.udpcl.SendPongTo(pkt, myUserId, addr)
+
+			if userId != myUserId {
+				z.udpcl.SendPongTo(pkt, myUserId, addr)
+			}
 		case proto.MessageType_Pong:
 			rttNano := time.Now().UnixNano() - pkt.GetPongData().GetTimestamp()
 			userId := pkt.GetPongData().GetUserId()
@@ -251,13 +254,19 @@ func (z *Zproxy) PollLobby() error {
 			}
 
 			mtx.Lock()
-			pongReceived[userId] = pingResult{
-				rttNano:  rttNano,
-				recvTime: time.Now(),
-				addr:     addr,
-				userId:   userId,
-			}
+			myUserId := z.userId
 			mtx.Unlock()
+
+			if userId != myUserId {
+				mtx.Lock()
+				pongReceived[userId] = pingResult{
+					rttNano:  rttNano,
+					recvTime: time.Now(),
+					addr:     addr,
+					userId:   userId,
+				}
+				mtx.Unlock()
+			}
 		}
 	})
 
@@ -361,7 +370,7 @@ func (z *Zproxy) PollLobby() error {
 	for {
 		select {
 		case <-time.After(lobbyCheckDelay):
-			lobbyCheckDelay = 10 * time.Second
+			lobbyCheckDelay = 5 * time.Second
 			err := register()
 			if err != nil {
 				return err
@@ -521,5 +530,4 @@ func (z *Zproxy) ServeBattle() error {
 			proto.PutPacket(pkt)
 		}
 	}
-	return nil
 }
