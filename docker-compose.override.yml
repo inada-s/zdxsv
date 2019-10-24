@@ -1,20 +1,5 @@
-version: '3'
+version: '3.7'
 services:
   web:
     ports:
       - "1080:80"
-  dns:
-    volumes:
-      - ./local.toml:/config.toml
-  login:
-    volumes:
-      - ./local.toml:/config.toml
-  lobby:
-    volumes:
-      - ./local.toml:/config.toml
-  battle:
-    volumes:
-      - ./local.toml:/config.toml
-  status:
-    volumes:
-      - ./local.toml:/config.toml

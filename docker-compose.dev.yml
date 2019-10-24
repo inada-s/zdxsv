@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 services:
   https-portal:
     build: "./docker/https-portal"
@@ -9,22 +9,7 @@ services:
   web:
     ports:
       - "80:80"
-  dns:
-    volumes:
-      - ./dev.toml:/config.toml
-  login:
-    volumes:
-      - ./dev.toml:/config.toml
   lobby:
     network_mode: "host"
-    volumes:
-      - ./dev.toml:/config.toml
   battle:
     network_mode: "host"
-    volumes:
-      - ./dev.toml:/config.toml
-  status:
-    environment:
-      - ZDXSV_ON_DOCKER_HOST=lobby,battle
-    volumes:
-      - ./dev.toml:/config.toml

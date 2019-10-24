@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"zdxsv/pkg/assets"
+	"zdxsv/pkg/config"
 	"zdxsv/pkg/login"
 
 	"github.com/golang/glog"
@@ -100,7 +101,7 @@ func mainLogin() {
 	router.HandleFunc("/login", login.HandleLoginPage)
 	router.HandleFunc("/register", login.HandleRegisterPage)
 	//router.HandleFunc("/00000020/CRS-game-start.jsp", handleGameStart)
-	err := http.ListenAndServe(stripHost(conf.Login.Addr), wrapHandler(router))
+	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), wrapHandler(router))
 	if err != nil {
 		glog.Fatalln(err)
 	}

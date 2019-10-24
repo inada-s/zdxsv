@@ -10,9 +10,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -43,31 +41,20 @@ func pprofPort(mode string) int {
 	}
 }
 
-var conf config.Config
-
-func resolveDockerHostAddr() string {
-	out, err := exec.Command("sh", "-c", "ip route | awk '/default/ { print $3 }'").Output()
-	if err != nil {
-		glog.Warning("err in resolve gw addr", err)
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		glog.Fatal("err in splitPort", err)
+		glog.FatalDepth(1, "err in splitPort ", addr, err)
 	}
 	return ":" + fmt.Sprint(port)
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]", "config.toml")
+	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]")
 }
 
 func prepareDB() {
-	conn, err := sql.Open("sqlite3", conf.DB.Name)
+	conn, err := sql.Open("sqlite3", config.Conf.DB.Name)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -102,13 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(args) >= 2 {
-		err := config.LoadFile(args[1])
-		if err != nil {
-			glog.Fatal(err)
-		}
-		conf = config.Conf
-	}
+	config.LoadConfig()
 
 	command := args[0]
 	prepareOption(command)
@@ -127,7 +108,7 @@ func main() {
 	case "status":
 		mainStatus()
 	case "initdb":
-		os.Remove(conf.DB.Name)
+		os.Remove(config.Conf.DB.Name)
 		prepareDB()
 		db.DefaultDB.Init()
 	default:

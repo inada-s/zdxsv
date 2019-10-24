@@ -1,10 +1,11 @@
 package lobby
 
 import (
-	"github.com/golang/glog"
 	"strconv"
 	"strings"
 	. "zdxsv/pkg/lobby/message"
+
+	"github.com/golang/glog"
 )
 
 func NoticeBattleStart(p *AppPeer) {
