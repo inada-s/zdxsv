@@ -17,9 +17,8 @@ builds:
     - amd64
     - arm
     - arm64
-  format_overrides:
-    - goos: windows
-      format: zip
+archives:
+  format: zip
 checksum:
   name_template: 'checksums.txt'
 changelog:
