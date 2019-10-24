@@ -39,10 +39,7 @@ func main() {
 	log.Println("対戦中はソフトを終了しないでください.")
 
 	if conf.CheckUpdate {
-		err := equinoxUpdate()
-		if err != nil {
-			log.Println(err)
-		}
+		doSelfUpdate()
 	}
 
 	if conf.ProfileLevel >= 1 {
