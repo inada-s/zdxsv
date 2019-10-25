@@ -10,8 +10,7 @@ This game has online mode, but the service ended in 2011. This project aims to k
 
 There are still many unimplemented parts, and there are many problems. We appreciate your contribution.
 
-[zdxsv.net] (https://zdxsv.net) The running server in Japan.
-
+A server is running at [zdxsv.net](https://zdxsv.net) in Japan.
 
 ## Build and Run
 
