@@ -2,7 +2,7 @@ FROM golang:alpine as builder
 WORKDIR /work
 RUN apk add --no-cache --virtual .zdxsv-builddeps gcc musl-dev make
 COPY go.mod go.sum ./
-RUN go mod download && go build ...
+RUN go mod download
 ADD src src
 ADD pkg pkg
 RUN go build -o ./bin/zdxsv \
