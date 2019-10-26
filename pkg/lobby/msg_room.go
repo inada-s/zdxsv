@@ -1,8 +1,9 @@
 package lobby
 
 import (
-	"github.com/golang/glog"
 	. "zdxsv/pkg/lobby/message"
+
+	"github.com/golang/glog"
 )
 
 var _ = register(0x6401, "GetRoomCount", func(p *AppPeer, m *Message) {
@@ -40,11 +41,15 @@ var _ = register(0x640B, "GetRoomJoinInfo", func(p *AppPeer, m *Message) {
 var _ = register(0x6403, "GetRoomUserCount", func(p *AppPeer, m *Message) {
 	roomId := m.Reader().Read16()
 	count := p.app.OnGetRoomUserCount(p, roomId)
+	maxCount := p.app.OnGetRoomJoinInfo(p, roomId)
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(roomId)
 	w.Write16(count) // 現在人数
 	// なんかこの後にWrite16したらティターンズの人数が変わったがメモリ的な問題っぽい
+	w.Write16(0) // ???
+	w.Write16(maxCount)
+	w.Write16(count) // ???
 	p.SendMessage(a)
 })
 
@@ -276,10 +281,10 @@ var _ = register(0x6504, "EntryRoomMatch", func(p *AppPeer, m *Message) {
 var _ = register(0x6406, "EnterRoom", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	roomId := r.Read16()
-	hoge := r.Read16()
-	huga := r.Read16()
-	p.app.OnEnterRoom(p, roomId, hoge, huga)
-	glog.Infoln("EnterRoom", roomId, hoge, huga)
+	unk1 := r.Read16()
+	unk2 := r.Read16()
+	p.app.OnEnterRoom(p, roomId, unk1, unk2)
+	glog.Infoln("EnterRoom", roomId, unk1, unk2)
 	p.SendMessage(NewServerAnswer(m))
 })
 
@@ -291,13 +296,13 @@ var _ = register(0x6501, "ExitRoom", func(p *AppPeer, m *Message) {
 var _ = register(0x6412, "GetRoomMatchEntryUserCount", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	roomId := r.Read16()
-	p.app.OnGetRoomMatchEntryUserCount(p, roomId)
+	aeug, titans := p.app.OnGetRoomMatchEntryUserCount(p, roomId)
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(roomId)
-	w.Write16(0) // うまく動かん
-	w.Write16(0) // うまく動かん
-	p.SendMessage(NewServerAnswer(m))
+	w.Write16(aeug)
+	w.Write16(titans)
+	p.SendMessage(a)
 })
 
 var _ = register(0x6508, "NoticeRoomBattleStart", func(p *AppPeer, m *Message) {
