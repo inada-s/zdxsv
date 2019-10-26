@@ -399,6 +399,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 				continue
 			}
 			NoticeChatMessage(peer, "SERVER", ">", msg)
+			// NoticeEntryUserCount(peer, lobby.Id, aeug, titans)
 		}
 	}
 }
@@ -692,7 +693,12 @@ func (a *App) OnGetRoomRestTime(p *AppPeer, roomId uint16) uint16 {
 	if !ok {
 		return 0
 	}
-	return uint16(room.Deadline.Sub(time.Now()).Seconds() + 1)
+
+	t := room.Deadline.Sub(time.Now()).Seconds()
+	if t < 0 {
+		t = 0
+	}
+	return uint16(t)
 }
 
 func (a *App) OnGetRoomMember(p *AppPeer, roomId uint16) (count uint16, users []string) {
@@ -748,7 +754,9 @@ func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
 			continue
 		}
 		NoticeChatMessage(peer, "SERVER", ">", msg)
+		// NoticeEntryUserCount(peer, p.Room.Id, aeug, titans)
 	}
+
 }
 
 func (a *App) OnEnterRoom(p *AppPeer, roomId, _, _ uint16) bool {
@@ -833,8 +841,13 @@ func (a *App) OnExitRoom(p *AppPeer) {
 
 }
 
-func (a *App) OnGetRoomMatchEntryUserCount(p *AppPeer, roomId uint16) {
-	//保留
+func (a *App) OnGetRoomMatchEntryUserCount(p *AppPeer, roomId uint16) (aeug uint16, titans uint16) {
+	if p.Lobby != nil {
+		if room, ok := p.Lobby.Rooms[roomId]; ok {
+			return room.GetEntryUserCount()
+		}
+	}
+	return
 }
 
 func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {

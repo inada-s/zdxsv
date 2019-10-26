@@ -175,6 +175,7 @@ func NoticeLobbyUserCount(p *AppPeer, lobbyId, inLobby, inBattle uint16) {
 }
 
 func NoticeEntryUserCount(p *AppPeer, lobbyId, aeug, titans uint16) {
+	// Doesn't work..
 	n := NewServerNotice(0x640F)
 	w := n.Writer()
 	w.Write16(lobbyId)
