@@ -59,6 +59,13 @@ func (r *Room) Exit(userId string) {
 			break
 		}
 	}
+
+	if len(r.Users) == int(r.MaxPlayer) {
+		r.Status = RoomStateFull
+	} else {
+		r.Status = RoomStateRecruit
+	}
+
 	if len(r.Users) == 0 {
 		r.Remove()
 	}
