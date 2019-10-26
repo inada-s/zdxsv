@@ -433,7 +433,11 @@ func (z *Zproxy) ServeBattle() error {
 		log.Println("テスト対戦を開始します")
 		z.ps2cl.Write(firstData)
 		z.ps2cl.Serve(ctx, func(data []byte) {
-			if len(data) == 4 && data[0] == 0x04 && data[1] == 0xF0 && data[2] == 0x00 && data[3] == 0x00 {
+			if len(data) == 4 &&
+				data[0] == 0x04 &&
+				data[1] == 0xF0 &&
+				data[2] == 0x00 &&
+				data[3] == 0x00 {
 				log.Println("対戦の終了を検出しました")
 				z.ps2cl.Close()
 			}
@@ -498,7 +502,7 @@ func (z *Zproxy) ServeBattle() error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if time.Since(lastSend).Seconds() >= 0.016 {
+			if time.Since(lastSend).Seconds() >= 0.030 {
 				select {
 				case chFlush <- struct{}{}:
 				default:
