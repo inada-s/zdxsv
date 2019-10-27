@@ -21,6 +21,7 @@ services:
       - "443:443"
   https-portal:
     image: hello-world
+
   web:
     restart: always
     build: "./docker/web"
@@ -29,6 +30,7 @@ services:
   legacyweb:
     restart: always
     build: "./docker/legacyweb"
+
   dns:
     build:
       context: .
@@ -37,6 +39,7 @@ services:
     ports:
       - "53:53/udp"
     environment: *zdxsv-environment
+
   login:
     build:
       context: .
@@ -45,6 +48,7 @@ services:
     volumes:
       - ./zdxsv.db:/zdxsv.db
     environment: *zdxsv-environment
+
   lobby:
     build:
       context: .
@@ -57,15 +61,17 @@ services:
     volumes:
       - ./zdxsv.db:/zdxsv.db
     environment: *zdxsv-environment
+
   battle:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
-    command: battle 
+    command: battle
     ports:
       - "8210:8210"
       - "8210:8210/udp"
     environment: *zdxsv-environment
+
   status:
     build:
       context: .
