@@ -16,7 +16,8 @@ type Room struct {
 	id    int
 	peers []Peer // 追加はappend 削除はnil代入 インデックスがposと一致するように維持
 
-	last6Fr []int
+	last6Fr  []int
+	lastHash []int
 }
 
 func newRoom(id int) *Room {
@@ -105,12 +106,15 @@ func padString(pad1, pad2 uint16) string {
 func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 	k := peer.Position()
 	r.RLock()
-	lastFr := 0
-	for _, fr := range r.last6Fr {
-		if lastFr < fr {
-			lastFr = fr
+	lastFr := r.last6Fr[k]
+	lastHash := r.lastHash[k]
+	/*
+		for _, fr := range r.last6Fr {
+			if lastFr < fr {
+				lastFr = fr
+			}
 		}
-	}
+	*/
 	r.RUnlock()
 
 	if true {
@@ -135,17 +139,18 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 				// [5] := hash
 
 				// fid = body[2] & 0x7F
-				// flag = (body[2] >> 7) == 1
+				// flag? = (body[2] >> 7) == 1
 				// hash = body[3]
 				// fid = body[4] & 0x7F
-				// flag = (body[4] >> 7) == 1
+				// flag? = (body[4] >> 7) == 1
 				// hash = body[5]
 
 				r.Lock()
 				r.last6Fr[k] = int(body[4] & 0x7F)
+				r.lastHash[k] = int(body[5])
 				r.Unlock()
 			case 12:
-				// 2fr update pad state
+				// 2fr update pad state (single chane)
 
 				// lastnop0620b686b75d
 				// [12] TTNCHY>XMMFXD 0c21003880003e 5d 8001 b9 5d
@@ -184,11 +189,16 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 						glog.Infof("has %x %x", has1, has2)
 					*/
 
-					{
+					if false {
 						pad1 := binary.BigEndian.Uint16(body[4:6])
 						pad2 := binary.BigEndian.Uint16(body[8:10])
 						glog.Info(padString(pad1, pad2))
 					}
+
+					r.Lock()
+					//r.last6Fr[k] = int(body[10] & 0x7F)
+					r.lastHash[k] = int(body[11])
+					r.Unlock()
 
 					/*
 						fr := int(body[10] & 0x7F)
@@ -230,9 +240,15 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 						}
 					*/
 
-					pad1 := binary.BigEndian.Uint16(body[6:8])
-					pad2 := binary.BigEndian.Uint16(body[10:12])
-					glog.Info(padString(pad1, pad2))
+					if false {
+						pad1 := binary.BigEndian.Uint16(body[6:8])
+						pad2 := binary.BigEndian.Uint16(body[10:12])
+						glog.Info(padString(pad1, pad2))
+					}
+					r.Lock()
+					//r.last6Fr[k] = int(body[2] & 0x7F)
+					r.lastHash[k] = int(body[9])
+					r.Unlock()
 
 					/*
 						fr := int(body[2] & 0x7F)
@@ -243,14 +259,59 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 				}
 
 				// glog.Info("lastnop", lastnop)
-				glog.Infof("[12] %v %v", peer.UserId(), hex.EncodeToString(body[:x]))
+				// glog.Infof("[12] %v %v", peer.UserId(), hex.EncodeToString(body[:x]))
 			case 4:
 				{
+					// [0] = 4 (length)
+					// [1] = (type << 4) | player_id
+					// [2] = dat1
+					// [3] = dat2
+
+					// Type 1 : after join a room     ex: 04100000 04110000
+					// Type 3 : after scene change    ex: 04300000 04310000
+					// Type 7 : wait a player?        ex: 0471000e
+					// Type 9 : sync (every 160 fr ?) ex: 04910200 04910100
 					// glog.Info("lastnop", lastnop)
+					glog.Infof("lastFr:%x(%x) lastHash:%x", lastFr, lastFr|0x80, lastHash)
 					glog.Infof("[4] %v %v", peer.UserId(), hex.EncodeToString(body[:x]))
 				}
 			case 18:
 				{
+					// 2fr update pad state (double chane)
+					// ex: Press X 1fr
+					// lastFr:1b lastHash:30
+					// 12 20 001c 0080 17 3c 0041 001d 0000 7b 8d 0001
+					// [0] := 12 (length)
+					// [1] := player_id | 0x20
+					// [2] := 0 always zero
+					// [3] := frame_id 1c
+					// [4-5] := pad1-1 0080
+					// [6] := ? 17
+					// [7] := ? hash
+					// [8-9] := pad2-1 0041
+					// [10] := 00 always zero
+					// [11] := frame_id 1d
+					// [12-13] := pad1-2 0000
+					// [14] := ? 7b
+					// [15] := ? hash
+					// [16-17] := pad2-2 0001
+
+					// RDown 1fr
+					// lastFr:38 lastHash:df
+					// 12 20 00 39 1000 40 df 0001 003a 0000 40 df 0001
+
+					if true {
+						pad11 := binary.BigEndian.Uint16(body[4:6])
+						pad21 := binary.BigEndian.Uint16(body[8:10])
+						glog.Info(padString(pad11, pad21))
+					}
+					if true {
+						pad11 := binary.BigEndian.Uint16(body[12:14])
+						pad21 := binary.BigEndian.Uint16(body[16:18])
+						glog.Info(padString(pad11, pad21))
+					}
+
+					glog.Infof("lastFr:%x(%x) lastHash:%x", lastFr, lastFr|0x80, lastHash)
 					glog.Infof("[18] %v %v", peer.UserId(), hex.EncodeToString(body[:x]))
 				}
 			default:
@@ -258,6 +319,26 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 			}
 			body = body[x:]
 		}
+	}
+
+	if false {
+		body := msg.GetBody()
+		for i := 0; i < len(body); {
+			x := body[i]
+			switch x {
+			case 4:
+				btype := body[1] >> 4
+				if btype == 7 {
+					glog.Infoln("trim", body[i:i+4])
+					body = append(body[:i], body[i+4:]...)
+				} else {
+					i += int(x)
+				}
+			default:
+				i += int(x)
+			}
+		}
+		msg.Body = body
 	}
 
 	r.RLock()
@@ -292,6 +373,7 @@ func (r *Room) Join(p Peer) {
 	p.SetPosition(len(r.peers))
 	r.peers = append(r.peers, p)
 	r.last6Fr = append(r.last6Fr, 0)
+	r.lastHash = append(r.lastHash, 0)
 	r.Unlock()
 }
 
