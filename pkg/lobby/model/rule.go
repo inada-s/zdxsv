@@ -60,16 +60,18 @@ func NewRule() *Rule {
 
 func (r *Rule) Serialize() []byte {
 	b := new(bytes.Buffer)
-	var zero16 uint16
-	var zero8 byte
-	binary.Write(b, binary.BigEndian, uint16(100)) // Rule Length
-	binary.Write(b, binary.BigEndian, zero16)      // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
+	var zero16 uint16 = 0
+	var zero8 byte = 0
+
+	binary.Write(b, binary.BigEndian, uint16(110)) // Rule Length
+	binary.Write(b, binary.BigEndian, uint8(0x00)) // 0x01 : GetCollectionPoint / 0x20~ Buggy
+	binary.Write(b, binary.BigEndian, uint8(0xFF)) // 0xff : Disable CPU
+	binary.Write(b, binary.BigEndian, uint8(0x00)) // Buggy
+	binary.Write(b, binary.BigEndian, uint8(0x00)) // Unknown
 	for i := 0; i < 16*4; i++ {
 		binary.Write(b, binary.BigEndian, byte(0xFF)) // Available MS Mask
 	}
-	binary.Write(b, binary.BigEndian, zero8) // MS/MA Auto Only
+	binary.Write(b, binary.BigEndian, zero8) // Unknown
 	binary.Write(b, binary.BigEndian, r.visibleTeam)
 	binary.Write(b, binary.BigEndian, r.battleGauge)
 	binary.Write(b, binary.BigEndian, r.battleGauge)
