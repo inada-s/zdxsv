@@ -11,5 +11,13 @@ services:
       - "80:80"
   lobby:
     network_mode: "host"
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
+    command: lobby
   battle:
     network_mode: "host"
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
+    command: battle
