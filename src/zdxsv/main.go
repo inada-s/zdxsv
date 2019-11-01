@@ -81,6 +81,8 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
+	glog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.")
+
 	args := flag.Args()
 	glog.Infoln(args, len(args))
 

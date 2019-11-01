@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"zdxsv/pkg/config"
@@ -15,8 +16,8 @@ func mainLobby() {
 	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.RPCAddr))
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	<-c
+	signal.Notify(c)
+	s := <-c
+	fmt.Println("Got signal:", s)
 	app.Quit()
 }
