@@ -2,10 +2,11 @@ package lobby
 
 import (
 	"fmt"
-	"github.com/golang/glog"
 	"strconv"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
+
+	"github.com/golang/glog"
 )
 
 // 6007 : ServerFull サーバ選択画面へ
@@ -126,8 +127,9 @@ var _ = register(0x614C, "GetTopInformation", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write8(0)
+
 	//w.Write8(1)
-	//w.WriteString("<B>こんにちはこんにちはこんにちは<B>")
+	// 昇格降格が出る. a.Status = StatusError
 	p.SendMessage(a)
 })
 

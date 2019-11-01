@@ -196,7 +196,7 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 					}
 
 					r.Lock()
-					//r.last6Fr[k] = int(body[10] & 0x7F)
+					r.last6Fr[k] = int(body[10] & 0x7F)
 					r.lastHash[k] = int(body[11])
 					r.Unlock()
 
@@ -246,7 +246,7 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 						glog.Info(padString(pad1, pad2))
 					}
 					r.Lock()
-					//r.last6Fr[k] = int(body[2] & 0x7F)
+					r.last6Fr[k] = int(body[2]&0x7F) + 1
 					r.lastHash[k] = int(body[9])
 					r.Unlock()
 
@@ -311,6 +311,10 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 						glog.Info(padString(pad11, pad21))
 					}
 
+					r.Lock()
+					r.last6Fr[k] = int(body[11] & 0x7F)
+					r.lastHash[k] = int(body[15])
+					r.Unlock()
 					glog.Infof("lastFr:%x(%x) lastHash:%x", lastFr, lastFr|0x80, lastHash)
 					glog.Infof("[18] %v %v", peer.UserId(), hex.EncodeToString(body[:x]))
 				}
@@ -321,24 +325,43 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 		}
 	}
 
-	if false {
+	if true {
 		body := msg.GetBody()
 		for i := 0; i < len(body); {
 			x := body[i]
 			switch x {
 			case 4:
-				btype := body[1] >> 4
-				if btype == 7 {
-					glog.Infoln("trim", body[i:i+4])
-					body = append(body[:i], body[i+4:]...)
-				} else {
-					i += int(x)
+				if body[i+1] == 0x90 {
+					glog.Infof("[mod]1")
+					body[i+1] = 0x10
+					body[i+2] = 0x00
+					body[i+3] = 0x00
 				}
+				if body[i+1] == 0x91 {
+					glog.Infof("[mod]2")
+					body[i+1] = 0x10
+					body[i+2] = 0x00
+					body[i+3] = 0x00
+				}
+				i += int(x)
 			default:
 				i += int(x)
 			}
 		}
 		msg.Body = body
+	}
+
+	if glog.V(2) {
+		r.RLock()
+		delta := r.last6Fr[k] - lastFr
+		if delta < 0 {
+			delta = r.last6Fr[k] - lastFr + 64
+		}
+		if delta != 2 {
+			glog.Infof("Fr %v > %v (delta %v)", lastFr, r.last6Fr[k], delta)
+			glog.Infof("%v %v", msg.GetUserId(), hex.EncodeToString(msg.GetBody()))
+		}
+		r.RUnlock()
 	}
 
 	r.RLock()
