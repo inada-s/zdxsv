@@ -6,4 +6,4 @@ go build -o /zdxsv \
   --ldflags '-extldflags "-static"' \
   ./src/zdxsv
 cd /
-/zdxsv -v=3 "$@"
+exec /zdxsv -v=3 "$@"
