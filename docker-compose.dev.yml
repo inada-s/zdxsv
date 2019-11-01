@@ -6,18 +6,13 @@ services:
     environment:
       DOMAINS: 'zdxsv.example.com -> http://web:80'
       STAGE: 'local'
+
   web:
     ports:
       - "80:80"
+
   lobby:
     network_mode: "host"
-    build:
-      context: .
-      dockerfile: "./docker/zdxsv/Dockerfile"
-    command: lobby
+
   battle:
     network_mode: "host"
-    build:
-      context: .
-      dockerfile: "./docker/zdxsv/Dockerfile"
-    command: battle
