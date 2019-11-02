@@ -2,10 +2,11 @@ package lobby
 
 import (
 	"fmt"
-	"github.com/golang/glog"
 	"strconv"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
+
+	"github.com/golang/glog"
 )
 
 // 6007 : ServerFull サーバ選択画面へ
@@ -125,9 +126,8 @@ var _ = register(0x6190, "DecideTeam", func(p *AppPeer, m *Message) {
 var _ = register(0x614C, "GetTopInformation", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write8(0)
-	//w.Write8(1)
-	//w.WriteString("<B>こんにちはこんにちはこんにちは<B>")
+	w.Write8(1)
+	w.WriteString("<BODY><LF=5><CENTER>ーパッド遅延軽減ハックを試験導入中ー<BR><BR>ＵＤＰプロキシ使用推奨です。<BR>不具合やラグの改善具合の報告にご協力ください。<END>")
 	p.SendMessage(a)
 })
 
