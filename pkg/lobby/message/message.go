@@ -261,6 +261,10 @@ func (msg *Message) Writer() *MessageBodyWriter {
 	}
 }
 
+func (m *MessageBodyWriter) BodyLen() int {
+	return len(m.msg.Body)
+}
+
 func (m *MessageBodyWriter) Write(v []byte) *MessageBodyWriter {
 	m.buf.Write(v)
 	m.msg.Body = m.buf.Bytes()
@@ -273,14 +277,32 @@ func (m *MessageBodyWriter) Write8(v byte) *MessageBodyWriter {
 	return m
 }
 
+func (m *MessageBodyWriter) Write8LE(v byte) *MessageBodyWriter {
+	binary.Write(m.buf, binary.LittleEndian, v)
+	m.msg.Body = m.buf.Bytes()
+	return m
+}
+
 func (m *MessageBodyWriter) Write16(v uint16) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
 	m.msg.Body = m.buf.Bytes()
 	return m
 }
 
+func (m *MessageBodyWriter) Write16LE(v uint16) *MessageBodyWriter {
+	binary.Write(m.buf, binary.LittleEndian, v)
+	m.msg.Body = m.buf.Bytes()
+	return m
+}
+
 func (m *MessageBodyWriter) Write32(v uint32) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
+	m.msg.Body = m.buf.Bytes()
+	return m
+}
+
+func (m *MessageBodyWriter) Write32LE(v uint32) *MessageBodyWriter {
+	binary.Write(m.buf, binary.LittleEndian, v)
 	m.msg.Body = m.buf.Bytes()
 	return m
 }

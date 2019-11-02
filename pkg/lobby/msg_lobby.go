@@ -2,8 +2,6 @@
 package lobby
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	. "zdxsv/pkg/lobby/message"
 )
@@ -73,19 +71,35 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	lobbyId := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write16(lobbyId)
-	if lobbyId == 1 {
-		w.WriteString(fmt.Sprintf("<B>ロビー %d<BR>接続テスト対戦専用", lobbyId))
-	} else if lobbyId == 24 {
-		raAddr := 0x120 - 12
-		data := make([]byte, raAddr, raAddr)
 
-		// Client uses strcpy, so we fill with Null.
-		buf := new(bytes.Buffer)
-		binary.Write(buf, binary.LittleEndian, uint32(0)) // null
-		binary.Write(buf, binary.LittleEndian, uint32(0)) // null
-		binary.Write(buf, binary.LittleEndian, uint32(0)) // null
-		binary.Write(buf, binary.LittleEndian, uint32(0)) // null
+	if lobbyId == 1 {
+		w.Write16(lobbyId)
+		w.WriteString(fmt.Sprintf("<B>ロビー %d<BR>接続テスト対戦専用", lobbyId))
+	} else if lobbyId == 2 {
+		w.Write16(lobbyId)
+		w.WriteString(fmt.Sprintf("<B>shingoshingoshingoshingo %d", lobbyId))
+	} else if lobbyId == 3 {
+		targetBodySize := 0x0120 - 8
+
+		// 0x00c617B0 ~ 0x00c617CF
+		w.Write16(lobbyId)
+		w.Write16(uint16(targetBodySize - 4))
+		w.Write8('<')
+		w.Write8('B')
+		w.Write8('>')
+		w.Write8('f')
+		w.Write8('i')
+		w.Write8('x')
+		w.Write8('l')
+		w.Write8('a')
+		w.Write8('g')
+		w.Write8('t')
+		w.Write8('b')
+		w.Write8('l')
+		w.Write32(uint32(0))
+		w.Write32(uint32(0))
+		w.Write32(uint32(0))
+		w.Write32(uint32(0))
 
 		fixLagTable := []uint32{
 			0x00000000, 0x00000000, 0x00000000, 0x00000000,
@@ -101,33 +115,32 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 			0xdfa40040, 0xdfa50030, 0xdfa20020, 0xdfa30010,
 			0x27bd0050,
 		}
+
+		// 0x00c617D0 ~
 		for _, op := range fixLagTable {
-			binary.Write(buf, binary.LittleEndian, op)
+			w.Write32LE(op)
 		}
 
 		// return to original address, fixing sp.
-		binary.Write(buf, binary.LittleEndian, uint32(0xdfbf0000)) // ld ra $0000(sp)
-		binary.Write(buf, binary.LittleEndian, uint32(0x03e00008)) // jr ra
-		binary.Write(buf, binary.LittleEndian, uint32(0x27bd0010)) // addiu sp, sp $0010
+		w.Write32LE(uint32(0xdfbf0000)) // ld ra $0000(sp)
+		w.Write32LE(uint32(0x00000000)) // nop
+		w.Write32LE(uint32(0x27bd0010)) // addiu sp, sp $0010
+		w.Write32LE(uint32(0x00000000)) // nop
+		w.Write32LE(uint32(0x03e00008)) // jr ra
 
-		copy(data, buf.Bytes())
+		for w.BodyLen() < targetBodySize-8 {
+			w.Write8(uint8(0))
+		}
 
 		// Reproduce client stack.
-		data[raAddr-8] = 0x00
-		data[raAddr-7] = 0x00
-		data[raAddr-6] = byte(lobbyId & 0xFF)
-		data[raAddr-5] = byte(lobbyId >> 8 & 0xFF)
+		w.Write16LE(0)
+		w.Write16LE(lobbyId)
 
 		// Overwrite return addr in stack for client to run my program.
-		jump := uint32(0x00c617B4 + 16)
-		data[raAddr-4] = byte(jump & 0xFF)
-		data[raAddr-3] = byte(jump >> 8 & 0xFF)
-		data[raAddr-2] = byte(jump >> 16 & 0xFF)
-		data[raAddr-1] = byte(jump >> 24 & 0xFF)
-
-		w.Write16(uint16(len(data)))
-		w.Write(data)
+		w.Write32LE(uint32(0x00c22cc0))
+		//w.Write32LE(uint32(0x00c617D0))
 	} else {
+		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<B>", lobbyId))
 	}
 	p.SendMessage(a)
