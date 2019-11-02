@@ -75,13 +75,9 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	if lobbyId == 1 {
 		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<BR>接続テスト対戦専用", lobbyId))
-	} else if lobbyId == 2 {
-		w.Write16(lobbyId)
-		w.WriteString(fmt.Sprintf("<B>shingoshingoshingoshingo %d", lobbyId))
 	} else if lobbyId == 3 {
 		targetBodySize := 0x0120 - 8
 
-		// 0x00c617B0 ~ 0x00c617CF
 		w.Write16(lobbyId)
 		w.Write16(uint16(targetBodySize - 4))
 		w.Write8('<')
@@ -116,7 +112,6 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 			0x27bd0050,
 		}
 
-		// 0x00c617D0 ~
 		for _, op := range fixLagTable {
 			w.Write32LE(op)
 		}
@@ -138,7 +133,6 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 
 		// Overwrite return addr in stack for client to run my program.
 		w.Write32LE(uint32(0x00c22cc0))
-		//w.Write32LE(uint32(0x00c617D0))
 	} else {
 		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<B>", lobbyId))
