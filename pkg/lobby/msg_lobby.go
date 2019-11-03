@@ -71,69 +71,13 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	lobbyId := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
-
-	if lobbyId == 1 {
+	switch lobbyId {
+	case 1:
 		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<BR>接続テスト対戦専用", lobbyId))
-	} else if lobbyId == 3 {
-		targetBodySize := 0x0120 - 8
-
-		w.Write16(lobbyId)
-		w.Write16(uint16(targetBodySize - 4))
-		w.Write8('<')
-		w.Write8('B')
-		w.Write8('>')
-		w.Write8('f')
-		w.Write8('i')
-		w.Write8('x')
-		w.Write8('l')
-		w.Write8('a')
-		w.Write8('g')
-		w.Write8('t')
-		w.Write8('b')
-		w.Write8('l')
-		w.Write32(uint32(0))
-		w.Write32(uint32(0))
-		w.Write32(uint32(0))
-		w.Write32(uint32(0))
-
-		fixLagTable := []uint32{
-			0x00000000, 0x00000000, 0x00000000, 0x00000000,
-			0x27bdffb0,
-			0xffa40040, 0xffa50030, 0xffa20020, 0xffa30010,
-			0x24040002, 0x24050006, 0x3c030060, 0x2463fba0,
-			0xa0640000, 0xa0650004, 0xa0650008,
-			0xa064000c, 0xa0650010, 0xa0650014,
-			0xa0640018, 0xa065001c, 0xa0650020,
-			0xa0640024, 0xa0650028, 0xa065002c,
-			0xa0640030, 0xa0650034, 0xa0650038,
-			0xa064003c, 0xa0650040, 0xa0650044,
-			0xdfa40040, 0xdfa50030, 0xdfa20020, 0xdfa30010,
-			0x27bd0050,
-		}
-
-		for _, op := range fixLagTable {
-			w.Write32LE(op)
-		}
-
-		// return to original address, fixing sp.
-		w.Write32LE(uint32(0xdfbf0000)) // ld ra $0000(sp)
-		w.Write32LE(uint32(0x00000000)) // nop
-		w.Write32LE(uint32(0x27bd0010)) // addiu sp, sp $0010
-		w.Write32LE(uint32(0x00000000)) // nop
-		w.Write32LE(uint32(0x03e00008)) // jr ra
-
-		for w.BodyLen() < targetBodySize-8 {
-			w.Write8(uint8(0))
-		}
-
-		// Reproduce client stack.
-		w.Write16LE(0)
-		w.Write16LE(lobbyId)
-
-		// Overwrite return addr in stack for client to run my program.
-		w.Write32LE(uint32(0x00c22cc0))
-	} else {
+	case 3:
+		a = SetPadDelayLobbyHack(p, m)
+	default:
 		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<B>", lobbyId))
 	}
