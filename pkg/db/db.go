@@ -61,7 +61,7 @@ type User struct {
 	DailyLoseCount   int
 
 	Created time.Time
-	System  byte
+	System  uint32
 }
 
 type DB interface {

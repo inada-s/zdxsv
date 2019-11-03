@@ -77,6 +77,8 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<BR>接続テスト対戦専用", lobbyId))
 	case 3:
 		a = SetPadDelayLobbyHack(p, m)
+	case 4:
+		a = SetWideScreenLobbyHack(p, m)
 	default:
 		w.Write16(lobbyId)
 		w.WriteString(fmt.Sprintf("<B>ロビー %d<B>", lobbyId))
@@ -89,7 +91,6 @@ var _ = register(0x6305, "EnterLobby", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	p.app.OnEnterLobby(p, lobbyId)
 	p.SendMessage(a)
-
 })
 
 var _ = register(0x6408, "ExitLobby", func(p *AppPeer, m *Message) {
@@ -111,6 +112,10 @@ var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *AppPeer, m *Message) 
 	w.Write16(aeug)
 	w.Write16(titans)
 	p.SendMessage(a)
+
+	if lobbyId == 1 {
+		SendLobbyChatHackNotice(p)
+	}
 })
 
 var _ = register(0x640E, "EntryLobbyBattle", func(p *AppPeer, m *Message) {
@@ -145,6 +150,9 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 
 var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	str := m.Reader().ReadEncryptedString()
+	if p.Lobby != nil && p.Lobby.Id == 1 {
+		LobbyChatHack(p, str)
+	}
 	p.app.OnSendChatMessage(p, str)
 })
 
