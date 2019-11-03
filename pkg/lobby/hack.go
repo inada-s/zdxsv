@@ -136,18 +136,19 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 	w.Write32(uint32(0))
 
 	fixvalue01 := uint32(0x24843f40)
-	fixvalue02 := uint32(0x3c044440)
-	fixvalue03 := uint32(0x2485e7ff)
+	fixvalue02 := uint32(0x3c0444c0)
+	fixvalue03 := uint32(0x2485f400)
+	fixvalue04 := uint32(0x3c044440)
+	fixvalue05 := uint32(0x2485e7ff)
 
 	if p.System&0x0f == 0 {
 		// set original value to disable the patch
 		fixvalue01 = uint32(0x24843f80)
-		fixvalue02 = uint32(0x3c044480)
-		fixvalue03 = uint32(0x2485e000)
+		fixvalue02 = uint32(0x3c044500)
+		fixvalue03 = uint32(0x2485f000)
+		fixvalue04 = uint32(0x3c044480)
+		fixvalue05 = uint32(0x2485e000)
 	}
-	_ = fixvalue01
-	_ = fixvalue02
-	_ = fixvalue03
 
 	// apply wide screen patch.
 	for _, op := range []uint32{
@@ -159,14 +160,14 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 		0xffbf0000,
 		0x3c020027,
 		0x3c043c02,
-		0x24843f40,
+		fixvalue01,
 		0xac44cf84,
 		0x3c020084,
-		0x3c0444c0,
-		0x2485f400,
+		fixvalue02,
+		fixvalue03,
 		0xac453d30,
-		0x3c044440,
-		0x2485e7ff,
+		fixvalue04,
+		fixvalue05,
 		0xac453ef0,
 		0xac4540b0,
 		0xdfa40040,
