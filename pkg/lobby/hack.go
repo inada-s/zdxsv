@@ -3,8 +3,6 @@ package lobby
 import (
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
-
-	"github.com/golang/glog"
 )
 
 func SendLobbyChatHackNotice(p *AppPeer) {
@@ -152,56 +150,19 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 
 	// apply wide screen patch.
 	for _, op := range []uint32{
-		0x27bdffb0,
-		0xffa40040,
-		0xffa50030,
-		0xffa20020,
-		0xffa30010,
-		0xffbf0000,
-		0x3c020027,
-		0x3c043c02,
-		fixvalue01,
-		0xac44cf84,
-		0x3c020084,
-		fixvalue02,
-		fixvalue03,
-		0xac453d30,
-		fixvalue04,
-		fixvalue05,
-		0xac453ef0,
-		0xac4540b0,
-		0xdfa40040,
-		0xdfa50030,
-		0xdfa20020,
-		0xdfa30010,
-		0xdfbf0000,
-		0x03e00008,
-		0x27bd0050,
-		0x00000000,
-		0x27bdffb0,
-		0xffa40040,
-		0xffa50030,
-		0xffa20020,
-		0xffa30010,
-		0xffbf0000,
-		0x3c0500c2,
-		0x24a52cc0,
-		0x3c040010,
-		0x2484a000,
-		0x3c060000,
-		0x0c046a66,
-		0x24c60064,
-		0x3c040c04,
-		0x2484e800,
-		0x3c050027,
-		0xaca4d5d4,
-		0xdfa40040,
-		0xdfa50030,
-		0xdfa20020,
-		0xdfa30010,
-		0xdfbf0000,
-		0x27bd0050,
-		0x00000000,
+		0x27bdffb0, 0xffa40040, 0xffa50030, 0xffa20020,
+		0xffa30010, 0xffbf0000, 0x3c020027, 0x3c043c02,
+		fixvalue01, 0xac44cf84, 0x3c020084, fixvalue02,
+		fixvalue03, 0xac453d30, fixvalue04, fixvalue05,
+		0xac453ef0, 0xac4540b0, 0xdfa40040, 0xdfa50030,
+		0xdfa20020, 0xdfa30010, 0xdfbf0000, 0x03e00008,
+		0x27bd0050, 0x00000000, 0x27bdffb0, 0xffa40040,
+		0xffa50030, 0xffa20020, 0xffa30010, 0xffbf0000,
+		0x3c0500c2, 0x24a52cc0, 0x3c040010, 0x2484a000,
+		0x3c060000, 0x0c046a66, 0x24c60064, 0x3c040c04,
+		0x2484e800, 0x3c050027, 0xaca4d5d4, 0xdfa40040,
+		0xdfa50030, 0xdfa20020, 0xdfa30010, 0xdfbf0000,
+		0x27bd0050, 0x00000000,
 	} {
 		w.Write32LE(op)
 	}
@@ -211,13 +172,10 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 	w.Write32LE(uint32(0x03e00008)) // jr ra
 	w.Write32LE(uint32(0x27bd0010)) // addiu sp, sp $0010
 
-	n := 0
 	// padding
 	for w.BodyLen() < targetBodySize-8 {
-		n++
 		w.Write8(uint8(0))
 	}
-	glog.Infoln("padding:", n)
 
 	// Reproduce client stack.
 	w.Write16LE(0)
