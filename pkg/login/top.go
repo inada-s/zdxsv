@@ -1,6 +1,7 @@
 package login
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"text/template"
@@ -65,8 +66,8 @@ var messageLoginFail = `<br><br><br><br><br><br>
 	ログインに失敗しました。<br>
 	アカウントをお持ちでない場合はTOPから新規登録してください。<br>`
 var messageMainte = `<br><br><br><br><br><br>
-   現在メンテナンス中です。<br>
-   しばらく時間を置いてから再度ログインしてください。<br>`
+	現在メンテナンス中です。<br>
+	しばらく時間を置いてから再度ログインしてください。<br>`
 
 type commonParam struct {
 	ServerVersion string
@@ -99,6 +100,12 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a, err := db.DefaultDB.GetAccountByLoginKey(loginKey)
+	if err == sql.ErrNoRows && len(loginKey) == 10 {
+		// Since this login key seems to have been registered on another server,
+		// new registration is performed.
+		a, err = db.DefaultDB.RegisterAccountWithLoginKey(r.RemoteAddr, loginKey)
+	}
+
 	if err != nil {
 		glog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")

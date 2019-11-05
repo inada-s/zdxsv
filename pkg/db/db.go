@@ -67,6 +67,7 @@ type User struct {
 type DB interface {
 	Init() error
 	RegisterAccount(ip string) (*Account, error)
+	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
 	GetAccountByLoginKey(key string) (*Account, error)
 	LoginAccount(*Account) error
 	RegisterUser(loginKey string) (*User, error)

@@ -2,9 +2,10 @@ package db
 
 import (
 	"database/sql"
+	"time"
+
 	_ "github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
-	"time"
 )
 
 type SQLiteDB struct {
@@ -63,6 +64,23 @@ VALUES
 	}
 	a := &Account{
 		LoginKey:  key,
+		CreatedIP: ip,
+	}
+	return a, nil
+}
+
+func (db SQLiteDB) RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error) {
+	now := time.Now()
+	_, err := db.Exec(`
+INSERT INTO account
+	(login_key, created_ip, created, last_login, system)
+VALUES
+	(?, ?, ?, ?, ?)`, loginKey, ip, now, now, 0)
+	if err != nil {
+		return nil, err
+	}
+	a := &Account{
+		LoginKey:  loginKey,
 		CreatedIP: ip,
 	}
 	return a, nil
