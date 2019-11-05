@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"fmt"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 )
@@ -43,19 +44,8 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 
 	w.Write16(lobbyId)
 	w.Write16(uint16(targetBodySize - 4))
-	w.Write8('<')
-	w.Write8('B')
-	w.Write8('>')
-	w.Write8('f')
-	w.Write8('i')
-	w.Write8('x')
-	w.Write8('l')
-	w.Write8('a')
-	w.Write8('g')
-	w.Write8('t')
-	w.Write8('b')
-	w.Write8('l')
-	w.Write32(uint32(0))
+
+	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyId)))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
@@ -113,22 +103,8 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 
 	w.Write16(lobbyId)
 	w.Write16(uint16(targetBodySize - 4))
-	w.Write8('<')
-	w.Write8('B')
-	w.Write8('>')
-	w.Write8('w')
-	w.Write8('i')
-	w.Write8('d')
-	w.Write8('e')
-	w.Write8('s')
-	w.Write8('c')
-	w.Write8('r')
-	w.Write8('e')
-	w.Write8('e')
-	w.Write8('n')
-	w.Write8(0)
-	w.Write8(0)
-	w.Write8(0)
+
+	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyId)))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))

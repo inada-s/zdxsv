@@ -182,7 +182,13 @@ func (a *App) Serve() {
 				if f, ok := a.handlers[args.msg.Command]; ok {
 					f(args.peer, args.msg)
 				} else {
-					glog.Errorf("Handler not found: msg = %v", args.msg)
+					glog.Errorf("======================================")
+					glog.Errorf("======================================")
+					glog.Errorf("======================================")
+					glog.Errorf("Handler not found: name = %v msg = %v", symbolMap[args.msg.Command], args.msg)
+					glog.Errorf("======================================")
+					glog.Errorf("======================================")
+					glog.Errorf("======================================")
 					if args.msg.Category == message.CategoryQuestion {
 						args.peer.SendMessage(message.NewServerAnswer(args.msg))
 					}
