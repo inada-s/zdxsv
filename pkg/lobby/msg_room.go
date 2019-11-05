@@ -326,17 +326,14 @@ func NoticeRoomName(p *AppPeer, roomId uint16, name string) {
 	p.SendMessage(n)
 }
 
-/*
-//TODO検証
-func NoticeRoomEntryUser(p *AppPeer, roomId, aeug, titans uint16) {
-	n := NewServerNotice(0x6506)
+func NoticeRoomEntryUserCountForLobbyUser(p *AppPeer, roomId, aeug, titans uint16) {
+	n := NewServerNotice(0x6412)
 	w := n.Writer()
 	w.Write16(roomId)
 	w.Write16(aeug)
 	w.Write16(titans)
 	p.SendMessage(n)
 }
-*/
 
 func NoticeRoomStatus(p *AppPeer, roomId uint16, status byte) {
 	n := NewServerNotice(0x6404)

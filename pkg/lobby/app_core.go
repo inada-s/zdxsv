@@ -1,7 +1,6 @@
 package lobby
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -392,14 +391,12 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 		}
 
 		aeug, titans := lobby.GetEntryUserCount()
-		msg := fmt.Sprintf("エゥーゴx%d ティターンズx%d", aeug, titans)
 		for _, u := range lobby.Users {
 			peer, ok := a.users[u.UserId]
 			if !ok || peer.Room != nil {
 				continue
 			}
-			NoticeChatMessage(peer, "SERVER", ">", msg)
-			// NoticeEntryUserCount(peer, lobby.Id, aeug, titans)
+			NoticeLobbyEntryUserCount(peer, lobby.Id, aeug, titans)
 		}
 	}
 }
@@ -737,6 +734,7 @@ func (a *App) OnGetRoomEntryList(p *AppPeer, roomId uint16) (count uint8, ids []
 
 func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
 	p.Room.Entry(&p.User, side)
+	aeug, titans := p.Room.GetEntryUserCount()
 
 	for id := range p.Lobby.Users {
 		peer, ok := a.users[id]
@@ -744,19 +742,8 @@ func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
 			continue
 		}
 		NoticeRoomEntry(peer, p.Room.Id, p.UserId, p.Entry)
+		NoticeRoomEntryUserCountForLobbyUser(peer, p.Room.Id, aeug, titans)
 	}
-
-	aeug, titans := p.Room.GetEntryUserCount()
-	msg := fmt.Sprintf("エゥーゴx%d ティターンズx%d", aeug, titans)
-	for _, u := range p.Room.Users {
-		peer, ok := a.users[u.UserId]
-		if !ok {
-			continue
-		}
-		NoticeChatMessage(peer, "SERVER", ">", msg)
-		// NoticeEntryUserCount(peer, p.Room.Id, aeug, titans)
-	}
-
 }
 
 func (a *App) OnEnterRoom(p *AppPeer, roomId, _, _ uint16) bool {
