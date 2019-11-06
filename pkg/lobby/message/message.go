@@ -5,10 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"sync/atomic"
 
-	"github.com/axgle/mahonia"
 	"github.com/golang/glog"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/encoding/japanese"
 )
 
 const (
@@ -170,9 +173,8 @@ func NewClientNotice(command uint16) *Message {
 }
 
 type MessageBodyReader struct {
-	data []byte
-	seq  uint16
-	r    *bytes.Reader
+	seq uint16
+	r   *bytes.Reader
 }
 
 func (msg *Message) Reader() *MessageBodyReader {
@@ -246,7 +248,12 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		glog.Errorln("decrypt faild mismatch checksum")
 		return ""
 	}
-	return mahonia.NewDecoder("Shift_JIS").ConvertString(string(buf))
+
+	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
+	if err != nil {
+		glog.Errorln(err)
+	}
+	return string(ret)
 }
 
 type MessageBodyWriter struct {
@@ -268,50 +275,61 @@ func (m *MessageBodyWriter) BodyLen() int {
 func (m *MessageBodyWriter) Write(v []byte) *MessageBodyWriter {
 	m.buf.Write(v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write8(v byte) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write8LE(v byte) *MessageBodyWriter {
 	binary.Write(m.buf, binary.LittleEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write16(v uint16) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write16LE(v uint16) *MessageBodyWriter {
 	binary.Write(m.buf, binary.LittleEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write32(v uint32) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) Write32LE(v uint32) *MessageBodyWriter {
 	binary.Write(m.buf, binary.LittleEndian, v)
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
 func (m *MessageBodyWriter) WriteString(v string) *MessageBodyWriter {
-	s := mahonia.NewEncoder("Shift_JIS").ConvertString(v)
-	binary.Write(m.buf, binary.BigEndian, uint16(len(s)))
-	m.buf.WriteString(s)
+	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(v), japanese.ShiftJIS.NewEncoder()))
+	if err != nil {
+		glog.Errorln(err)
+	}
+	binary.Write(m.buf, binary.BigEndian, uint16(len(ret)))
+	m.buf.WriteString(string(ret))
 	m.msg.Body = m.buf.Bytes()
+	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
