@@ -5,21 +5,19 @@ import (
 	"fmt"
 	"net/http"
 	"text/template"
-	_ "time"
 
 	"zdxsv/pkg/assets"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 
-	"github.com/axgle/mahonia"
 	"github.com/golang/glog"
+	"golang.org/x/text/encoding/japanese"
 )
 
 var (
 	tplTop     *template.Template
 	tplLogin   *template.Template
 	tplMessage *template.Template
-	se         mahonia.Encoder
 )
 
 func Prepare() {
@@ -55,8 +53,6 @@ func Prepare() {
 	if err != nil {
 		glog.Fatalln(err)
 	}
-
-	se = mahonia.NewEncoder("Shift_JIS")
 }
 
 var messageRegister = `<br><br><br><br><br><br>
@@ -82,7 +78,8 @@ func HandleTopPage(w http.ResponseWriter, r *http.Request) {
 	p.ServerVersion = "1.0"
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
 	w.WriteHeader(200)
-	sw := se.NewWriter(w)
+
+	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplTop.Execute(sw, p)
 }
 
@@ -131,13 +128,12 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
 	w.WriteHeader(200)
-	sw := se.NewWriter(w)
+	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplLogin.Execute(sw, p)
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
 	a, err := db.DefaultDB.RegisterAccount(r.RemoteAddr)
-	sw := se.NewWriter(w)
 	if err != nil {
 		glog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -146,7 +142,7 @@ func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
 	w.WriteHeader(200)
-	fmt.Fprintf(sw, "<!--COMP-SIGNUP--><!--INPUT-IDS   %s-->\n", a.LoginKey)
+	fmt.Fprintf(w, "<!--COMP-SIGNUP--><!--INPUT-IDS   %s-->\n", a.LoginKey)
 	writeMessagePage(w, r, messageRegister)
 }
 
@@ -154,6 +150,6 @@ func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 	p := commonParam{}
 	p.ServerVersion = "1.0"
 	p.Message = message
-	sw := se.NewWriter(w)
+	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplMessage.Execute(sw, p)
 }
