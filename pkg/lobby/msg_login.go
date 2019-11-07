@@ -137,18 +137,67 @@ func NoticeLoginOk(p *AppPeer) {
 	p.SendMessage(NewServerNotice(0x6104))
 }
 
-var _ = register(0x6144, "GetParsonalRecordCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6144, "GetParsonalRecordHeader", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
+	// The response data is all 1 byte size,
+	// the first one seems to represent the number that follows.
 	w.Write8(0)
 	p.SendMessage(a)
 })
 
-var _ = register(0x6145, "GetParsonalRecord", func(p *AppPeer, m *Message) {
+var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
+	r := m.Reader()
+	kind := r.Read8()
+	page := r.Read8()
+
+	invCount := uint32(p.User.BattleCount - p.User.WinCount + p.User.LoseCount)
+	// FIXME: Consider a reasonable calculation method.
+	c := p.User.WinCount / 100
+	if 14 <= c {
+		c = 14
+	}
+
 	w := a.Writer()
-	w.Write8(0)
+	w.Write8(kind)
+	w.Write8(page)
+	w.Write32(0)        // Entire Player Count
+	w.Write32(0xAAAA)   // Unknown
+	w.Write32(invCount) // Invalid Match Count
+	w.Write8(uint8(c))  // Class
+	w.Write32(0)        // Personal Rank
+	w.Write32(0xBBBB)   // Unknown
+	w.Write32(uint32(p.User.BattleCount))
+	w.Write32(uint32(p.User.WinCount))
+	w.Write32(uint32(p.User.LoseCount))
+	w.Write32(0)      // Kill Count
+	w.Write32(0xCCCC) // Unknown
+	w.Write32(0xDDDD) // Unknown
+	w.Write32(0xEEEE) // Unknown
+	w.Write32(0xFFFF) // Unknown
+
 	p.SendMessage(a)
+})
+
+// *UNUSED*
+var _ = register(0x6146, "GetParsonalRecordVide", func(p *AppPeer, m *Message) {
+	a := NewServerAnswer(m)
+	r := m.Reader()
+	kind := r.Read8()
+	page := r.Read8()
+
+	w := a.Writer()
+	w.Write8(kind)
+	w.Write8(page)
+
+	w.WriteString(fmt.Sprintf("Vide %v %v", kind, page))
+	w.Write8(1)
+	w.Write8(2)
+	w.Write8(3)
+	w.Write8(4)
+	w.Write8(5)
+	w.Write8(6)
 })
 
 var _ = register(0x6143, "SetUserBinary", func(p *AppPeer, m *Message) {
