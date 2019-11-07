@@ -62,8 +62,24 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
 })
 
 var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message) {
+	pos := m.Reader().Read8()
 	a := NewServerAnswer(m)
-	// TODO:戦績データ? 何か調べる
+	w := a.Writer()
+	user := p.app.OnGetBattleOpponentUser(p, pos)
+	w.Write8(pos)
+	// class 14 ~ 0 : [大将][中将][少将][大佐][中佐][少佐][大尉][中尉][少尉][曹長][軍曹][伍長][上等兵][一等兵][二等兵]
+	// Tekitou
+	c := uint16(user.WinCount / 100)
+	if 14 <= c {
+		c = 14
+	}
+	w.Write16(c)
+	w.Write32(0) // Unknown
+	w.Write32(uint32(user.BattleCount))
+	w.Write32(uint32(user.WinCount))
+	w.Write32(uint32(user.LoseCount))
+	w.Write32(0) // Unknown
+
 	p.SendMessage(a)
 })
 

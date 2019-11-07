@@ -46,13 +46,10 @@ var _ = register(0x600E, "EchoPacket", func(p *AppPeer, m *Message) {
 })
 
 var _ = register(0x61A0, "NAZO 0x61A0", func(p *AppPeer, m *Message) {
-	// 06
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	// 自動切断猶予
-	w.Write([]byte{
-		0x00, 0x00, 0x0E, 0x10,
-		0x00, 0x00, 0x02, 0x58})
+	w.Write([]byte{0x00, 0x00, 0x0E, 0x10, 0x00, 0x00, 0x02, 0x58})
 	p.SendMessage(a)
 })
 
