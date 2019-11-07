@@ -1,10 +1,10 @@
 .DS_Store
 .env
 zdxsv.db
-local.toml
-dev.toml
-prod.toml
+zdxsv_test.db
 docker-compose.prod.yml
+*.swp
+*.swo
 
 bin/
 dist/

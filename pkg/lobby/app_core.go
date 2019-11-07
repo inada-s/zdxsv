@@ -1,6 +1,8 @@
 package lobby
 
 import (
+	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -127,7 +129,39 @@ func (a *App) OnDecideUserId(p *AppPeer, userId, name string) {
 		return
 	}
 	a.users[p.UserId] = p
+	AskBattleResult(p)
 	NoticeLoginOk(p)
+}
+
+func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
+	js, err := json.Marshal(result)
+	if err != nil {
+		glog.Errorln("Failed to marshal battle result", err)
+		glog.Infoln(result)
+		return
+	}
+
+	record, err := db.DefaultDB.GetBattleRecordUser(result.BattleCode, p.UserId)
+	if err != nil {
+		glog.Errorln("Failed to load battle record", err)
+		glog.Infoln(string(js))
+		return
+	}
+
+	record.Round = int(result.BattleCount)
+	record.Win = int(result.WinCount)
+	record.Lose = int(result.LoseCount)
+	record.Kill = int(result.KillCount)
+	record.Death = int(result.DeathCount)
+	record.Frame = int(result.TotalFrame)
+	record.Result = string(js)
+
+	err = db.DefaultDB.UpdateBattleRecord(record)
+	if err != nil {
+		glog.Errorln("Failed to save battle record", err)
+		glog.Infoln(record)
+		return
+	}
 }
 
 func (a *App) OnDecideTeam(p *AppPeer, team string) {
@@ -199,6 +233,8 @@ func (a *App) startTestBattle(lobbyId uint16, users []*model.User) (string, bool
 	battle.UDPUsers[u.UserId] = true
 	battle.P2PMap[u.UserId] = map[string]struct{}{}
 	battle.StartTime = time.Now()
+	battle.BattleCode = fmt.Sprintf("t%08d", battle.StartTime.Unix())
+
 	for _, u := range users {
 		battle.Add(u)
 		peer, ok := a.users[u.UserId]
@@ -207,6 +243,7 @@ func (a *App) startTestBattle(lobbyId uint16, users []*model.User) (string, bool
 			NoticeBattleStart(peer)
 		}
 	}
+
 	return "接続テスト対戦開始", true
 }
 
@@ -288,12 +325,31 @@ func (a *App) startBattle(lobbyId uint16, users []*model.User, rule *model.Rule)
 
 	battle.SetBattleServer(net.ParseIP(host), uint16(portNum))
 	battle.StartTime = time.Now()
+	battle.BattleCode = fmt.Sprintf("b%08d", battle.StartTime.Unix())
 
 	for _, u := range users {
-		battle.Add(u)
 		peer, ok := a.users[u.UserId]
 		if ok {
+			battle.Add(u)
 			peer.Battle = battle
+			err = db.DefaultDB.AddBattleRecord(&db.BattleRecord{
+				BattleCode: battle.BattleCode,
+				UserId:     u.UserId,
+				Players:    len(users),
+				Pos:        int(battle.GetPosition(u.UserId)),
+				Side:       int(u.Entry),
+			})
+			if err != nil {
+				glog.Infoln("Failed to add battle record", err)
+			}
+		} else {
+			return false
+		}
+	}
+
+	for _, u := range users {
+		peer, ok := a.users[u.UserId]
+		if ok {
 			NoticeBattleStart(peer)
 		}
 	}
@@ -431,7 +487,13 @@ func (a *App) OnGetBattleRule(p *AppPeer) *model.Rule {
 	return p.Battle.Rule
 }
 
-// var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
+// OnGetBattleCode returns a unique battle code the client is going to join.
+func (a *App) OnGetBattleCode(p *AppPeer) (string, error) {
+	if p.Battle == nil {
+		return "", fmt.Errorf("Battle not found")
+	}
+	return p.Battle.BattleCode, nil
+}
 
 func (a *App) OnGetBattleServerAddress(p *AppPeer) (net.IP, uint16) {
 	if p.Battle == nil {

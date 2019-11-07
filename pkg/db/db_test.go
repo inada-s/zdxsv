@@ -124,6 +124,56 @@ func Test106GetUserListNone(t *testing.T) {
 	assertEq(t, 0, len(users))
 }
 
+func Test200AddBattleRecord(t *testing.T) {
+	br := &BattleRecord{
+		BattleCode: "battlecode",
+		UserId:     "123456",
+		Players:    4,
+		Pos:        1,
+		Side:       2,
+		System:     123,
+	}
+	err := testDB.AddBattleRecord(br)
+	must(t, err)
+
+	actual, err := testDB.GetBattleRecordUser(br.BattleCode, "123456")
+	must(t, err)
+
+	// These values are automatically set.
+	br.Created = actual.Created
+	br.Updated = actual.Updated
+	assertEq(t, br, actual)
+}
+
+func Test201AddUpdateBattleRecord(t *testing.T) {
+	br := &BattleRecord{
+		BattleCode: "battlecode",
+		UserId:     "23456",
+		Players:    4,
+		Pos:        1,
+		Round:      10,
+		Win:        7,
+		Lose:       3,
+		Kill:       123,
+		Death:      456,
+		Frame:      9999,
+		Result:     "result",
+		Side:       2,
+		System:     123,
+	}
+	err := testDB.AddBattleRecord(br)
+	must(t, err)
+	err = testDB.UpdateBattleRecord(br)
+	must(t, err)
+
+	actual, err := testDB.GetBattleRecordUser(br.BattleCode, "23456")
+
+	// These values are automatically set.
+	br.Created = actual.Created
+	br.Updated = actual.Updated
+	assertEq(t, br, actual)
+}
+
 func TestMain(m *testing.M) {
 	flag.Set("logtostderr", "true")
 	flag.Parse()

@@ -47,6 +47,24 @@ CREATE TABLE IF NOT EXISTS battle_user (
         team text default ''
 );
 CREATE INDEX BATTLE_SESSION_ID ON battle_user(session_id);
+CREATE TABLE IF NOT EXISTS battle_record (
+		battle_code text,
+		user_id     text,
+		players     integer default 0,
+		pos         integer default 0,
+		side        integer default 0,
+		round       integer default 0,
+		win         integer default 0,
+		lose        integer default 0,
+		kill        integer default 0,
+		death       integer default 0,
+		frame       integer default 0,
+		result      text default '',
+		created     timestamp,
+		updated     timestamp,
+		system      integer default 0,
+        PRIMARY KEY (battle_code, user_id)
+);
 `)
 	return err
 }
@@ -303,4 +321,102 @@ WHERE
 		user.System,
 		user.UserId)
 	return err
+}
+
+func (db SQLiteDB) AddBattleRecord(battle *BattleRecord) error {
+	now := time.Now()
+	_, err := db.Exec(`
+INSERT INTO battle_record
+	(battle_code, user_id, players, pos, side, created, updated, system)
+VALUES
+	(?, ?, ?, ?, ?, ?, ?, ?)`,
+		battle.BattleCode,
+		battle.UserId,
+		battle.Players,
+		battle.Pos,
+		battle.Side,
+		now,
+		now,
+		battle.System)
+	if err != nil {
+		battle.Created = now
+		battle.Updated = now
+	}
+	return err
+}
+
+func (db SQLiteDB) UpdateBattleRecord(battle *BattleRecord) error {
+	now := time.Now()
+	_, err := db.Exec(`
+UPDATE battle_record
+SET
+	round = ?,
+	win = ?,
+	lose = ?,
+	kill = ?,
+	death = ?,
+	frame = ?,
+	result = ?,
+	updated = ?,
+	system = ?
+WHERE
+	battle_code = ? AND user_id = ?`,
+		battle.Round,
+		battle.Win,
+		battle.Lose,
+		battle.Kill,
+		battle.Death,
+		battle.Frame,
+		battle.Result,
+		now,
+		battle.System,
+		battle.BattleCode,
+		battle.UserId,
+	)
+	return err
+}
+
+func (db SQLiteDB) GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error) {
+	b := new(BattleRecord)
+	r := db.QueryRow(`
+SELECT 
+	battle_code,
+	user_id,
+	players,
+	pos,
+	side,
+	round,
+	win,
+	lose,
+	kill,
+	death,
+	frame,
+	result,
+	created,
+	updated,
+	system
+FROM
+	battle_record
+WHERE
+	battle_code = ? AND user_id = ?`, battleCode, userId)
+	err := r.Scan(
+		&b.BattleCode,
+		&b.UserId,
+		&b.Players,
+		&b.Pos,
+		&b.Side,
+		&b.Round,
+		&b.Win,
+		&b.Lose,
+		&b.Kill,
+		&b.Death,
+		&b.Frame,
+		&b.Result,
+		&b.Created,
+		&b.Updated,
+		&b.System)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
