@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"time"
 
-	_ "github.com/golang/glog"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -63,8 +62,11 @@ CREATE TABLE IF NOT EXISTS battle_record (
 		created     timestamp,
 		updated     timestamp,
 		system      integer default 0,
-        PRIMARY KEY (battle_code, user_id)
+		PRIMARY KEY (battle_code, user_id)
 );
+CREATE INDEX BATTLE_RECORD_USER_ID ON battle_record(user_id);
+CREATE INDEX BATTLE_RECORD_PLAYERS ON battle_record(players);
+CREATE INDEX BATTLE_RECORD_CREATED ON battle_record(created);
 `)
 	return err
 }
@@ -422,15 +424,14 @@ WHERE
 }
 
 func (db SQLiteDB) CalculateUserBattleCount(userId string) (ret BattleCountResult, err error) {
-	r := db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4 AND created > ?`,
-		userId, time.Now().Add(-24*time.Hour))
+	r := db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4`, userId)
 	err = r.Scan(&ret.BattleCount, &ret.WinCount, &ret.LoseCount)
 	if err != nil {
 		return
 	}
 
 	r = db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4 AND created > ?`,
-		userId, time.Now().Add(-24*time.Hour))
+		userId, time.Now().AddDate(0, 0, -1))
 	err = r.Scan(&ret.DailyBattleCount, &ret.DailyWinCount, &ret.DailyLoseCount)
 	if err != nil {
 		return
