@@ -420,3 +420,21 @@ WHERE
 	}
 	return b, nil
 }
+
+func (db SQLiteDB) CalculateUserBattleCount(userId string) (ret BattleCountResult, err error) {
+	r := db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4 AND created > ?`,
+		userId, time.Now().Add(-24*time.Hour))
+	err = r.Scan(&ret.BattleCount, &ret.WinCount, &ret.LoseCount)
+	if err != nil {
+		return
+	}
+
+	r = db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4 AND created > ?`,
+		userId, time.Now().Add(-24*time.Hour))
+	err = r.Scan(&ret.DailyBattleCount, &ret.DailyWinCount, &ret.DailyLoseCount)
+	if err != nil {
+		return
+	}
+
+	return
+}

@@ -15,6 +15,14 @@ import (
 	"zdxsv/pkg/lobby/model"
 )
 
+func genBattleCode(isTest bool) string {
+	code := fmt.Sprintf("%012d", time.Now().UnixNano()/10000000)
+	if isTest {
+		return "t" + code
+	}
+	return "b" + code
+}
+
 // ===========================
 // Login
 // ===========================
@@ -128,6 +136,7 @@ func (a *App) OnDecideUserId(p *AppPeer, userId, name string) {
 		glog.Errorln(err)
 		return
 	}
+
 	a.users[p.UserId] = p
 	AskBattleResult(p)
 	NoticeLoginOk(p)
@@ -162,6 +171,27 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		glog.Infoln(record)
 		return
 	}
+
+	glog.Infoln("before", p.User.User)
+	rec, err := db.DefaultDB.CalculateUserBattleCount(p.UserId)
+	if err != nil {
+		glog.Errorln("Failed to calculate battle count", err)
+		return
+	}
+
+	p.User.BattleCount = rec.BattleCount
+	p.User.WinCount = rec.WinCount
+	p.User.LoseCount = rec.LoseCount
+	p.User.DailyBattleCount = rec.DailyBattleCount
+	p.User.DailyWinCount = rec.DailyWinCount
+	p.User.DailyLoseCount = rec.DailyLoseCount
+
+	err = db.DefaultDB.UpdateUser(&p.User.User)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	glog.Infoln("after", p.User.User)
 }
 
 func (a *App) OnDecideTeam(p *AppPeer, team string) {
@@ -233,7 +263,7 @@ func (a *App) startTestBattle(lobbyId uint16, users []*model.User) (string, bool
 	battle.UDPUsers[u.UserId] = true
 	battle.P2PMap[u.UserId] = map[string]struct{}{}
 	battle.StartTime = time.Now()
-	battle.BattleCode = fmt.Sprintf("t%08d", battle.StartTime.Unix())
+	battle.BattleCode = genBattleCode(true)
 
 	for _, u := range users {
 		battle.Add(u)
@@ -325,7 +355,7 @@ func (a *App) startBattle(lobbyId uint16, users []*model.User, rule *model.Rule)
 
 	battle.SetBattleServer(net.ParseIP(host), uint16(portNum))
 	battle.StartTime = time.Now()
-	battle.BattleCode = fmt.Sprintf("b%08d", battle.StartTime.Unix())
+	battle.BattleCode = genBattleCode(false)
 
 	for _, u := range users {
 		peer, ok := a.users[u.UserId]
@@ -341,6 +371,7 @@ func (a *App) startBattle(lobbyId uint16, users []*model.User, rule *model.Rule)
 			})
 			if err != nil {
 				glog.Infoln("Failed to add battle record", err)
+				return false
 			}
 		} else {
 			return false
@@ -488,6 +519,7 @@ func (a *App) OnGetBattleRule(p *AppPeer) *model.Rule {
 }
 
 // OnGetBattleCode returns a unique battle code the client is going to join.
+// Clients use this value as a random seed.
 func (a *App) OnGetBattleCode(p *AppPeer) (string, error) {
 	if p.Battle == nil {
 		return "", fmt.Errorf("Battle not found")

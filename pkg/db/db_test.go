@@ -174,6 +174,39 @@ func Test201AddUpdateBattleRecord(t *testing.T) {
 	assertEq(t, br, actual)
 }
 
+func Test203CalculateUserBattleCount(t *testing.T) {
+	br := &BattleRecord{
+		BattleCode: "battlecode",
+		UserId:     "11111",
+		Players:    4,
+		Pos:        1,
+		Round:      10,
+		Win:        7,
+		Lose:       3,
+		Kill:       123,
+		Death:      456,
+		Frame:      9999,
+		Result:     "result",
+		Side:       2,
+		System:     123,
+	}
+
+	err := testDB.AddBattleRecord(br)
+	must(t, err)
+	err = testDB.UpdateBattleRecord(br)
+	must(t, err)
+
+	rec, err := testDB.CalculateUserBattleCount("11111")
+	must(t, err)
+
+	assertEq(t, br.Round, rec.BattleCount)
+	assertEq(t, br.Win, rec.WinCount)
+	assertEq(t, br.Lose, rec.LoseCount)
+	assertEq(t, br.Round, rec.DailyBattleCount)
+	assertEq(t, br.Win, rec.DailyWinCount)
+	assertEq(t, br.Lose, rec.DailyLoseCount)
+}
+
 func TestMain(m *testing.M) {
 	flag.Set("logtostderr", "true")
 	flag.Parse()

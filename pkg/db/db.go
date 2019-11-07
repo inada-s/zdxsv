@@ -82,6 +82,15 @@ type BattleRecord struct {
 	System     uint32
 }
 
+type BattleCountResult struct {
+	BattleCount      int
+	WinCount         int
+	LoseCount        int
+	DailyBattleCount int
+	DailyWinCount    int
+	DailyLoseCount   int
+}
+
 type DB interface {
 	Init() error
 	RegisterAccount(ip string) (*Account, error)
@@ -96,4 +105,5 @@ type DB interface {
 	AddBattleRecord(battle *BattleRecord) error
 	GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error)
 	UpdateBattleRecord(record *BattleRecord) error
+	CalculateUserBattleCount(userId string) (ret BattleCountResult, err error)
 }
