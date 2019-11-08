@@ -180,7 +180,6 @@ func (a *App) Serve() {
 			case eventPeerMessage:
 				args.peer.lastRecvTime = time.Now()
 				if f, ok := a.handlers[args.msg.Command]; ok {
-					glog.Infoln("Cmd:", symbolMap[args.msg.Command].Name)
 					f(args.peer, args.msg)
 				} else {
 					glog.Errorf("======================================")
