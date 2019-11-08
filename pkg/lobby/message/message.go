@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 
 	"github.com/golang/glog"
-	"golang.org/x/text/transform"
 	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 const (
@@ -213,7 +213,7 @@ func (m *MessageBodyReader) ReadString() string {
 	size := m.Read16()
 	buf := make([]byte, size, size)
 	m.r.Read(buf)
-	return string(buf)
+	return string(bytes.Trim(buf, "\x00"))
 }
 
 func (m *MessageBodyReader) ReadEncryptedString() string {
@@ -253,7 +253,7 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 	if err != nil {
 		glog.Errorln(err)
 	}
-	return string(ret)
+	return string(bytes.Trim(ret, "\x00"))
 }
 
 type MessageBodyWriter struct {

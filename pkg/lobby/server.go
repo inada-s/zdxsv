@@ -241,7 +241,7 @@ func (c *Conn) dispatchLoop(ctx context.Context, cancel func()) {
 					c.peer.OnMessage(msg)
 				}
 				if n == 0 {
-					glog.Errorf("Got zero byte msg", c.Address())
+					glog.Errorf("Got zero byte msg %v", c.Address())
 					return
 				}
 			}

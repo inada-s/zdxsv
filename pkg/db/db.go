@@ -64,6 +64,33 @@ type User struct {
 	System  uint32
 }
 
+type BattleRecord struct {
+	BattleCode string
+	UserId     string
+	Players    int
+	Pos        int
+	Side       int
+	Round      int
+	Win        int
+	Lose       int
+	Kill       int
+	Death      int
+	Frame      int
+	Result     string
+	Created    time.Time
+	Updated    time.Time
+	System     uint32
+}
+
+type BattleCountResult struct {
+	BattleCount      int
+	WinCount         int
+	LoseCount        int
+	DailyBattleCount int
+	DailyWinCount    int
+	DailyLoseCount   int
+}
+
 type DB interface {
 	Init() error
 	RegisterAccount(ip string) (*Account, error)
@@ -75,4 +102,8 @@ type DB interface {
 	GetUser(userId string) (*User, error)
 	LoginUser(user *User) error
 	UpdateUser(user *User) error
+	AddBattleRecord(battle *BattleRecord) error
+	GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error)
+	UpdateBattleRecord(record *BattleRecord) error
+	CalculateUserBattleCount(userId string) (ret BattleCountResult, err error)
 }
