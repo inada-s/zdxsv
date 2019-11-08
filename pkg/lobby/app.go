@@ -158,7 +158,6 @@ func stripHost(addr string) string {
 
 func (a *App) Serve() {
 	aliveCheck := time.Tick(10 * time.Second)
-	go runCMS(a)
 	err := newLobbyRPCServer(a, stripHost(config.Conf.Lobby.RPCAddr)).Start()
 	if err != nil {
 		glog.Errorln(err)

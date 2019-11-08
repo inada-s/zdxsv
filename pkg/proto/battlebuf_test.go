@@ -30,7 +30,7 @@ func testEq(a, b []byte) bool {
 }
 
 func TestMessageSeq(t *testing.T) {
-	f := NewMessageFilter()
+	f := NewMessageFilter([]string{"hoge"})
 	msg := f.GenerateMessage("hoge", []byte("hoge"))
 	assert(msg.GetSeq() == 1)
 	msg = f.GenerateMessage("hoge", []byte("hoge"))
@@ -42,11 +42,11 @@ func TestMessageSeq(t *testing.T) {
 func TestProtoRUDP(t *testing.T) {
 	t.Log("hoge")
 
-	a := NewBuffer("a")
-	af := NewMessageFilter()
+	a := NewBattleBuffer("a")
+	af := NewMessageFilter([]string{"b"})
 
-	b := NewBuffer("b")
-	bf := NewMessageFilter()
+	b := NewBattleBuffer("b")
+	bf := NewMessageFilter([]string{"a"})
 
 	/*
 		var recvdata []byte
@@ -59,8 +59,7 @@ func TestProtoRUDP(t *testing.T) {
 	a.PushBattleMessage(af.GenerateMessage(a.GetId(), []byte("abc")))
 
 	assert(a.end == 2)
-	senddata, seq := a.GetSendData()
-	ack := a.GetAck()
+	senddata, seq, ack := a.GetSendData()
 	t.Log(senddata, seq, ack)
 
 	assert(b.ack == 0)
@@ -71,7 +70,7 @@ func TestProtoRUDP(t *testing.T) {
 	assert(string(recvdata.GetBody()) == "abc")
 	assert(recvdata.GetUserId() == "a")
 	assert(recvdata.GetSeq() == 1)
-	assert(b.GetAck() == 1)
+	assert(b.ack == 1)
 	t.Log("A send data before", b.begin, b.end)
 
 	assert(a.end == 2)
@@ -79,7 +78,7 @@ func TestProtoRUDP(t *testing.T) {
 	assert(a.end == 3)
 	a.PushBattleMessage(af.GenerateMessage(a.GetId(), []byte("ghi")))
 	assert(a.end == 4)
-	senddata, seq = a.GetSendData()
+	senddata, seq, ack = a.GetSendData()
 	t.Log("B send data before", b.begin, b.end)
 
 	assert(b.ack == 1)
@@ -96,7 +95,7 @@ func TestProtoRUDP(t *testing.T) {
 	t.Log("C send data before", b.begin, b.end)
 
 	assert(a.ack == 0)
-	senddata, seq = a.GetSendData()
+	senddata, seq, ack = a.GetSendData()
 	for _, msg := range senddata {
 		if bf.Filter(msg) {
 			buf = append(buf, msg.GetBody()...)
@@ -108,26 +107,26 @@ func TestProtoRUDP(t *testing.T) {
 	t.Log("D send data before", b.begin, b.end)
 
 	t.Log("add send data before", b.begin, b.end)
-	data := []*proto.BattleMessage{}
+	data := []*BattleMessage{}
 
 	b.PushBattleMessage(bf.GenerateMessage(b.GetId(), []byte("hoge")))
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
 
 	b.PushBattleMessage(bf.GenerateMessage(b.GetId(), []byte("piyo")))
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
-	senddata, seq = b.GetSendData()
+	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
 	t.Log("add send data after", b.begin, b.end)
 
-	a.ApplySeqAck(seq, b.GetAck())
+	a.ApplySeqAck(seq, ack)
 	buf = buf[:0]
 	for _, msg := range data {
 		if af.Filter(msg) {

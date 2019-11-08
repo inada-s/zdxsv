@@ -3,6 +3,7 @@ package lobby
 import (
 	"testing"
 	"time"
+	"zdxsv/pkg/config"
 	"zdxsv/pkg/lobby/message"
 )
 
@@ -26,6 +27,13 @@ func (c callcenter) WaitCall(t *testing.T) {
 
 func TestDispatchMessage(t *testing.T) {
 	c := newCallcenter()
+
+	config.Conf.Lobby.Addr = ":18200"
+	config.Conf.Lobby.PublicAddr = ":18200"
+	config.Conf.Lobby.RPCAddr = ":18201"
+	config.Conf.Battle.Addr = ":18210"
+	config.Conf.Battle.PublicAddr = ":18210"
+	config.Conf.Battle.RPCAddr = ":13080"
 
 	app := NewApp()
 	go app.Serve()

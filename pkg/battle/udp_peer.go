@@ -94,7 +94,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			err := pbuf.Marshal(pkt)
 			proto.PutPacket(pkt)
 			if err != nil {
-				glog.Errorf("%v Marshal error : %v", err)
+				glog.Errorf("Marshal error : %v", err)
 				return
 			}
 			u.conn.WriteTo(pbuf.Bytes(), u.addr)

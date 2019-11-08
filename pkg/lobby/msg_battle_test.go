@@ -75,24 +75,7 @@ func Test_ParseBattleResult(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ParseBattleResult(tt.args.m)
-		})
-	}
-}
-
-func TestParseBattleResult(t *testing.T) {
-	type args struct {
-		m *Message
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ParseBattleResult(tt.args.m)
+			parseBattleResult(tt.args.m)
 		})
 	}
 }
