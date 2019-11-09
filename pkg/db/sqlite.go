@@ -321,23 +321,26 @@ func (db SQLiteDB) GetBattleRecordUser(battleCode string, userId string) (*Battl
 	return b, err
 }
 
-func (db SQLiteDB) CalculateUserBattleCount(userId string) (ret BattleCountResult, err error) {
+func (db SQLiteDB) CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error) {
+	if side == 0 {
+		r := db.QueryRow(`
+			SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
+			WHERE user_id = ? AND aggregate <> 0 AND players = 4`, userId)
+		err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
+		return
+	}
 	r := db.QueryRow(`
 		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
-		WHERE user_id = ? AND aggregate <> 0 AND players = 4`, userId)
+		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND side = ?`, userId, side)
 	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
-	if err != nil {
-		return
-	}
+	return
+}
 
-	r = db.QueryRow(`
-		SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record
+func (db SQLiteDB) CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error) {
+	r := db.QueryRow(`
+		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
 		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND created > ?`,
 		userId, time.Now().AddDate(0, 0, -1))
-	err = r.Scan(&ret.DailyBattle, &ret.DailyWin, &ret.DailyLose)
-	if err != nil {
-		return
-	}
-
+	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 	return
 }

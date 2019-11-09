@@ -165,7 +165,7 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 	}
 
 	glog.Infoln("before", p.User.User)
-	rec, err := db.DefaultDB.CalculateUserBattleCount(p.UserId)
+	rec, err := db.DefaultDB.CalculateUserTotalBattleCount(p.UserId, 0)
 	if err != nil {
 		glog.Errorln("Failed to calculate battle count", err)
 		return
@@ -175,10 +175,17 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 	p.User.WinCount = rec.Win
 	p.User.LoseCount = rec.Lose
 	p.User.KillCount = rec.Kill
+	p.User.DeathCount = rec.Death
 
-	p.User.DailyBattleCount = rec.DailyBattle
-	p.User.DailyWinCount = rec.DailyWin
-	p.User.DailyLoseCount = rec.DailyLose
+	rec, err = db.DefaultDB.CalculateUserDailyBattleCount(p.UserId)
+	if err != nil {
+		glog.Errorln("Failed to calculate battle count", err)
+		return
+	}
+
+	p.User.DailyBattleCount = rec.Battle
+	p.User.DailyWinCount = rec.Win
+	p.User.DailyLoseCount = rec.Lose
 
 	err = db.DefaultDB.UpdateUser(&p.User.User)
 	if err != nil {
@@ -186,6 +193,45 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 	glog.Infoln("after", p.User.User)
+}
+
+type RankingRecord struct {
+	Rank        uint32
+	EntireCount uint32
+	Class       byte
+	Battle      uint32
+	Win         uint32
+	Lose        uint32
+	Invalid     uint32
+	Kill        uint32
+}
+
+func (a *App) getUserRanking(userId string, side byte) *RankingRecord {
+	res, err := db.DefaultDB.CalculateUserTotalBattleCount(userId, side)
+	if err != nil {
+		glog.Errorln(err)
+	}
+
+	// TODO: Consider a reasonable calculation method.
+	c := res.Win / 100
+	if 14 <= c {
+		c = 14
+	}
+
+	return &RankingRecord{
+		Rank:        0, // TODO
+		EntireCount: 0, // TODO
+		Class:       byte(c),
+		Battle:      uint32(res.Battle),
+		Win:         uint32(res.Win),
+		Lose:        uint32(res.Lose),
+		Invalid:     uint32(res.Battle - res.Win - res.Lose),
+		Kill:        uint32(res.Kill),
+	}
+}
+
+func (a *App) OnGetUserRanking(p *AppPeer, kind, page byte) *RankingRecord {
+	return a.getUserRanking(p.UserId, page)
 }
 
 func (a *App) OnDecideTeam(p *AppPeer, team string) {

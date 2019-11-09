@@ -57,12 +57,11 @@ type User struct {
 	Name   string `db:"name" json:"name,omitempty"`
 	Team   string `db:"team" json:"team,omitempty"`
 
-	BattleCount int `db:"battle_count" json:"battle_count,omitempty"`
-	WinCount    int `db:"win_count" json:"win_count,omitempty"`
-	LoseCount   int `db:"lose_count" json:"lose_count,omitempty"`
-	KillCount   int `db:"kill_count" json:"kill_count,omitempty"`
-	DeathCount  int `db:"death_count" json:"death_count,omitempty"`
-
+	BattleCount      int `db:"battle_count" json:"battle_count,omitempty"`
+	WinCount         int `db:"win_count" json:"win_count,omitempty"`
+	LoseCount        int `db:"lose_count" json:"lose_count,omitempty"`
+	KillCount        int `db:"kill_count" json:"kill_count,omitempty"`
+	DeathCount       int `db:"death_count" json:"death_count,omitempty"`
 	DailyBattleCount int `db:"daily_battle_count" json:"daily_battle_count,omitempty"`
 	DailyWinCount    int `db:"daily_win_count" json:"daily_win_count,omitempty"`
 	DailyLoseCount   int `db:"daily_lose_count" json:"daily_lose_count,omitempty"`
@@ -95,15 +94,11 @@ type BattleRecord struct {
 }
 
 type BattleCountResult struct {
-	Battle int `json:"battle_count,omitempty"`
-	Win    int `json:"win_count,omitempty"`
-	Lose   int `json:"lose_count,omitempty"`
+	Battle int `json:"battle,omitempty"`
+	Win    int `json:"win,omitempty"`
+	Lose   int `json:"lose,omitempty"`
 	Kill   int `json:"kill,omitempty"`
 	Death  int `json:"death,omitempty"`
-
-	DailyBattle int `json:"daily_battle_count,omitempty"`
-	DailyWin    int `json:"daily_win_count,omitempty"`
-	DailyLose   int `json:"daily_lose_count,omitempty"`
 }
 
 type DB interface {
@@ -121,5 +116,6 @@ type DB interface {
 	AddBattleRecord(battle *BattleRecord) error
 	GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error)
 	UpdateBattleRecord(record *BattleRecord) error
-	CalculateUserBattleCount(userId string) (ret BattleCountResult, err error)
+	CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error)
+	CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error)
 }
