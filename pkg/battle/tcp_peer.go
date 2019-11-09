@@ -92,11 +92,11 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 			}
 			value := string(inbuf[12:22])
 			inbuf = inbuf[:0]
-			sessionId, err := ParseSessionId(value)
-			glog.Infoln("[TCP] SessionId", sessionId, err)
-			u.room = logic.Join(u, sessionId)
+			sessionID, err := ParseSessionID(value)
+			glog.Infoln("[TCP] SessionID", sessionID, err)
+			u.room = logic.Join(u, sessionID)
 			if u.room == nil {
-				glog.Infoln("failed to join room: ", u.UserId(), u.Address())
+				glog.Infoln("failed to join room: ", u.UserID(), u.Address())
 				u.conn.Close()
 				break
 			}
@@ -115,7 +115,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 			if 0 < len(tmp) {
 				msg := proto.GetBattleMessage()
 				msg.Body = tmp
-				msg.UserId = pb.String(u.UserId())
+				msg.UserId = pb.String(u.UserID())
 				msg.Seq = pb.Uint32(u.seq)
 				u.seq++
 				u.room.SendMessage(u, msg)

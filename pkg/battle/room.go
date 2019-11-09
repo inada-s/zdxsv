@@ -31,7 +31,7 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 		other := r.peers[i]
 		if other != nil {
 			if glog.V(2) {
-				glog.Infof("[ROOM] %v>%v %v", peer.UserId(), other.UserId(), msg.GetBody())
+				glog.Infof("[ROOM] %v>%v %v", peer.UserID(), other.UserID(), msg.GetBody())
 			}
 			other.AddSendMessage(msg)
 		}
@@ -49,7 +49,7 @@ func (r *Room) Clear() {
 }
 
 func (r *Room) Join(p Peer) {
-	p.SetRoomId(r.id)
+	p.SetRoomID(r.id)
 	r.Lock()
 	p.SetPosition(len(r.peers))
 	r.peers = append(r.peers, p)

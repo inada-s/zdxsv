@@ -72,8 +72,8 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 		glog.Errorln(err)
 	}
 	var2 := fmt.Sprintf("%010d", var1-100001)
-	sessionId := var2[1:5] + var2[6:]
-	p.app.OnKeePair(p, loginKey, sessionId)
+	sessionID := var2[1:5] + var2[6:]
+	p.app.OnKeePair(p, loginKey, sessionID)
 })
 
 func RequestFirstData(p *AppPeer) {
@@ -91,26 +91,26 @@ var _ = register(0x6103, "FirstData", func(p *AppPeer, _ *Message) {
 	p.app.OnFirstData(p)
 })
 
-func NoticeUserIdList(p *AppPeer, users []*db.User) {
+func NoticeUserIDList(p *AppPeer, users []*db.User) {
 	m := NewServerNotice(0x6131)
 	w := m.Writer()
 	w.Write8(byte(len(users)))
 	for _, u := range users {
-		w.WriteString(u.UserId)
+		w.WriteString(u.UserID)
 		w.WriteString(u.Name)
 		w.WriteString(u.Team)
 	}
 	p.SendMessage(m)
 }
 
-var _ = register(0x6132, "DecideUserId", func(p *AppPeer, m *Message) {
+var _ = register(0x6132, "DecideUserID", func(p *AppPeer, m *Message) {
 	r := m.Reader()
-	userId := r.ReadEncryptedString()
+	userID := r.ReadEncryptedString()
 	name := r.ReadEncryptedString()
-	p.app.OnDecideUserId(p, userId, name)
+	p.app.OnDecideUserID(p, userID, name)
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.WriteString(p.UserId) // これだけか？
+	w.WriteString(p.UserID) // これだけか？
 	p.SendMessage(a)
 })
 

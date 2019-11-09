@@ -27,13 +27,13 @@ func NewBattleBuffer(id string) *BattleBuffer {
 	}
 }
 
-func (b *BattleBuffer) SetId(id string) {
+func (b *BattleBuffer) SetID(id string) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	b.id = id
 }
 
-func (b *BattleBuffer) GetId() string {
+func (b *BattleBuffer) GetID() string {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	return b.id
@@ -52,7 +52,7 @@ func (b *BattleBuffer) GetSendData() ([]*BattleMessage, uint32, uint32) {
 	defer b.mtx.Unlock()
 	l := b.begin % ringSize
 	e := b.end
-	if b.begin + 50 < e {
+	if b.begin+50 < e {
 		e = b.begin + 50
 	}
 	r := e % ringSize
@@ -79,23 +79,23 @@ type MessageFilter struct {
 	recvSeq map[string]uint32
 }
 
-func NewMessageFilter(acceptIds []string) *MessageFilter {
+func NewMessageFilter(acceptIDs []string) *MessageFilter {
 	mf := &MessageFilter{
 		seq:     1,
 		recvSeq: map[string]uint32{},
 	}
-	for _, id := range acceptIds {
+	for _, id := range acceptIDs {
 		mf.recvSeq[id] = 0
 	}
 	return mf
 }
 
-func (m *MessageFilter) GenerateMessage(userId string, data []byte) *BattleMessage {
+func (m *MessageFilter) GenerateMessage(userID string, data []byte) *BattleMessage {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	msg := GetBattleMessage()
 	msg.Seq = pb.Uint32(m.seq)
-	msg.UserId = pb.String(userId)
+	msg.UserId = pb.String(userID)
 	msg.Body = data
 	m.seq++
 	return msg

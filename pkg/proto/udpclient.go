@@ -118,55 +118,55 @@ func (c *UDPClient) SendPacketTo(pkt *Packet, addr *net.UDPAddr) {
 	}
 }
 
-func genPingPacket(userId string) *Packet {
+func genPingPacket(userID string) *Packet {
 	pkt := GetPacket()
 	pkt.Type = MessageType_Ping.Enum()
 	pkt.PingData = &PingMessage{
 		Timestamp: pb.Int64(time.Now().UnixNano()),
-		UserId:    pb.String(userId),
+		UserId:    pb.String(userID),
 	}
 	return pkt
 }
 
-func (c *UDPClient) SendPing(userId string, addr *net.UDPAddr) {
-	pkt := genPingPacket(userId)
+func (c *UDPClient) SendPing(userID string, addr *net.UDPAddr) {
+	pkt := genPingPacket(userID)
 	c.SendPacket(pkt)
 	PutPacket(pkt)
 }
 
-func (c *UDPClient) SendPingTo(userId string, addr *net.UDPAddr) {
-	pkt := genPingPacket(userId)
+func (c *UDPClient) SendPingTo(userID string, addr *net.UDPAddr) {
+	pkt := genPingPacket(userID)
 	c.SendPacketTo(pkt, addr)
 	PutPacket(pkt)
 }
 
-func (c *UDPClient) SendPingToAddr(userId string, addr string) {
+func (c *UDPClient) SendPingToAddr(userID string, addr string) {
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		log.Println("Failed to resolve udp address", err)
 		return
 	}
-	c.SendPingTo(userId, udpAddr)
+	c.SendPingTo(userID, udpAddr)
 }
 
-func genPongPacket(userId string, pktPing *Packet) *Packet {
+func genPongPacket(userID string, pktPing *Packet) *Packet {
 	pkt := GetPacket()
 	pkt.Type = MessageType_Pong.Enum()
 	pkt.PongData = &PongMessage{
 		Timestamp: pb.Int64(pktPing.GetPingData().GetTimestamp()),
-		UserId:    pb.String(userId),
+		UserId:    pb.String(userID),
 	}
 	return pkt
 }
 
-func (c *UDPClient) SendPong(pktPing *Packet, userId string) {
-	pkt := genPongPacket(userId, pktPing)
+func (c *UDPClient) SendPong(pktPing *Packet, userID string) {
+	pkt := genPongPacket(userID, pktPing)
 	c.SendPacket(pkt)
 	PutPacket(pkt)
 }
 
-func (c *UDPClient) SendPongTo(pktPing *Packet, userId string, addr *net.UDPAddr) {
-	pkt := genPongPacket(userId, pktPing)
+func (c *UDPClient) SendPongTo(pktPing *Packet, userID string, addr *net.UDPAddr) {
+	pkt := genPongPacket(userID, pktPing)
 	c.SendPacketTo(pkt, addr)
 	PutPacket(pkt)
 }

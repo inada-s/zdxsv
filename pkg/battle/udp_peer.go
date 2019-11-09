@@ -30,14 +30,14 @@ type UDPPeer struct {
 	closeFunc func()
 }
 
-func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userId string) *UDPPeer {
+func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *UDPPeer {
 	return &UDPPeer{
 		addr:    addr,
 		conn:    conn,
 		chFlush: make(chan struct{}, 1),
 		chRecv:  make(chan struct{}, 1),
-		rudp:    proto.NewBattleBuffer(userId),
-		filter:  proto.NewMessageFilter([]string{userId}),
+		rudp:    proto.NewBattleBuffer(userID),
+		filter:  proto.NewMessageFilter([]string{userID}),
 	}
 }
 
@@ -48,9 +48,9 @@ func (u *UDPPeer) Close() error {
 	return nil
 }
 
-func (u *UDPPeer) SetUserId(id string) {
-	u.userId = id
-	u.rudp.SetId(id)
+func (u *UDPPeer) SetUserID(id string) {
+	u.userID = id
+	u.rudp.SetID(id)
 }
 
 func (u *UDPPeer) Serve(logic *Logic) {
@@ -112,14 +112,14 @@ func (u *UDPPeer) Serve(logic *Logic) {
 						break
 					}
 					value := string(msg.GetBody()[12:22])
-					sessionId, err := ParseSessionId(value)
+					sessionID, err := ParseSessionID(value)
 					if err != nil {
 						glog.Error(err)
 						u.Close()
 						break
 					}
-					glog.Infoln("UDPSessionId:", sessionId)
-					room := logic.Join(u, sessionId)
+					glog.Infoln("UDPSessionID:", sessionID)
+					room := logic.Join(u, sessionID)
 					if room == nil {
 						glog.Error("failed to join room")
 						u.Close()

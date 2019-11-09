@@ -191,7 +191,7 @@ func (db SQLiteDB) GetAccountByLoginKey(key string) (*Account, error) {
 }
 
 func (db SQLiteDB) LoginAccount(a *Account) error {
-	a.SessionId = genSessionId()
+	a.SessionID = genSessionID()
 	a.LastLogin = time.Now()
 	_, err := db.Exec(`
 UPDATE
@@ -201,22 +201,22 @@ SET
 	last_login = ?
 WHERE
 	login_key = ?`,
-		a.SessionId,
+		a.SessionID,
 		a.LastLogin,
 		a.LoginKey)
 	return err
 }
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
-	userId := genUserId()
+	userID := genUserID()
 	now := time.Now()
-	_, err := db.Exec(`INSERT INTO user (user_id, login_key, created) VALUES (?, ?, ?)`, userId, loginKey, now)
+	_, err := db.Exec(`INSERT INTO user (user_id, login_key, created) VALUES (?, ?, ?)`, userID, loginKey, now)
 	if err != nil {
 		return nil, err
 	}
 	u := &User{
 		LoginKey: loginKey,
-		UserId:   userId,
+		UserID:   userID,
 		Created:  now,
 	}
 	return u, nil
@@ -241,9 +241,9 @@ func (db SQLiteDB) GetUserList(loginKey string) ([]*User, error) {
 	return users, nil
 }
 
-func (db SQLiteDB) GetUser(userId string) (*User, error) {
+func (db SQLiteDB) GetUser(userID string) (*User, error) {
 	u := &User{}
-	err := db.Get(u, `SELECT * FROM user WHERE user_id = ?`, userId)
+	err := db.Get(u, `SELECT * FROM user WHERE user_id = ?`, userID)
 	return u, err
 }
 
@@ -252,14 +252,14 @@ func (db SQLiteDB) LoginUser(user *User) error {
 	if err != nil {
 		return err
 	}
-	a.LastUserId = user.UserId
+	a.LastUserID = user.UserID
 
-	_, err = db.Exec(`UPDATE account SET last_user_id = ? WHERE login_key = ?`, a.LastUserId, a.LoginKey)
+	_, err = db.Exec(`UPDATE account SET last_user_id = ? WHERE login_key = ?`, a.LastUserID, a.LoginKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ?`, user.SessionId, user.UserId)
+	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ?`, user.SessionID, user.UserID)
 	return err
 }
 
@@ -315,32 +315,32 @@ WHERE
 	return err
 }
 
-func (db SQLiteDB) GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error) {
+func (db SQLiteDB) GetBattleRecordUser(battleCode string, userID string) (*BattleRecord, error) {
 	b := new(BattleRecord)
-	err := db.Get(b, `SELECT * FROM battle_record WHERE battle_code = ? AND user_id = ?`, battleCode, userId)
+	err := db.Get(b, `SELECT * FROM battle_record WHERE battle_code = ? AND user_id = ?`, battleCode, userID)
 	return b, err
 }
 
-func (db SQLiteDB) CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error) {
+func (db SQLiteDB) CalculateUserTotalBattleCount(userID string, side byte) (ret BattleCountResult, err error) {
 	if side == 0 {
 		r := db.QueryRow(`
 			SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
-			WHERE user_id = ? AND aggregate <> 0 AND players = 4`, userId)
+			WHERE user_id = ? AND aggregate <> 0 AND players = 4`, userID)
 		err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 		return
 	}
 	r := db.QueryRow(`
 		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
-		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND side = ?`, userId, side)
+		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND side = ?`, userID, side)
 	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 	return
 }
 
-func (db SQLiteDB) CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error) {
+func (db SQLiteDB) CalculateUserDailyBattleCount(userID string) (ret BattleCountResult, err error) {
 	r := db.QueryRow(`
 		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
 		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND created > ?`,
-		userId, time.Now().AddDate(0, 0, -1))
+		userID, time.Now().AddDate(0, 0, -1))
 	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 	return
 }

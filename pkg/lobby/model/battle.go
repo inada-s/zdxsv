@@ -10,25 +10,25 @@ type Battle struct {
 	ServerIP   net.IP
 	ServerPort uint16
 	Users      []User
-	AeugIds    []string
-	TitansIds  []string
+	AeugIDs    []string
+	TitansIDs  []string
 	UDPUsers   map[string]bool
 	P2PMap     map[string]map[string]struct{}
 	Rule       *Rule
-	LobbyId    uint16
+	LobbyID    uint16
 	StartTime  time.Time
 	TestBattle bool
 }
 
-func NewBattle(lobbyId uint16) *Battle {
+func NewBattle(lobbyID uint16) *Battle {
 	return &Battle{
 		Users:     make([]User, 0),
-		AeugIds:   make([]string, 0),
-		TitansIds: make([]string, 0),
+		AeugIDs:   make([]string, 0),
+		TitansIDs: make([]string, 0),
 		UDPUsers:  map[string]bool{},
 		P2PMap:    map[string]map[string]struct{}{},
 		Rule:      NewRule(),
-		LobbyId:   lobbyId,
+		LobbyID:   lobbyID,
 	}
 }
 
@@ -43,14 +43,14 @@ func (b *Battle) Add(s *User) {
 	cp.Room = nil
 	b.Users = append(b.Users, cp)
 	if s.Entry == EntryAeug {
-		b.AeugIds = append(b.AeugIds, cp.UserId)
+		b.AeugIDs = append(b.AeugIDs, cp.UserID)
 	} else if s.Entry == EntryTitans {
-		b.TitansIds = append(b.TitansIds, cp.UserId)
+		b.TitansIDs = append(b.TitansIDs, cp.UserID)
 	}
 }
 
 func (b *Battle) NumOfEntryUsers() uint16 {
-	return uint16(len(b.AeugIds) + len(b.TitansIds))
+	return uint16(len(b.AeugIDs) + len(b.TitansIDs))
 }
 
 func (b *Battle) SetBattleServer(ip net.IP, port uint16) {
@@ -58,9 +58,9 @@ func (b *Battle) SetBattleServer(ip net.IP, port uint16) {
 	b.ServerPort = port
 }
 
-func (b *Battle) GetPosition(userId string) byte {
+func (b *Battle) GetPosition(userID string) byte {
 	for i, u := range b.Users {
-		if userId == u.UserId {
+		if userID == u.UserID {
 			return byte(i + 1)
 		}
 	}

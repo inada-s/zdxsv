@@ -35,7 +35,7 @@ func init() {
 }
 
 type statusUser struct {
-	UserId string
+	UserID string
 	Name   string
 	Team   string
 	UDP    string
@@ -71,13 +71,13 @@ func pollLobby() {
 			checked := map[string]bool{}
 
 			for _, u := range res.LobbyUsers {
-				_, ok := checked[u.UserId]
+				_, ok := checked[u.UserID]
 				if ok {
 					continue
 				}
-				checked[u.UserId] = true
+				checked[u.UserID] = true
 				user := statusUser{
-					UserId: u.UserId,
+					UserID: u.UserID,
 					Name:   u.Name,
 					Team:   u.Team,
 				}
@@ -90,13 +90,13 @@ func pollLobby() {
 			current.BattleUsers = current.BattleUsers[:0]
 			for _, b := range res.Battles {
 				for _, u := range b.Users {
-					_, ok := checked[u.UserId]
+					_, ok := checked[u.UserID]
 					if ok {
 						continue
 					}
-					checked[u.UserId] = true
+					checked[u.UserID] = true
 					user := statusUser{
-						UserId: u.UserId,
+						UserID: u.UserID,
 						Name:   u.Name,
 						Team:   u.Team,
 					}
@@ -138,7 +138,7 @@ func dummyCurrent() {
 
 	for i := 0; i < 10; i++ {
 		user := statusUser{
-			UserId: fmt.Sprintf("%06d", i),
+			UserID: fmt.Sprintf("%06d", i),
 			Name:   fmt.Sprintf("%06dさん", i),
 			Team:   fmt.Sprintf("%06dチーム", i),
 		}

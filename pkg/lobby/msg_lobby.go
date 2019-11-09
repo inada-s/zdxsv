@@ -46,47 +46,47 @@ var _ = register(0x6301, "GetLobbyCount", func(p *AppPeer, m *Message) {
 })
 
 var _ = register(0x6303, "GetLobbyUserCount", func(p *AppPeer, m *Message) {
-	lobbyId := m.Reader().Read16()
-	count := p.app.OnGetLobbyUserCount(p, lobbyId)
+	lobbyID := m.Reader().Read16()
+	count := p.app.OnGetLobbyUserCount(p, lobbyID)
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(count)
 	p.SendMessage(a)
 })
 
 var _ = register(0x6304, "GetLobbyUserStatus", func(p *AppPeer, m *Message) {
-	lobbyId := m.Reader().Read16()
+	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write8(3) // 0:1:2:出入り不可 3:出入り可能
 	p.SendMessage(a)
 })
 
 var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
-	lobbyId := m.Reader().Read16()
+	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	switch lobbyId {
+	switch lobbyID {
 	case 1:
-		w.Write16(lobbyId)
-		w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>接続テスト対戦専用<END>", lobbyId))
+		w.Write16(lobbyID)
+		w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>接続テスト対戦専用<END>", lobbyID))
 	case 3:
 		a = SetPadDelayLobbyHack(p, m)
 	case 4:
 		a = SetWideScreenLobbyHack(p, m)
 	default:
-		w.Write16(lobbyId)
-		w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyId))
+		w.Write16(lobbyID)
+		w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID))
 	}
 	p.SendMessage(a)
 })
 
 var _ = register(0x6305, "EnterLobby", func(p *AppPeer, m *Message) {
-	lobbyId := m.Reader().Read16()
+	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
-	p.app.OnEnterLobby(p, lobbyId)
+	p.app.OnEnterLobby(p, lobbyID)
 	p.SendMessage(a)
 })
 
@@ -101,16 +101,16 @@ var _ = register(0x6208, "TopPageJump", func(p *AppPeer, m *Message) {
 })
 
 var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *AppPeer, m *Message) {
-	lobbyId := m.Reader().Read16()
-	aeug, titans := p.app.OnGetLobbyEntryUserCount(p, lobbyId)
+	lobbyID := m.Reader().Read16()
+	aeug, titans := p.app.OnGetLobbyEntryUserCount(p, lobbyID)
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(aeug)
 	w.Write16(titans)
 	p.SendMessage(a)
 
-	if lobbyId == 1 {
+	if lobbyID == 1 {
 		SendLobbyChatHackNotice(p)
 	}
 })
@@ -147,7 +147,7 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 
 var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	str := m.Reader().ReadEncryptedString()
-	if p.Lobby != nil && p.Lobby.Id == 1 {
+	if p.Lobby != nil && p.Lobby.ID == 1 {
 		LobbyChatHack(p, str)
 	}
 	p.app.OnSendChatMessage(p, str)
@@ -167,19 +167,19 @@ func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {
 	p.SendMessage(n)
 }
 
-func NoticeChatMessage(p *AppPeer, userId, name, message string) {
+func NoticeChatMessage(p *AppPeer, userID, name, message string) {
 	n := NewServerNotice(0x6702)
 	w := n.Writer()
-	w.WriteString(userId)
+	w.WriteString(userID)
 	w.WriteString(name)
 	w.WriteString(message)
 	p.SendMessage(n)
 }
 
-func NoticeLobbyUserCount(p *AppPeer, lobbyId, inLobby, inBattle uint16) {
+func NoticeLobbyUserCount(p *AppPeer, lobbyID, inLobby, inBattle uint16) {
 	n := NewServerNotice(0x6303)
 	w := n.Writer()
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(inLobby)
 	w.Write16(inBattle)
 	p.SendMessage(n)
@@ -187,10 +187,10 @@ func NoticeLobbyUserCount(p *AppPeer, lobbyId, inLobby, inBattle uint16) {
 
 // NoticeLobbyEntryUserCount reinforms the peer about
 // how many players entry to lobby match in the lobby.
-func NoticeLobbyEntryUserCount(p *AppPeer, lobbyId, aeug, titans uint16) {
+func NoticeLobbyEntryUserCount(p *AppPeer, lobbyID, aeug, titans uint16) {
 	n := NewServerNotice(0x640F)
 	w := n.Writer()
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(aeug)
 	w.Write16(titans)
 	p.SendMessage(n)

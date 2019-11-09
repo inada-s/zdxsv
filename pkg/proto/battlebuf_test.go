@@ -56,7 +56,7 @@ func TestProtoRUDP(t *testing.T) {
 	assert(a.end == 1)
 	assert(af.seq == 1)
 
-	a.PushBattleMessage(af.GenerateMessage(a.GetId(), []byte("abc")))
+	a.PushBattleMessage(af.GenerateMessage(a.GetID(), []byte("abc")))
 
 	assert(a.end == 2)
 	senddata, seq, ack := a.GetSendData()
@@ -74,9 +74,9 @@ func TestProtoRUDP(t *testing.T) {
 	t.Log("A send data before", b.begin, b.end)
 
 	assert(a.end == 2)
-	a.PushBattleMessage(af.GenerateMessage(a.GetId(), []byte("def")))
+	a.PushBattleMessage(af.GenerateMessage(a.GetID(), []byte("def")))
 	assert(a.end == 3)
-	a.PushBattleMessage(af.GenerateMessage(a.GetId(), []byte("ghi")))
+	a.PushBattleMessage(af.GenerateMessage(a.GetID(), []byte("ghi")))
 	assert(a.end == 4)
 	senddata, seq, ack = a.GetSendData()
 	t.Log("B send data before", b.begin, b.end)
@@ -109,7 +109,7 @@ func TestProtoRUDP(t *testing.T) {
 	t.Log("add send data before", b.begin, b.end)
 	data := []*BattleMessage{}
 
-	b.PushBattleMessage(bf.GenerateMessage(b.GetId(), []byte("hoge")))
+	b.PushBattleMessage(bf.GenerateMessage(b.GetID(), []byte("hoge")))
 	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
 	senddata, seq, ack = b.GetSendData()
@@ -117,7 +117,7 @@ func TestProtoRUDP(t *testing.T) {
 	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
 
-	b.PushBattleMessage(bf.GenerateMessage(b.GetId(), []byte("piyo")))
+	b.PushBattleMessage(bf.GenerateMessage(b.GetID(), []byte("piyo")))
 	senddata, seq, ack = b.GetSendData()
 	data = append(data, senddata...)
 	senddata, seq, ack = b.GetSendData()

@@ -93,10 +93,10 @@ func (r *Rule) Serialize() []byte {
 	return b.Bytes()
 }
 
-func (r *Rule) Set(ruleId, elemId byte) {
-	r.selected[ruleId] = byte(elemId)
-	value := ruleList[ruleId].List[elemId].Value
-	switch ruleId {
+func (r *Rule) Set(ruleID, elemID byte) {
+	r.selected[ruleID] = byte(elemID)
+	value := ruleList[ruleID].List[elemID].Value
+	switch ruleID {
 	case rulePlayerCount:
 		r.playerCount = value
 	case ruleBattleCount:
@@ -120,32 +120,32 @@ func (r *Rule) Set(ruleId, elemId byte) {
 	}
 }
 
-func (r *Rule) Get(ruleId byte) byte {
-	v, ok := r.selected[ruleId]
+func (r *Rule) Get(ruleID byte) byte {
+	v, ok := r.selected[ruleID]
 	if ok {
 		return v
 	}
-	return ruleList[ruleId].Default
+	return ruleList[ruleID].Default
 }
 
 func RuleCount() byte {
 	return byte(len(ruleList))
 }
 
-func RuleTitle(ruleId byte) string {
-	return ruleList[ruleId].Title
+func RuleTitle(ruleID byte) string {
+	return ruleList[ruleID].Title
 }
 
-func RuleElementCount(ruleId byte) byte {
-	return byte(len(ruleList[ruleId].List))
+func RuleElementCount(ruleID byte) byte {
+	return byte(len(ruleList[ruleID].List))
 }
 
-func RuleElementName(ruleId, elemId byte) string {
-	return ruleList[ruleId].List[elemId].Name
+func RuleElementName(ruleID, elemID byte) string {
+	return ruleList[ruleID].List[elemID].Name
 }
 
-func RuleElementDefault(ruleId byte) byte {
-	return ruleList[ruleId].Default
+func RuleElementDefault(ruleID byte) byte {
+	return ruleList[ruleID].Default
 }
 
 func setupRuleList() {

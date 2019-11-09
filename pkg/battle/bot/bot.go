@@ -12,7 +12,7 @@ import (
 
 type botBase struct {
 	id        int
-	sessionId int
+	sessionID int
 	sendcnt   int32
 	recvcnt   int32
 	readcnt   int32
@@ -55,12 +55,12 @@ func readMsg(in []byte) message {
 	return msg
 }
 
-func EncodeSessionId(sessionId int) string {
-		return fmt.Sprintf("%010d", sessionId+100001)
+func EncodeSessionID(sessionID int) string {
+		return fmt.Sprintf("%010d", sessionID+100001)
 }
 
-func ToStringSessionId(sessionId int) string {
-		return fmt.Sprintf("%08d", sessionId)
+func ToStringSessionID(sessionID int) string {
+		return fmt.Sprintf("%08d", sessionID)
 }
 
 func PrepareServer(n int, remote string) ([]int, error) {
@@ -68,8 +68,8 @@ func PrepareServer(n int, remote string) ([]int, error) {
 	ret := make([]int, n)
 	for i := 0; i < n; i++ {
 		args.Users = append(args.Users, battlerpc.User{
-			UserId:    fmt.Sprintf("%06d", i),
-			SessionId: fmt.Sprintf("%08d", i),
+			UserID:    fmt.Sprintf("%06d", i),
+			SessionID: fmt.Sprintf("%08d", i),
 			Name:      fmt.Sprintf("%d", i),
 			Team:      "",
 			Entry:     byte(i%2 + 1),

@@ -34,7 +34,7 @@ func LobbyChatHack(p *AppPeer, str string) {
 // SetPadDelayLobbyHack writes answer of LobbyExplain message
 // with a function that sets pad delay to static value.
 func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
-	lobbyId := m.Reader().Read16()
+	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
 
@@ -42,10 +42,10 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 
 	targetBodySize := 0x0120 - 8
 
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(uint16(targetBodySize - 4))
 
-	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyId)))
+	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID)))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
@@ -84,7 +84,7 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 
 	// Reproduce client stack.
 	w.Write16LE(0)
-	w.Write16LE(lobbyId)
+	w.Write16LE(lobbyID)
 
 	// Overwrite return addr in stack for client to run the function.
 	w.Write32LE(uint32(0x00c22cc0))
@@ -95,16 +95,16 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 // SetWideScreenLobbyHack writes answer of LobbyExplain message
 // with a function that sets widescreen patch.
 func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
-	lobbyId := m.Reader().Read16()
+	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
 
 	targetBodySize := 0x0120 - 8
 
-	w.Write16(lobbyId)
+	w.Write16(lobbyID)
 	w.Write16(uint16(targetBodySize - 4))
 
-	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyId)))
+	w.Write([]byte(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID)))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
 	w.Write32(uint32(0))
@@ -155,7 +155,7 @@ func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
 
 	// Reproduce client stack.
 	w.Write16LE(0)
-	w.Write16LE(lobbyId)
+	w.Write16LE(lobbyID)
 
 	// Overwrite return addr in stack for client to run the function.
 	w.Write32LE(uint32(0x00c22cc0 + 0x68))

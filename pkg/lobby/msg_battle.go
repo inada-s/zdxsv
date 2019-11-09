@@ -49,7 +49,7 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
 	w.Write8(pos)
 	if user != nil {
 		w.Write8(user.Entry)
-		w.WriteString(user.UserId)
+		w.WriteString(user.UserID)
 		w.WriteString(user.Name)
 		w.WriteString(user.Team)
 		w.WriteString(user.Bin)
@@ -197,7 +197,7 @@ func parseBattleResult(m *Message) *model.BattleResult {
 
 var _ = register(0x6138, "AnswerBattleResult", func(p *AppPeer, m *Message) {
 	glog.Infoln("== BattleResult ==")
-	glog.Infoln("ID:", p.User.UserId)
+	glog.Infoln("ID:", p.User.UserID)
 	glog.Infoln("Name:", p.User.Name)
 	result := parseBattleResult(m)
 	js, _ := json.MarshalIndent(result, "", "  ")

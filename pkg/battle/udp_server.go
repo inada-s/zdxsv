@@ -59,11 +59,11 @@ func (s *UDPServer) readLoop() error {
 			// 対戦前に正しいUDPパケットを送ってきたクライアントのみ受け付ける
 			// セッションIDが正しいかの検証を行う
 			// UDPのためクライアントは複数回このリクエストを送ってくる
-			sessionId := pkt.GetHelloServerData().GetSessionId()
-			user, valid := s.logic.FindWaitingUser(sessionId)
+			sessionID := pkt.GetHelloServerData().GetSessionId()
+			user, valid := s.logic.FindWaitingUser(sessionID)
 			if !found && valid {
 				glog.Infoln("join udp peer", key)
-				peer := NewUDPPeer(s.conn, addr, user.UserId)
+				peer := NewUDPPeer(s.conn, addr, user.UserID)
 
 				s.Lock()
 				s.peers[key] = peer
@@ -84,7 +84,7 @@ func (s *UDPServer) readLoop() error {
 			pkt.Type = proto.MessageType_HelloServer.Enum()
 			pkt.HelloServerData = &proto.HelloServerMessage{
 				Ok:        pb.Bool(valid),
-				SessionId: pb.String(sessionId),
+				SessionId: pb.String(sessionID),
 			}
 			if data, err := pb.Marshal(pkt); err != nil {
 				glog.Errorln(err)
