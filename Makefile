@@ -8,6 +8,11 @@ build:
 	go build -o ./bin/bench ./src/bench
 	go build -o ./bin/zproxy ./src/zproxy
 
+# execute all tests.
+.PHONY: test
+test:
+	go test -v zdxsv/...
+
 # build router binary.
 .PHONY: router
 router:

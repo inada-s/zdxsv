@@ -171,7 +171,7 @@ var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
 	w.Write32(uint32(p.User.BattleCount))
 	w.Write32(uint32(p.User.WinCount))
 	w.Write32(uint32(p.User.LoseCount))
-	w.Write32(0)      // Kill Count
+	w.Write32(uint32(p.User.KillCount))
 	w.Write32(0xCCCC) // Unknown
 	w.Write32(0xDDDD) // Unknown
 	w.Write32(0xEEEE) // Unknown

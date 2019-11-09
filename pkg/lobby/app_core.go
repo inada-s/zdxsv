@@ -15,14 +15,6 @@ import (
 	"zdxsv/pkg/lobby/model"
 )
 
-func genBattleCode(isTest bool) string {
-	code := fmt.Sprintf("%012d", time.Now().UnixNano()/10000000)
-	if isTest {
-		return "t" + code
-	}
-	return "b" + code
-}
-
 // ===========================
 // Login
 // ===========================
@@ -179,12 +171,14 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 
-	p.User.BattleCount = rec.BattleCount
-	p.User.WinCount = rec.WinCount
-	p.User.LoseCount = rec.LoseCount
-	p.User.DailyBattleCount = rec.DailyBattleCount
-	p.User.DailyWinCount = rec.DailyWinCount
-	p.User.DailyLoseCount = rec.DailyLoseCount
+	p.User.BattleCount = rec.Battle
+	p.User.WinCount = rec.Win
+	p.User.LoseCount = rec.Lose
+	p.User.KillCount = rec.Kill
+
+	p.User.DailyBattleCount = rec.DailyBattle
+	p.User.DailyWinCount = rec.DailyWin
+	p.User.DailyLoseCount = rec.DailyLose
 
 	err = db.DefaultDB.UpdateUser(&p.User.User)
 	if err != nil {
@@ -263,7 +257,7 @@ func (a *App) startTestBattle(lobbyId uint16, users []*model.User) (string, bool
 	battle.UDPUsers[u.UserId] = true
 	battle.P2PMap[u.UserId] = map[string]struct{}{}
 	battle.StartTime = time.Now()
-	battle.BattleCode = genBattleCode(true)
+	battle.BattleCode = db.GenBattleCode()
 
 	for _, u := range users {
 		battle.Add(u)
@@ -355,7 +349,7 @@ func (a *App) startBattle(lobbyId uint16, users []*model.User, rule *model.Rule)
 
 	battle.SetBattleServer(net.ParseIP(host), uint16(portNum))
 	battle.StartTime = time.Now()
-	battle.BattleCode = genBattleCode(false)
+	battle.BattleCode = db.GenBattleCode()
 
 	for _, u := range users {
 		peer, ok := a.users[u.UserId]

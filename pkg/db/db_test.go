@@ -1,13 +1,14 @@
 package db
 
 import (
-	"database/sql"
 	"flag"
 	"log"
 	"os"
 	"reflect"
 	"runtime"
 	"testing"
+
+	"github.com/jmoiron/sqlx"
 )
 
 var testDB DB
@@ -85,11 +86,8 @@ func Test102GetUser(t *testing.T) {
 }
 
 func Test103GetInvalidUser(t *testing.T) {
-	u, err := testDB.GetUser("HOGE01")
+	_, err := testDB.GetUser("HOGE01")
 	if err == nil {
-		t.FailNow()
-	}
-	if u != nil {
 		t.FailNow()
 	}
 }
@@ -150,6 +148,7 @@ func Test201AddUpdateBattleRecord(t *testing.T) {
 		BattleCode: "battlecode",
 		UserId:     "23456",
 		Players:    4,
+		Aggregate:  1,
 		Pos:        1,
 		Round:      10,
 		Win:        7,
@@ -179,6 +178,7 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 		BattleCode: "battlecode",
 		UserId:     "11111",
 		Players:    4,
+		Aggregate:  1,
 		Pos:        1,
 		Round:      10,
 		Win:        7,
@@ -199,12 +199,14 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 	rec, err := testDB.CalculateUserBattleCount("11111")
 	must(t, err)
 
-	assertEq(t, br.Round, rec.BattleCount)
-	assertEq(t, br.Win, rec.WinCount)
-	assertEq(t, br.Lose, rec.LoseCount)
-	assertEq(t, br.Round, rec.DailyBattleCount)
-	assertEq(t, br.Win, rec.DailyWinCount)
-	assertEq(t, br.Lose, rec.DailyLoseCount)
+	assertEq(t, br.Round, rec.Battle)
+	assertEq(t, br.Win, rec.Win)
+	assertEq(t, br.Lose, rec.Lose)
+	assertEq(t, br.Kill, rec.Kill)
+	assertEq(t, br.Death, rec.Death)
+	assertEq(t, br.Round, rec.DailyBattle)
+	assertEq(t, br.Win, rec.DailyWin)
+	assertEq(t, br.Lose, rec.DailyLose)
 }
 
 func TestMain(m *testing.M) {
@@ -212,7 +214,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	os.Remove("./zdxsv_test.db")
-	conn, err := sql.Open("sqlite3", "./zdxsv_test.db")
+	conn, err := sqlx.Open("sqlite3", "./zdxsv_test.db")
 	if err != nil {
 		log.Fatalln("Cannot open test db. err:", err)
 		os.Exit(1)
