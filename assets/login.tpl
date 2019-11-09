@@ -3,7 +3,7 @@
 <!--<CSV>
 "OK",
 "{{.LoginKey}}",
-"{{.SessionId}}",
+"{{.SessionID}}",
 "https://www01.kddi-mmbb.jp/00000020/login",
 "https://www01.kddi-mmbb.jp/00000020/CRS-top.jsp",
 </CSV>

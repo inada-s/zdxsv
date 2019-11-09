@@ -177,7 +177,7 @@ function updateOnlineUser(t, u) {
   for (var i = 0; i < u.length; i++) {
     var r = t.insertRow(-1);
     var uid = r.insertCell(0)
-    uid.innerHTML = "【" + u[i].UserId+ "】"
+    uid.innerHTML = "【" + u[i].UserID+ "】"
     uid.className = "z-user-id"
     var uname = r.insertCell(1)
     uname.innerHTML = u[i].Name

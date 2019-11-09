@@ -69,7 +69,7 @@ body { padding-top: 70px; }
 </thead>
 <tbody>
 {{range .LobbyUsers}}
-<tr><td>【{{.UserId}}】</td><td>{{.Name}}</td><td>{{.Team}}</td><td>{{.UDP}}</td></tr>
+<tr><td>【{{.UserID}}】</td><td>{{.Name}}</td><td>{{.Team}}</td><td>{{.UDP}}</td></tr>
 {{end}}
 </tbody>
 </table>
@@ -80,7 +80,7 @@ body { padding-top: 70px; }
 </thead>
 <tbody>
 {{range .BattleUsers}}
-<tr><td>【{{.UserId}}】</td><td>{{.Name}}</td><td>{{.Team}}</td><td>{{.UDP}}</td></tr>
+<tr><td>【{{.UserID}}】</td><td>{{.Name}}</td><td>{{.Team}}</td><td>{{.UDP}}</td></tr>
 {{end}}
 </tbody>
 </table>
