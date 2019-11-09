@@ -11,6 +11,7 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/mattn/go-sqlite3 v1.11.0
 	github.com/miekg/dns v1.1.19
+	github.com/pkg/errors v0.8.1
 	github.com/rhysd/go-github-selfupdate v1.1.0
 	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774
 	golang.org/x/text v0.3.2

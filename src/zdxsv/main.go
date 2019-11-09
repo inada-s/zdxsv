@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -76,6 +77,25 @@ func prepareOption(command string) {
 	}
 }
 
+func copyFile(dest, src string) {
+	from, err := os.Open(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer from.Close()
+
+	to, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer to.Close()
+
+	_, err = io.Copy(to, from)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
@@ -113,6 +133,14 @@ func main() {
 		os.Remove(config.Conf.DB.Name)
 		prepareDB()
 		db.DefaultDB.Init()
+	case "migratedb":
+		prepareDB()
+		err := db.DefaultDB.Migrate()
+		if err != nil {
+			glog.Errorln("Migration failed:", err)
+		} else {
+			glog.Errorln("Migration done")
+		}
 	default:
 		printUsage()
 		os.Exit(1)

@@ -1,18 +1,21 @@
 package db
 
 import (
+	"context"
+	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 )
 
 type SQLiteDB struct {
 	*sqlx.DB
 }
 
-func (db SQLiteDB) Init() error {
-	_, err := db.Exec(`
+const schema = `
 CREATE TABLE IF NOT EXISTS account (
         login_key text,
         session_id text default '',
@@ -62,12 +65,70 @@ CREATE TABLE IF NOT EXISTS battle_record (
 		system      integer default 0,
 		PRIMARY KEY (battle_code, user_id)
 );
-CREATE INDEX BATTLE_RECORD_USER_ID ON battle_record(user_id);
-CREATE INDEX BATTLE_RECORD_PLAYERS ON battle_record(players);
-CREATE INDEX BATTLE_RECORD_CREATED ON battle_record(created);
-CREATE INDEX BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
-`)
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_USER_ID ON battle_record(user_id);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
+`
+
+func (db SQLiteDB) Init() error {
+	_, err := db.Exec(schema)
 	return err
+}
+
+func (db SQLiteDB) Migrate() error {
+	ctx := context.Background()
+	tables := []string{"account", "user", "battle_record"}
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
+	if err != nil {
+		return errors.Wrap(err, "Begin failed")
+	}
+
+	for _, table := range tables {
+		tmp := table + "_tmp"
+		_, err = tx.Exec(`ALTER TABLE ` + table + ` RENAME TO ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "ALTER TABLE failed")
+		}
+	}
+
+	_, err = tx.Exec(schema)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "Init failed")
+	}
+
+	for _, table := range tables {
+		tmp := table + "_tmp"
+		rows, err := tx.Query(`SELECT * FROM ` + tmp + ` LIMIT 1`)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "SELECT failed")
+		}
+
+		columns, err := rows.Columns()
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "Columns() failed")
+		}
+		rows.Close()
+
+		_, err = tx.Exec(`INSERT INTO ` + table + `(` + strings.Join(columns, ",") + `) SELECT * FROM ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "INSERT failed")
+		}
+
+		_, err = tx.Exec(`DROP TABLE ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "DROP TABLE failed")
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (db SQLiteDB) RegisterAccount(ip string) (*Account, error) {

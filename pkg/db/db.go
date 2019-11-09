@@ -108,6 +108,7 @@ type BattleCountResult struct {
 
 type DB interface {
 	Init() error
+	Migrate() error
 	RegisterAccount(ip string) (*Account, error)
 	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
 	GetAccountByLoginKey(key string) (*Account, error)
