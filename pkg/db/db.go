@@ -101,21 +101,57 @@ type BattleCountResult struct {
 	Death  int `json:"death,omitempty"`
 }
 
+// DB is an interface of database operation.
 type DB interface {
+	// Init initializes the database.
 	Init() error
+
+	// Migrate converts old version database to current version.
 	Migrate() error
+
+	// RegisterAccount creates new user account.
 	RegisterAccount(ip string) (*Account, error)
+
+	// RegisterAccountWithLoginKey creates new user account with specific login key.
+	// This function enables users to share login-key among different servers.
 	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
+
+	// GetAccountByLoginKey retrieves an account by login-key.
 	GetAccountByLoginKey(key string) (*Account, error)
+
+	// LoginAccount updates last login information.
 	LoginAccount(*Account) error
+
+	// RegisterUser creates new user.
+	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)
+
+	// GetUserList returns user list that the account holds.
 	GetUserList(loginKey string) ([]*User, error)
+
+	// GetUser retrieves an account by user_id
 	GetUser(userId string) (*User, error)
+
+	// LoginUser updates last login information.
 	LoginUser(user *User) error
+
+	// UpdateUser updates all user's mutable information.
 	UpdateUser(user *User) error
+
+	// AddBattleRecord saves new battle record.
+	// This function is used when a battle starts.
 	AddBattleRecord(battle *BattleRecord) error
+
+	// GetBattleRecordUser load a battle record by battle_code and user_id.
 	GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error)
+
+	// UpdateBattleRecord updates all mutable information of battle_record.
 	UpdateBattleRecord(record *BattleRecord) error
+
+	// CalculateUserTotalBattleCount calculates battle count of the user.
+	// You can get the results of one army using the `side` parameter.
 	CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error)
+
+	// CalculateUserDailyBattleCount calculates daily battle count of the user.
 	CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error)
 }
