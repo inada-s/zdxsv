@@ -38,8 +38,6 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 
-	// FIX DELAY TABLE HACK
-
 	targetBodySize := 0x0120 - 8
 
 	w.Write16(lobbyID)
@@ -56,7 +54,7 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 		0x27bdffb0, // sp -= 0x0050
 
 		0xffa40040, 0xffa50030, 0xffa20020, 0xffa30010, // save a0, a1, v0, v1 to stack
-		0x24040002, 0x24050006, 0x3c030060, 0x2463fba0, // a0 = 2, a1 = 6, v1 = 0x005ffba0(table)
+		0x24040002, 0x24050004, 0x3c030060, 0x2463fba0, // a0 = 2, a1 = 4, v1 = 0x005ffba0(table)
 
 		0xa0640000, 0xa0650004, 0xa0650008, // table[0] = (a0, a1, a1)
 		0xa064000c, 0xa0650010, 0xa0650014, // table[1] = (a0, a1, a1)
