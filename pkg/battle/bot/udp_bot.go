@@ -154,7 +154,6 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 			atomic.StoreInt32(&bot.waitmsg, int32(bot.players-1))
 		}
 	}
-	return nil
 }
 
 func (bot *UDPBot) Summary() {

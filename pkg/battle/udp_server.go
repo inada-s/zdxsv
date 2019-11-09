@@ -101,7 +101,6 @@ func (s *UDPServer) readLoop() error {
 			glog.Errorf("received unexpected pkt type packet %v", pkt)
 		}
 	}
-	return nil
 }
 
 func (s *UDPServer) ListenAndServe(addr string) error {

@@ -113,7 +113,6 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 			}
 		}
 	}
-	return nil
 }
 
 func (bot *TCPBot) Summary() {

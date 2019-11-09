@@ -100,7 +100,6 @@ func (s *Server) ListenAndServe(addr string) error {
 		conn.peer = s.pf.NewPeer(conn)
 		go conn.serve()
 	}
-	return nil
 }
 
 type Conn struct {
