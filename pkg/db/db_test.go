@@ -196,7 +196,7 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 	err = testDB.UpdateBattleRecord(br)
 	must(t, err)
 
-	rec, err := testDB.CalculateUserBattleCount("11111")
+	rec, err := testDB.CalculateUserTotalBattleCount("11111", 0)
 	must(t, err)
 
 	assertEq(t, br.Round, rec.Battle)
@@ -204,9 +204,16 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 	assertEq(t, br.Lose, rec.Lose)
 	assertEq(t, br.Kill, rec.Kill)
 	assertEq(t, br.Death, rec.Death)
-	assertEq(t, br.Round, rec.DailyBattle)
-	assertEq(t, br.Win, rec.DailyWin)
-	assertEq(t, br.Lose, rec.DailyLose)
+
+	rec, err = testDB.CalculateUserDailyBattleCount("11111")
+	must(t, err)
+
+	assertEq(t, br.Round, rec.Battle)
+	assertEq(t, br.Win, rec.Win)
+	assertEq(t, br.Lose, rec.Lose)
+	assertEq(t, br.Kill, rec.Kill)
+	assertEq(t, br.Death, rec.Death)
+	assertEq(t, br.Round, rec.Battle)
 }
 
 func TestMain(m *testing.M) {
