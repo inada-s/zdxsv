@@ -152,26 +152,21 @@ var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
 	kind := r.Read8()
 	page := r.Read8()
 
-	invCount := uint32(p.User.BattleCount - p.User.WinCount + p.User.LoseCount)
-	// FIXME: Consider a reasonable calculation method.
-	c := p.User.WinCount / 100
-	if 14 <= c {
-		c = 14
-	}
+	rec := p.app.OnGetUserRanking(p, kind, page)
 
 	w := a.Writer()
 	w.Write8(kind)
 	w.Write8(page)
-	w.Write32(0)        // Entire Player Count
-	w.Write32(0xAAAA)   // Unknown
-	w.Write32(invCount) // Invalid Match Count
-	w.Write8(uint8(c))  // Class
-	w.Write32(0)        // Personal Rank
-	w.Write32(0xBBBB)   // Unknown
-	w.Write32(uint32(p.User.BattleCount))
-	w.Write32(uint32(p.User.WinCount))
-	w.Write32(uint32(p.User.LoseCount))
-	w.Write32(0)      // Kill Count
+	w.Write32(rec.EntireCount)
+	w.Write32(0xAAAA) // Unknown
+	w.Write32(rec.Invalid)
+	w.Write8(rec.Class)
+	w.Write32(rec.Rank)
+	w.Write32(0xBBBB) // Unknown
+	w.Write32(rec.Battle)
+	w.Write32(rec.Win)
+	w.Write32(rec.Lose)
+	w.Write32(rec.Kill)
 	w.Write32(0xCCCC) // Unknown
 	w.Write32(0xDDDD) // Unknown
 	w.Write32(0xEEEE) // Unknown

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -13,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/golang/glog"
@@ -54,11 +54,11 @@ func printUsage() {
 }
 
 func prepareDB() {
-	conn, err := sql.Open("sqlite3", config.Conf.DB.Name)
+	conn, err := sqlx.Open("sqlite3", config.Conf.DB.Name)
 	if err != nil {
 		glog.Fatal(err)
 	}
-	db.DefaultDB = db.SQLiteDB{conn}
+	db.DefaultDB = db.SQLiteDB{DB: conn}
 }
 
 func prepareOption(command string) {
@@ -113,6 +113,14 @@ func main() {
 		os.Remove(config.Conf.DB.Name)
 		prepareDB()
 		db.DefaultDB.Init()
+	case "migratedb":
+		prepareDB()
+		err := db.DefaultDB.Migrate()
+		if err != nil {
+			glog.Errorln("Migration failed:", err)
+		} else {
+			glog.Errorln("Migration done")
+		}
 	default:
 		printUsage()
 		os.Exit(1)

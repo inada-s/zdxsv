@@ -1,18 +1,21 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 )
 
 type SQLiteDB struct {
-	*sql.DB
+	*sqlx.DB
 }
 
-func (db SQLiteDB) Init() error {
-	_, err := db.Exec(`
+const schema = `
 CREATE TABLE IF NOT EXISTS account (
         login_key text,
         session_id text default '',
@@ -31,7 +34,9 @@ CREATE TABLE IF NOT EXISTS user (
         team text default '',
         battle_count integer default 0,
         win_count integer default 0,
-        lose_count integer default 0,
+		lose_count integer default 0,
+		kill_count integer default 0,
+		death_count integer default 0,
         daily_battle_count integer default 0,
         daily_win_count integer default 0,
         daily_lose_count integer default 0,
@@ -39,17 +44,13 @@ CREATE TABLE IF NOT EXISTS user (
         system integer default 0,
         PRIMARY KEY (user_id, login_key)
 );
-CREATE TABLE IF NOT EXISTS battle_user (
-        user_id text,
-        session_id text,
-        name text default '',
-        team text default ''
-);
-CREATE INDEX BATTLE_SESSION_ID ON battle_user(session_id);
 CREATE TABLE IF NOT EXISTS battle_record (
 		battle_code text,
 		user_id     text,
+		user_name 	text,
+		pilot_name 	text,
 		players     integer default 0,
+		aggregate   integer default 0,
 		pos         integer default 0,
 		side        integer default 0,
 		round       integer default 0,
@@ -64,11 +65,85 @@ CREATE TABLE IF NOT EXISTS battle_record (
 		system      integer default 0,
 		PRIMARY KEY (battle_code, user_id)
 );
-CREATE INDEX BATTLE_RECORD_USER_ID ON battle_record(user_id);
-CREATE INDEX BATTLE_RECORD_PLAYERS ON battle_record(players);
-CREATE INDEX BATTLE_RECORD_CREATED ON battle_record(created);
-`)
+`
+
+const indexes = `
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_USER_ID ON battle_record(user_id);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
+CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
+`
+
+func (db SQLiteDB) Init() error {
+	_, err := db.Exec(schema + indexes)
 	return err
+}
+
+func (db SQLiteDB) Migrate() error {
+	ctx := context.Background()
+	tables := []string{"account", "user", "battle_record"}
+
+	// begin tx
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
+	if err != nil {
+		return errors.Wrap(err, "Begin failed")
+	}
+
+	// create table if not exists
+	_, err = tx.Exec(schema)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "Begin failed")
+	}
+
+	// copy all tables
+	for _, table := range tables {
+		tmp := table + "_tmp"
+		_, err = tx.Exec(`ALTER TABLE ` + table + ` RENAME TO ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "ALTER TABLE failed")
+		}
+	}
+
+	// create new table
+	_, err = tx.Exec(schema + indexes)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "failed to create new tables")
+	}
+
+	// copy old table into new table and drop old table
+	// it works unless key name is changed
+	for _, table := range tables {
+		tmp := table + "_tmp"
+		rows, err := tx.Query(`SELECT * FROM ` + tmp + ` LIMIT 1`)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "SELECT failed")
+		}
+
+		columns, err := rows.Columns()
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "Columns() failed")
+		}
+		rows.Close()
+
+		_, err = tx.Exec(`INSERT INTO ` + table + `(` + strings.Join(columns, ",") + `) SELECT * FROM ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "INSERT failed")
+		}
+
+		_, err = tx.Exec(`DROP TABLE ` + tmp)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrap(err, "DROP TABLE failed")
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (db SQLiteDB) RegisterAccount(ip string) (*Account, error) {
@@ -108,27 +183,7 @@ VALUES
 
 func (db SQLiteDB) GetAccountByLoginKey(key string) (*Account, error) {
 	a := &Account{}
-	r := db.QueryRow(`
-SELECT
-	login_key,
-	session_id,
-	last_user_id,
-	created,
-	created_ip,
-	last_login,
-	system
-FROM
-	account
-WHERE
-	login_key = ?`, key)
-	err := r.Scan(
-		&a.LoginKey,
-		&a.SessionId,
-		&a.LastUserId,
-		&a.Created,
-		&a.CreatedIP,
-		&a.LastLogin,
-		&a.System)
+	err := db.QueryRowx("SELECT * FROM account WHERE login_key = ?", key).StructScan(a)
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +210,7 @@ WHERE
 func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
 	userId := genUserId()
 	now := time.Now()
-	_, err := db.Exec(`
-INSERT INTO user
-	(user_id, login_key, created) 
-VALUES
-	(?, ?, ?)`, userId, loginKey, now)
+	_, err := db.Exec(`INSERT INTO user (user_id, login_key, created) VALUES (?, ?, ?)`, userId, loginKey, now)
 	if err != nil {
 		return nil, err
 	}
@@ -172,95 +223,28 @@ VALUES
 }
 
 func (db SQLiteDB) GetUserList(loginKey string) ([]*User, error) {
-	rows, err := db.Query(`
-SELECT
-	user_id,
-	login_key,
-	name,
-	team,
-	created,
-	battle_count,
-	win_count,
-	lose_count,
-	daily_battle_count,
-	daily_win_count,
-	daily_lose_count,
-	system
-FROM
-	user
-WHERE
-	login_key = ?`, loginKey)
-
+	rows, err := db.Queryx(`SELECT * FROM user WHERE login_key = ?`, loginKey)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	users := make([]*User, 0)
+	users := []*User{}
 	for rows.Next() {
 		u := new(User)
-		err = rows.Scan(
-			&u.UserId,
-			&u.LoginKey,
-			&u.Name,
-			&u.Team,
-			&u.Created,
-			&u.BattleCount,
-			&u.WinCount,
-			&u.LoseCount,
-			&u.DailyBattleCount,
-			&u.DailyWinCount,
-			&u.DailyLoseCount,
-			&u.System)
+		err = rows.StructScan(u)
 		if err != nil {
 			return nil, err
 		}
 		users = append(users, u)
-	}
-
-	if err != nil {
-		return nil, err
 	}
 	return users, nil
 }
 
 func (db SQLiteDB) GetUser(userId string) (*User, error) {
 	u := &User{}
-	r := db.QueryRow(`
-SELECT
-	user_id,
-	login_key,
-	name,
-	team,
-	created,
-	battle_count,
-	win_count,
-	lose_count,
-	daily_battle_count,
-	daily_win_count,
-	daily_lose_count,
-	system
-FROM
-	user
-WHERE
-	user_id = ?`, userId)
-	err := r.Scan(
-		&u.UserId,
-		&u.LoginKey,
-		&u.Name,
-		&u.Team,
-		&u.Created,
-		&u.BattleCount,
-		&u.WinCount,
-		&u.LoseCount,
-		&u.DailyBattleCount,
-		&u.DailyWinCount,
-		&u.DailyLoseCount,
-		&u.System)
-	if err != nil {
-		return nil, err
-	}
-	return u, nil
+	err := db.Get(u, `SELECT * FROM user WHERE user_id = ?`, userId)
+	return u, err
 }
 
 func (db SQLiteDB) LoginUser(user *User) error {
@@ -270,172 +254,93 @@ func (db SQLiteDB) LoginUser(user *User) error {
 	}
 	a.LastUserId = user.UserId
 
-	_, err = db.Exec(`
-UPDATE
-	account
-SET
-	last_user_id = ?
-WHERE
-	login_key = ?`,
-		a.LastUserId,
-		a.LoginKey)
-
+	_, err = db.Exec(`UPDATE account SET last_user_id = ? WHERE login_key = ?`, a.LastUserId, a.LoginKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(`
-UPDATE
-	user
-SET
-	session_id = ?
-WHERE
-	user_id = ?`,
-		user.SessionId,
-		user.UserId)
+	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ?`, user.SessionId, user.UserId)
 	return err
 }
 
 func (db SQLiteDB) UpdateUser(user *User) error {
-	_, err := db.Exec(`
-UPDATE
-	user
+	_, err := db.NamedExec(`
+UPDATE user
 SET
-	name = ?,
-	team = ?,
-	battle_count = ?,
-	win_count = ?,
-	lose_count = ?,
-	daily_battle_count = ?,
-	daily_win_count = ?,
-	daily_lose_count = ?,
-	system = ?
+	name = :name,
+	team = :team,
+	battle_count = :battle_count,
+	win_count = :win_count,
+	lose_count = :lose_count,
+	kill_count = :kill_count,
+	death_count = :death_count,
+	daily_battle_count = :daily_battle_count,
+	daily_win_count = :daily_win_count,
+	daily_lose_count = :daily_lose_count,
+	system = :system
 WHERE
-	user_id = ?`,
-		user.Name,
-		user.Team,
-		user.BattleCount,
-		user.WinCount,
-		user.LoseCount,
-		user.DailyBattleCount,
-		user.DailyWinCount,
-		user.DailyLoseCount,
-		user.System,
-		user.UserId)
+	user_id = :user_id`, user)
 	return err
 }
 
-func (db SQLiteDB) AddBattleRecord(battle *BattleRecord) error {
+func (db SQLiteDB) AddBattleRecord(battleRecord *BattleRecord) error {
 	now := time.Now()
-	_, err := db.Exec(`
+	battleRecord.Updated = now
+	battleRecord.Created = now
+	_, err := db.NamedExec(`
 INSERT INTO battle_record
-	(battle_code, user_id, players, pos, side, created, updated, system)
+	(battle_code, user_id, user_name, pilot_name, players, aggregate, pos, side, created, updated, system)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?)`,
-		battle.BattleCode,
-		battle.UserId,
-		battle.Players,
-		battle.Pos,
-		battle.Side,
-		now,
-		now,
-		battle.System)
-	if err != nil {
-		battle.Created = now
-		battle.Updated = now
-	}
+	(:battle_code, :user_id, :user_name, :pilot_name, :players, :aggregate, :pos, :side, :created, :updated, :system)`,
+		battleRecord)
 	return err
 }
 
 func (db SQLiteDB) UpdateBattleRecord(battle *BattleRecord) error {
-	now := time.Now()
-	_, err := db.Exec(`
+	battle.Updated = time.Now()
+	_, err := db.NamedExec(`
 UPDATE battle_record
 SET
-	round = ?,
-	win = ?,
-	lose = ?,
-	kill = ?,
-	death = ?,
-	frame = ?,
-	result = ?,
-	updated = ?,
-	system = ?
+	round = :round,
+	win = :win,
+	lose = :lose,
+	kill = :kill,
+	death = :death,
+	frame = :frame,
+	result = :result,
+	updated = :updated,
+	system =:system
 WHERE
-	battle_code = ? AND user_id = ?`,
-		battle.Round,
-		battle.Win,
-		battle.Lose,
-		battle.Kill,
-		battle.Death,
-		battle.Frame,
-		battle.Result,
-		now,
-		battle.System,
-		battle.BattleCode,
-		battle.UserId,
-	)
+	battle_code = :battle_code AND user_id = :user_id`, battle)
 	return err
 }
 
 func (db SQLiteDB) GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error) {
 	b := new(BattleRecord)
-	r := db.QueryRow(`
-SELECT 
-	battle_code,
-	user_id,
-	players,
-	pos,
-	side,
-	round,
-	win,
-	lose,
-	kill,
-	death,
-	frame,
-	result,
-	created,
-	updated,
-	system
-FROM
-	battle_record
-WHERE
-	battle_code = ? AND user_id = ?`, battleCode, userId)
-	err := r.Scan(
-		&b.BattleCode,
-		&b.UserId,
-		&b.Players,
-		&b.Pos,
-		&b.Side,
-		&b.Round,
-		&b.Win,
-		&b.Lose,
-		&b.Kill,
-		&b.Death,
-		&b.Frame,
-		&b.Result,
-		&b.Created,
-		&b.Updated,
-		&b.System)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	err := db.Get(b, `SELECT * FROM battle_record WHERE battle_code = ? AND user_id = ?`, battleCode, userId)
+	return b, err
 }
 
-func (db SQLiteDB) CalculateUserBattleCount(userId string) (ret BattleCountResult, err error) {
-	r := db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4`, userId)
-	err = r.Scan(&ret.BattleCount, &ret.WinCount, &ret.LoseCount)
-	if err != nil {
+func (db SQLiteDB) CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error) {
+	if side == 0 {
+		r := db.QueryRow(`
+			SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
+			WHERE user_id = ? AND aggregate <> 0 AND players = 4`, userId)
+		err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 		return
 	}
+	r := db.QueryRow(`
+		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
+		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND side = ?`, userId, side)
+	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
+	return
+}
 
-	r = db.QueryRow(`SELECT TOTAL(round), TOTAL(win), TOTAL(lose) FROM battle_record WHERE user_id = ? AND players = 4 AND created > ?`,
+func (db SQLiteDB) CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error) {
+	r := db.QueryRow(`
+		SELECT TOTAL(round), TOTAL(win), TOTAL(lose), TOTAL(kill), TOTAL(death) FROM battle_record
+		WHERE user_id = ? AND aggregate <> 0 AND players = 4 AND created > ?`,
 		userId, time.Now().AddDate(0, 0, -1))
-	err = r.Scan(&ret.DailyBattleCount, &ret.DailyWinCount, &ret.DailyLoseCount)
-	if err != nil {
-		return
-	}
-
+	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 	return
 }
