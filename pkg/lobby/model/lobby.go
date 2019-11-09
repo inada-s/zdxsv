@@ -3,23 +3,23 @@ package model
 const roomCount = 5
 
 type Lobby struct {
-	Id         uint16
+	ID         uint16
 	Rule       *Rule
 	Users      map[string]*User
 	Rooms      map[uint16]*Room
 	EntryUsers []string
 }
 
-func NewLobby(lobbyId uint16) *Lobby {
+func NewLobby(lobbyID uint16) *Lobby {
 	lobby := &Lobby{
-		Id:         lobbyId,
+		ID:         lobbyID,
 		Rule:       NewRule(),
 		Users:      make(map[string]*User),
 		Rooms:      make(map[uint16]*Room),
 		EntryUsers: make([]string, 0),
 	}
 	for i := uint16(0); i <= roomCount; i++ {
-		lobby.Rooms[i] = NewRoom(lobbyId, i)
+		lobby.Rooms[i] = NewRoom(lobbyID, i)
 	}
 	return lobby
 }
@@ -29,15 +29,15 @@ func (l *Lobby) RoomCount() uint16 {
 }
 
 func (l *Lobby) Enter(u *User) {
-	l.Users[u.UserId] = u
+	l.Users[u.UserID] = u
 }
 
-func (l *Lobby) Exit(userId string) {
-	_, ok := l.Users[userId]
+func (l *Lobby) Exit(userID string) {
+	_, ok := l.Users[userID]
 	if ok {
-		delete(l.Users, userId)
+		delete(l.Users, userID)
 		for i, id := range l.EntryUsers {
-			if id == userId {
+			if id == userID {
 				l.EntryUsers = append(l.EntryUsers[:i], l.EntryUsers[i+1:]...)
 				break
 			}
@@ -49,13 +49,13 @@ func (l *Lobby) Entry(u *User, side byte) {
 	u.Entry = side
 	if side == EntryNone {
 		for i, id := range l.EntryUsers {
-			if id == u.UserId {
+			if id == u.UserID {
 				l.EntryUsers = append(l.EntryUsers[:i], l.EntryUsers[i+1:]...)
 				break
 			}
 		}
 	} else {
-		l.EntryUsers = append(l.EntryUsers, u.UserId)
+		l.EntryUsers = append(l.EntryUsers, u.UserID)
 	}
 }
 
@@ -78,10 +78,10 @@ func (l *Lobby) GetEntryUserCount() (uint16, uint16) {
 
 func (l *Lobby) CanBattleStart() bool {
 	a, b := l.GetEntryUserCount()
-	if l.Id == uint16(2) {
+	if l.ID == uint16(2) {
 		return 1 <= a && 1 <= b
 	}
-	if l.Id == uint16(3) {
+	if l.ID == uint16(3) {
 		return 1 <= a || 1 <= b
 	}
 	return 2 <= a && 2 <= b

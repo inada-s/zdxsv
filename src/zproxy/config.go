@@ -20,7 +20,7 @@ var (
 type config struct {
 	CheckUpdate    bool
 	EnableUPnP     bool
-	RegisterUserId string
+	RegisterUserID string
 	LobbyRPCAddr   string
 	TCPListenPort  uint16
 	UDPListenPort  uint16
@@ -34,7 +34,7 @@ func init() {
 	conf = config{
 		CheckUpdate:    *updatecheck,
 		EnableUPnP:     *enableupnp,
-		RegisterUserId: *userid,
+		RegisterUserID: *userid,
 		LobbyRPCAddr:   *lobbyrpcaddr,
 		TCPListenPort:  uint16(*tcpport),
 		UDPListenPort:  uint16(*udpport),

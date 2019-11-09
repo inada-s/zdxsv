@@ -17,7 +17,7 @@ func init() {
 
 type RegisterProxyRequest struct {
 	CurrentVersion int
-	UserId         string
+	UserID         string
 	LocalIP        net.IP
 	Port           uint16
 	UDPAddrs       []string
@@ -27,13 +27,13 @@ type RegisterProxyRequest struct {
 type RegisterProxyResponse struct {
 	Result     bool
 	Message    string
-	SessionId  string
-	UserId     string
+	SessionID  string
+	UserID     string
 	LobbyUsers []User
 }
 
 type BattleInfoRequest struct {
-	SessionId string
+	SessionID string
 }
 
 type BattleInfoResponse struct {
@@ -49,7 +49,7 @@ type StatusRequest struct {
 }
 
 type User struct {
-	UserId   string
+	UserID   string
 	Name     string
 	Team     string
 	UDP      bool
@@ -58,8 +58,8 @@ type User struct {
 
 type Battle struct {
 	Users     []User
-	AeugIds   []string
-	TitansIds []string
+	AeugIDs   []string
+	TitansIDs []string
 }
 
 type StatusResponse struct {

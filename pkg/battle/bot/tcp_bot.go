@@ -12,11 +12,11 @@ type TCPBot struct {
 	conn *net.TCPConn
 }
 
-func NewTCPBot(id int, sessionId int, players int, addr string) Bot {
+func NewTCPBot(id int, sessionID int, players int, addr string) Bot {
 	return &TCPBot{
 		botBase: botBase{
 			id:        id,
-			sessionId: sessionId,
+			sessionID: sessionID,
 			sendcnt:   0,
 			recvcnt:   0,
 			players:   players,
@@ -52,7 +52,7 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 		glog.Fatalln("Too long first data", recvbuf[:n])
 	} else {
 		firstData := []byte{130, 2, 16, 49, 0, 10, 0, 1, 0, 255, 255, 255}
-		firstData = append(firstData, []byte(EncodeSessionId(bot.sessionId))...)
+		firstData = append(firstData, []byte(EncodeSessionID(bot.sessionID))...)
 		_, err = bot.conn.Write(firstData)
 		if err != nil {
 			return err
@@ -113,7 +113,6 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 			}
 		}
 	}
-	return nil
 }
 
 func (bot *TCPBot) Summary() {

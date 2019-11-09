@@ -22,11 +22,11 @@ func genLoginKey() string {
 	return randomString(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 }
 
-func genUserId() string {
+func genUserID() string {
 	return randomString(6, "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789")
 }
 
-func genSessionId() string {
+func genSessionID() string {
 	return randomString(8, "123456789")
 }
 
@@ -41,8 +41,8 @@ func randInt(min int, max int) int {
 
 type Account struct {
 	LoginKey   string    `db:"login_key" json:"login_key,omitempty"`
-	SessionId  string    `db:"session_id" json:"session_id,omitempty"`
-	LastUserId string    `db:"last_user_id" json:"last_user_id,omitempty"`
+	SessionID  string    `db:"session_id" json:"session_id,omitempty"`
+	LastUserID string    `db:"last_user_id" json:"last_user_id,omitempty"`
 	Created    time.Time `db:"created" json:"created,omitempty"`
 	CreatedIP  string    `db:"created_ip" json:"created_ip,omitempty"`
 	LastLogin  time.Time `db:"last_login" json:"last_login,omitempty"`
@@ -51,9 +51,9 @@ type Account struct {
 
 type User struct {
 	LoginKey  string `db:"login_key" json:"login_key,omitempty"`
-	SessionId string `db:"session_id" json:"session_id,omitempty"`
+	SessionID string `db:"session_id" json:"session_id,omitempty"`
 
-	UserId string `db:"user_id" json:"user_id,omitempty"`
+	UserID string `db:"user_id" json:"user_id,omitempty"`
 	Name   string `db:"name" json:"name,omitempty"`
 	Team   string `db:"team" json:"team,omitempty"`
 
@@ -72,7 +72,7 @@ type User struct {
 
 type BattleRecord struct {
 	BattleCode string `db:"battle_code" json:"battle_code,omitempty"`
-	UserId     string `db:"user_id" json:"user_id,omitempty"`
+	UserID     string `db:"user_id" json:"user_id,omitempty"`
 	UserName   string `db:"user_name" json:"user_name,omitempty"`
 	PilotName  string `db:"pilot_name" json:"pilot_name,omitempty"`
 	Players    int    `db:"players" json:"players,omitempty"`
@@ -130,7 +130,7 @@ type DB interface {
 	GetUserList(loginKey string) ([]*User, error)
 
 	// GetUser retrieves an account by user_id
-	GetUser(userId string) (*User, error)
+	GetUser(userID string) (*User, error)
 
 	// LoginUser updates last login information.
 	LoginUser(user *User) error
@@ -143,15 +143,15 @@ type DB interface {
 	AddBattleRecord(battle *BattleRecord) error
 
 	// GetBattleRecordUser load a battle record by battle_code and user_id.
-	GetBattleRecordUser(battleCode string, userId string) (*BattleRecord, error)
+	GetBattleRecordUser(battleCode string, userID string) (*BattleRecord, error)
 
 	// UpdateBattleRecord updates all mutable information of battle_record.
 	UpdateBattleRecord(record *BattleRecord) error
 
 	// CalculateUserTotalBattleCount calculates battle count of the user.
 	// You can get the results of one army using the `side` parameter.
-	CalculateUserTotalBattleCount(userId string, side byte) (ret BattleCountResult, err error)
+	CalculateUserTotalBattleCount(userID string, side byte) (ret BattleCountResult, err error)
 
 	// CalculateUserDailyBattleCount calculates daily battle count of the user.
-	CalculateUserDailyBattleCount(userId string) (ret BattleCountResult, err error)
+	CalculateUserDailyBattleCount(userID string) (ret BattleCountResult, err error)
 }

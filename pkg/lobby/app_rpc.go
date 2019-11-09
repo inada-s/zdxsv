@@ -77,13 +77,13 @@ func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *
 
 	m.app.Locked(func(app *App) {
 		var userPeer *AppPeer
-		for userId, peer := range app.users {
+		for userID, peer := range app.users {
 			arr := strings.Split(peer.conn.Address(), ":")
 			if 0 < len(arr) {
-				if arr[0] == arrRemote[0] && req.UserId == "_AUTO_" {
+				if arr[0] == arrRemote[0] && req.UserID == "_AUTO_" {
 					userPeer = peer
 					break
-				} else if isLANTest && userId == req.UserId {
+				} else if isLANTest && userID == req.UserID {
 					userPeer = peer
 					break
 				}
@@ -102,11 +102,11 @@ func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *
 		userPeer.proxyUDPAddrs = req.UDPAddrs
 		userPeer.proxyP2PConnected = req.P2PConnected
 		res.Result = true
-		res.UserId = userPeer.UserId
-		res.SessionId = userPeer.SessionId
+		res.UserID = userPeer.UserID
+		res.SessionID = userPeer.SessionID
 		for _, u := range app.users {
 			user := User{
-				UserId: u.UserId,
+				UserID: u.UserID,
 				Name:   u.Name,
 				Team:   u.Team,
 				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
@@ -115,7 +115,7 @@ func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *
 			res.LobbyUsers = append(res.LobbyUsers, user)
 		}
 		res.Message = "登録成功"
-		glog.Infoln("Register zproxy", userPeer.UserId, userPeer.SessionId)
+		glog.Infoln("Register zproxy", userPeer.UserID, userPeer.SessionID)
 	})
 	return res
 }
@@ -124,27 +124,27 @@ func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *Bat
 	glog.Infof("BattleInfoRequest %v %+v\n", remoteAddr, req)
 	res := new(BattleInfoResponse)
 
-	if req.SessionId == "" {
+	if req.SessionID == "" {
 		res.Result = false
 		res.Message = "セッションIDが無効です."
 	}
 
 	m.app.Locked(func(app *App) {
-		battle, ok := app.battles[req.SessionId]
+		battle, ok := app.battles[req.SessionID]
 		if !ok {
 			res.Result = false
 			res.Message = "対戦情報が見つかりません."
 			return
 		}
 
-		userId := ""
+		userID := ""
 		for _, u := range battle.Users {
-			if u.SessionId == req.SessionId {
-				userId = u.UserId
+			if u.SessionID == req.SessionID {
+				userID = u.UserID
 			}
 		}
 
-		if userId == "" {
+		if userID == "" {
 			res.Result = false
 			res.Message = "対戦情報にユーザが見つかりません."
 			return
@@ -156,7 +156,7 @@ func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *Bat
 		res.IsTest = battle.TestBattle
 		for _, u := range battle.Users {
 			res.Users = append(res.Users, User{
-				UserId: u.UserId,
+				UserID: u.UserID,
 				Name:   u.Name,
 				Team:   u.Team,
 			})
@@ -173,7 +173,7 @@ func (m *lobbyRPC) getStatus(remoteAddr string, _ *StatusRequest) *StatusRespons
 	m.app.Locked(func(app *App) {
 		for _, u := range app.users {
 			user := User{
-				UserId: u.UserId,
+				UserID: u.UserID,
 				Name:   u.Name,
 				Team:   u.Team,
 				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
@@ -187,17 +187,17 @@ func (m *lobbyRPC) getStatus(remoteAddr string, _ *StatusRequest) *StatusRespons
 				continue
 			}
 			battle := Battle{}
-			battle.AeugIds = append(battle.AeugIds, b.AeugIds...)
-			battle.TitansIds = append(battle.TitansIds, b.TitansIds...)
+			battle.AeugIDs = append(battle.AeugIDs, b.AeugIDs...)
+			battle.TitansIDs = append(battle.TitansIDs, b.TitansIDs...)
 			for _, u := range b.Users {
-				_, isUDP := b.UDPUsers[u.UserId]
+				_, isUDP := b.UDPUsers[u.UserID]
 				battle.Users = append(battle.Users, User{
-					UserId: u.UserId,
+					UserID: u.UserID,
 					Name:   u.Name,
 					Team:   u.Team,
 					UDP:    isUDP,
 				})
-				checked[u.SessionId] = true
+				checked[u.SessionID] = true
 			}
 			res.Battles = append(res.Battles, battle)
 		}

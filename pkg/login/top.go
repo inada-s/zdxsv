@@ -68,7 +68,7 @@ var messageMainte = `<br><br><br><br><br><br>
 type commonParam struct {
 	ServerVersion string
 	LoginKey      string
-	SessionId     string
+	SessionID     string
 	ServerAddr    string
 	Message       string
 }
@@ -123,7 +123,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	p.ServerVersion = "1.0"
 	p.LoginKey = a.LoginKey
-	p.SessionId = a.SessionId
+	p.SessionID = a.SessionID
 	p.ServerAddr = config.Conf.Lobby.PublicAddr
 
 	w.Header().Set("Content-Type", "text/html; charset=cp932")

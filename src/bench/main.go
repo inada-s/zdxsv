@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 	runtime.GOMAXPROCS(*cpu)
 	players := *tcp_players + *udp_players
-	sessionIds, err := bot.PrepareServer(players, *rpcsv)
+	sessionIDs, err := bot.PrepareServer(players, *rpcsv)
 	if err != nil {
 		glog.Fatalln(err)
 	}
@@ -33,9 +33,9 @@ func main() {
 	for i := 0; i < players; i++ {
 		var b bot.Bot
 		if i < *tcp_players {
-			b = bot.NewTCPBot(i, sessionIds[i], players, *remote)
+			b = bot.NewTCPBot(i, sessionIDs[i], players, *remote)
 		} else {
-			b = bot.NewUDPBot(i, sessionIds[i], players, *remote)
+			b = bot.NewUDPBot(i, sessionIDs[i], players, *remote)
 		}
 		wg.Add(1)
 		go func() {

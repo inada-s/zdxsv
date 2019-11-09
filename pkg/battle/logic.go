@@ -14,26 +14,26 @@ import (
 )
 
 type BasePeer struct {
-	sessionId string
-	userId    string
+	sessionID string
+	userID    string
 	position  int
-	roomId    int
+	roomID    int
 }
 
-func (p *BasePeer) SetUserId(userId string) {
-	p.userId = userId
+func (p *BasePeer) SetUserID(userID string) {
+	p.userID = userID
 }
 
-func (p *BasePeer) SetSessionId(sessionId string) {
-	p.sessionId = sessionId
+func (p *BasePeer) SetSessionID(sessionID string) {
+	p.sessionID = sessionID
 }
 
-func (p *BasePeer) SessionId() string {
-	return p.sessionId
+func (p *BasePeer) SessionID() string {
+	return p.sessionID
 }
 
-func (p *BasePeer) UserId() string {
-	return p.userId
+func (p *BasePeer) UserID() string {
+	return p.userID
 }
 
 func (p *BasePeer) SetPosition(pos int) {
@@ -44,23 +44,23 @@ func (p *BasePeer) Position() int {
 	return p.position
 }
 
-func (p *BasePeer) SetRoomId(id int) {
-	p.roomId = id
+func (p *BasePeer) SetRoomID(id int) {
+	p.roomID = id
 }
 
-func (p *BasePeer) RoomId() int {
-	return p.roomId
+func (p *BasePeer) RoomID() int {
+	return p.roomID
 }
 
 type Peer interface {
-	SetUserId(string)
-	SetSessionId(string)
-	UserId() string
-	SessionId() string
+	SetUserID(string)
+	SetSessionID(string)
+	UserID() string
+	SessionID() string
 	SetPosition(int)
 	Position() int
-	SetRoomId(int)
-	RoomId() int
+	SetRoomID(int)
+	RoomID() int
 	AddSendData([]byte)
 	AddSendMessage(*proto.BattleMessage)
 	Address() string
@@ -90,38 +90,38 @@ func (m *Logic) ServeRpc(addr string) {
 	}
 }
 
-func (m *Logic) FindWaitingUser(sessionId string) (*battlerpc.User, bool) {
-	info := m.GetBattleInfo(sessionId)
+func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {
+	info := m.GetBattleInfo(sessionID)
 	if info == nil {
-		glog.Errorln("BattleInfo not found. sessionId=", sessionId)
+		glog.Errorln("BattleInfo not found. sessionID=", sessionID)
 		return nil, false
 	}
 
 	for _, u := range info.Users {
-		if sessionId == u.SessionId {
+		if sessionID == u.SessionID {
 			return &u, true
 		}
 	}
-	glog.Errorln("User not found in BattleInfo. sessionId=", sessionId)
+	glog.Errorln("User not found in BattleInfo. sessionID=", sessionID)
 	return nil, false
 }
 
-func (m *Logic) Join(p Peer, sessionId string) *Room {
-	user, ok := m.FindWaitingUser(sessionId)
+func (m *Logic) Join(p Peer, sessionID string) *Room {
+	user, ok := m.FindWaitingUser(sessionID)
 	if !ok {
 		return nil
 	}
 
-	p.SetUserId(user.UserId)
-	p.SetSessionId(sessionId)
-	info := m.GetBattleInfo(sessionId)
-	m.ClearBattleInfo(sessionId)
+	p.SetUserID(user.UserID)
+	p.SetSessionID(sessionID)
+	info := m.GetBattleInfo(sessionID)
+	m.ClearBattleInfo(sessionID)
 
 	m.roomsMtx.Lock()
-	room := m.rooms[info.RoomId]
+	room := m.rooms[info.RoomID]
 	if room == nil {
-		room = newRoom(info.RoomId)
-		m.rooms[info.RoomId] = room
+		room = newRoom(info.RoomID)
+		m.rooms[info.RoomID] = room
 	}
 	m.roomsMtx.Unlock()
 
@@ -129,7 +129,7 @@ func (m *Logic) Join(p Peer, sessionId string) *Room {
 	return room
 }
 
-func ParseSessionId(value string) (string, error) {
+func ParseSessionID(value string) (string, error) {
 	if len(value) != 10 {
 		return "", fmt.Errorf("Invalid value length")
 	}

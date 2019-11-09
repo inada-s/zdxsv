@@ -82,7 +82,7 @@ type pingResult struct {
 	rttNano  int64
 	recvTime time.Time
 	addr     *net.UDPAddr
-	userId   string
+	userID   string
 }
 
 type Zproxy struct {
@@ -94,11 +94,11 @@ type Zproxy struct {
 	selfLocalIP  net.IP
 
 	testBattle bool
-	userId     string
-	sessionId  string
+	userID     string
+	sessionID  string
 	svAddr     *net.UDPAddr
-	p2pAddr    map[string]*net.UDPAddr // userId -> addr
-	otherIds   []string
+	p2pAddr    map[string]*net.UDPAddr // userID -> addr
+	otherIDs   []string
 }
 
 func NewZproxy() *Zproxy {
@@ -109,12 +109,12 @@ func (z *Zproxy) Reset() {
 	z.ps2cl = nil
 
 	z.testBattle = false
-	z.userId = ""
-	z.sessionId = ""
+	z.userID = ""
+	z.sessionID = ""
 
 	z.svAddr = nil
 	z.p2pAddr = nil
-	z.otherIds = nil
+	z.otherIDs = nil
 }
 
 func (z *Zproxy) Setup() bool {
@@ -219,11 +219,11 @@ func (z *Zproxy) PollLobby() error {
 		mtx.Lock()
 		defer mtx.Unlock()
 		for _, user := range lobbyUsers {
-			if user.UserId == z.userId {
+			if user.UserID == z.userID {
 				continue
 			}
 			for _, addr := range user.UDPAddrs {
-				z.udpcl.SendPingToAddr(z.userId, addr)
+				z.udpcl.SendPingToAddr(z.userID, addr)
 			}
 		}
 	}
@@ -232,38 +232,38 @@ func (z *Zproxy) PollLobby() error {
 	z.udpcl.SubscribePacket("poll_lobby", func(pkt *proto.Packet, addr *net.UDPAddr) {
 		switch pkt.GetType() {
 		case proto.MessageType_Ping:
-			userId := pkt.GetPingData().GetUserId()
-			log.Println("Ping received from", userId)
+			userID := pkt.GetPingData().GetUserId()
+			log.Println("Ping received from", userID)
 			if conf.Verbose {
 				log.Println(addr)
 			}
 
 			mtx.Lock()
-			myUserId := z.userId
+			myUserID := z.userID
 			mtx.Unlock()
 
-			if userId != myUserId {
-				z.udpcl.SendPongTo(pkt, myUserId, addr)
+			if userID != myUserID {
+				z.udpcl.SendPongTo(pkt, myUserID, addr)
 			}
 		case proto.MessageType_Pong:
 			rttNano := time.Now().UnixNano() - pkt.GetPongData().GetTimestamp()
-			userId := pkt.GetPongData().GetUserId()
-			log.Println("Pong received from", userId, "RTT:", rttNano/(1000*1000), "[ms]")
+			userID := pkt.GetPongData().GetUserId()
+			log.Println("Pong received from", userID, "RTT:", rttNano/(1000*1000), "[ms]")
 			if conf.Verbose {
 				log.Println(addr)
 			}
 
 			mtx.Lock()
-			myUserId := z.userId
+			myUserID := z.userID
 			mtx.Unlock()
 
-			if userId != myUserId {
+			if userID != myUserID {
 				mtx.Lock()
-				pongReceived[userId] = pingResult{
+				pongReceived[userID] = pingResult{
 					rttNano:  rttNano,
 					recvTime: time.Now(),
 					addr:     addr,
-					userId:   userId,
+					userID:   userID,
 				}
 				mtx.Unlock()
 			}
@@ -282,7 +282,7 @@ func (z *Zproxy) PollLobby() error {
 
 		resp, err := registerProxy(&lobbyrpc.RegisterProxyRequest{
 			CurrentVersion: protocolVersion,
-			UserId:         conf.RegisterUserId,
+			UserID:         conf.RegisterUserID,
 			Port:           conf.TCPListenPort,
 			LocalIP:        z.selfLocalIP,
 			UDPAddrs:       z.selfUDPAddrs,
@@ -302,24 +302,24 @@ func (z *Zproxy) PollLobby() error {
 				if u.UDP {
 					pro = "(UDP)"
 				}
-				log.Println(u.UserId, u.Name, pro)
+				log.Println(u.UserID, u.Name, pro)
 				if conf.Verbose {
 					log.Println(u.UDPAddrs)
 				}
 			}
 			mtx.Lock()
-			z.sessionId = resp.SessionId
-			z.userId = resp.UserId
+			z.sessionID = resp.SessionID
+			z.userID = resp.UserID
 			lobbyUsers = resp.LobbyUsers
 			mtx.Unlock()
-			log.Println("あなたのユーザID:", resp.UserId)
+			log.Println("あなたのユーザID:", resp.UserID)
 			sendPingToLobbyUsers()
 		}
 		return nil
 	}
 
 	prepareBattle := func() error {
-		resp, err := getBattleInfo(&lobbyrpc.BattleInfoRequest{SessionId: z.sessionId})
+		resp, err := getBattleInfo(&lobbyrpc.BattleInfoRequest{SessionID: z.sessionID})
 		if err != nil {
 			return err
 		}
@@ -327,9 +327,9 @@ func (z *Zproxy) PollLobby() error {
 			return fmt.Errorf(resp.Message)
 		}
 
-		z.otherIds = nil
+		z.otherIDs = nil
 		for _, u := range resp.Users {
-			z.otherIds = append(z.otherIds, u.UserId)
+			z.otherIDs = append(z.otherIDs, u.UserID)
 		}
 
 		log.Println(resp.Message)
@@ -350,17 +350,17 @@ func (z *Zproxy) PollLobby() error {
 			mtx.Lock()
 			for _, info := range pongReceived {
 				if time.Since(info.recvTime).Seconds() < 60 {
-					pingResults[info.userId] = info
+					pingResults[info.userID] = info
 				}
 			}
 			mtx.Unlock()
 
 			z.p2pAddr = map[string]*net.UDPAddr{}
 			for _, u := range resp.Users {
-				info, ok := pingResults[u.UserId]
+				info, ok := pingResults[u.UserID]
 				if ok {
-					log.Println("P2P Mode Enabled", u.UserId)
-					z.p2pAddr[u.UserId] = info.addr
+					log.Println("P2P Mode Enabled", u.UserID)
+					z.p2pAddr[u.UserID] = info.addr
 				}
 			}
 		}
@@ -405,7 +405,7 @@ func (z *Zproxy) GreetBattleServer() bool {
 
 	pkt := proto.GetPacket()
 	pkt.Type = proto.MessageType_HelloServer.Enum()
-	pkt.HelloServerData = &proto.HelloServerMessage{SessionId: pb.String(z.sessionId)}
+	pkt.HelloServerData = &proto.HelloServerMessage{SessionId: pb.String(z.sessionID)}
 	svAddr := z.svAddr
 	for i := 0; i < 10; i++ {
 		if !result.Load().(bool) {
@@ -419,7 +419,7 @@ func (z *Zproxy) GreetBattleServer() bool {
 
 func (z *Zproxy) ServeBattle() error {
 	firstData, _ := hex.DecodeString("280110310000000100ffffff")
-	msgFilter := proto.NewMessageFilter(z.otherIds)
+	msgFilter := proto.NewMessageFilter(z.otherIDs)
 	svRudp := proto.NewBattleBuffer("server")
 	p2pRudp := map[string]*proto.BattleBuffer{}
 	for id, addr := range z.p2pAddr {
@@ -474,7 +474,7 @@ func (z *Zproxy) ServeBattle() error {
 
 	go func() {
 		z.ps2cl.Serve(ctx, func(data []byte) {
-			msg := msgFilter.GenerateMessage(z.userId, data)
+			msg := msgFilter.GenerateMessage(z.userID, data)
 			svRudp.PushBattleMessage(msg)
 			if !isPS2FirstData(data) {
 				for _, rudpBuf := range p2pRudp {
@@ -525,7 +525,7 @@ func (z *Zproxy) ServeBattle() error {
 				pkt.BattleData = data
 				pkt.Seq = pb.Uint32(seq)
 				pkt.Ack = pb.Uint32(ack)
-				addr, ok := z.p2pAddr[rudpBuf.GetId()]
+				addr, ok := z.p2pAddr[rudpBuf.GetID()]
 				if !ok {
 					log.Fatalln("p2pAddr remote not found")
 				}

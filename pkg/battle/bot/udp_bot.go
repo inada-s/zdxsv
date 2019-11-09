@@ -19,11 +19,11 @@ type UDPBot struct {
 	conn    *net.UDPConn
 }
 
-func NewUDPBot(id int, sessionId int, players int, addr string) Bot {
+func NewUDPBot(id int, sessionID int, players int, addr string) Bot {
 	return &UDPBot{
 		botBase: botBase{
 			id:        id,
-			sessionId: sessionId,
+			sessionID: sessionID,
 			sendcnt:   0,
 			recvcnt:   0,
 			players:   players,
@@ -46,13 +46,13 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 
 	send := make(chan bool, 32)
 	bb := proto.NewBattleBuffer(fmt.Sprintf("%6d", bot.id))
-	var otherIds []string
+	var otherIDs []string
 	for i := 0; i < bot.players; i++ {
 		if i != bot.id {
-			otherIds = append(otherIds, fmt.Sprintf("%6d", i))
+			otherIDs = append(otherIDs, fmt.Sprintf("%6d", i))
 		}
 	}
-	mf := proto.NewMessageFilter(otherIds)
+	mf := proto.NewMessageFilter(otherIDs)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -107,7 +107,7 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 	pkt := new(proto.Packet)
 	pkt.Type = proto.MessageType_HelloServer.Enum()
 	pkt.HelloServerData = &proto.HelloServerMessage{
-		SessionId: pb.String(ToStringSessionId(bot.sessionId)),
+		SessionId: pb.String(ToStringSessionID(bot.sessionID)),
 	}
 
 	for i := 0; i < 10; i++ {
@@ -122,7 +122,7 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 	}
 
 	firstData := []byte{130, 2, 16, 49, 0, 10, 0, 1, 0, 255, 255, 255}
-	firstData = append(firstData, []byte(EncodeSessionId(bot.sessionId))...)
+	firstData = append(firstData, []byte(EncodeSessionID(bot.sessionID))...)
 	msg := mf.GenerateMessage(fmt.Sprintf("%06d", bot.id), firstData)
 	bb.PushBattleMessage(msg)
 	data, seq, ack := bb.GetSendData()
@@ -154,7 +154,6 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 			atomic.StoreInt32(&bot.waitmsg, int32(bot.players-1))
 		}
 	}
-	return nil
 }
 
 func (bot *UDPBot) Summary() {

@@ -13,8 +13,8 @@ const (
 )
 
 type Room struct {
-	Id        uint16
-	LobbyId   uint16
+	ID        uint16
+	LobbyID   uint16
 	Name      string
 	MaxPlayer uint16
 	Password  string
@@ -25,10 +25,10 @@ type Room struct {
 	Rule      *Rule
 }
 
-func NewRoom(lobbyId, roomId uint16) *Room {
+func NewRoom(lobbyID, roomID uint16) *Room {
 	return &Room{
-		Id:      roomId,
-		LobbyId: lobbyId,
+		ID:      roomID,
+		LobbyID: lobbyID,
 		Name:    "(空き)",
 		Status:  RoomStateEmpty,
 		Rule:    NewRule(),
@@ -38,7 +38,7 @@ func NewRoom(lobbyId, roomId uint16) *Room {
 
 func (r *Room) Enter(u *User) {
 	if len(r.Users) == 0 {
-		r.Owner = u.UserId
+		r.Owner = u.UserID
 		r.Deadline = time.Now().Add(30 * time.Minute)
 		r.MaxPlayer = r.Rule.playerCount
 	}
@@ -52,9 +52,9 @@ func (r *Room) Enter(u *User) {
 	}
 }
 
-func (r *Room) Exit(userId string) {
+func (r *Room) Exit(userID string) {
 	for i, u := range r.Users {
-		if u.UserId == userId {
+		if u.UserID == userID {
 			r.Users, r.Users[len(r.Users)-1] = append(r.Users[:i], r.Users[i+1:]...), nil
 			break
 		}
@@ -72,7 +72,7 @@ func (r *Room) Exit(userId string) {
 }
 
 func (r *Room) Remove() {
-	*r = *NewRoom(r.LobbyId, r.Id)
+	*r = *NewRoom(r.LobbyID, r.ID)
 }
 
 func (r *Room) Entry(u *User, side byte) {

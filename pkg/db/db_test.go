@@ -13,7 +13,7 @@ import (
 
 var testDB DB
 var testLoginKey string
-var testUserId string
+var testUserID string
 
 func must(tb testing.TB, err error) {
 	if err != nil {
@@ -63,20 +63,20 @@ func Test101RegisterUser(t *testing.T) {
 		t.FailNow()
 	}
 	assertEq(t, testLoginKey, u.LoginKey)
-	assertEq(t, 6, len(u.UserId))
+	assertEq(t, 6, len(u.UserID))
 	assertEq(t, 0, u.BattleCount)
 	assertEq(t, 0, u.WinCount)
 	assertEq(t, 0, u.LoseCount)
 	assertEq(t, 0, u.DailyBattleCount)
 	assertEq(t, 0, u.DailyWinCount)
 	assertEq(t, 0, u.DailyLoseCount)
-	testUserId = u.UserId
+	testUserID = u.UserID
 }
 
 func Test102GetUser(t *testing.T) {
-	u, err := testDB.GetUser(testUserId)
+	u, err := testDB.GetUser(testUserID)
 	must(t, err)
-	assertEq(t, testUserId, u.UserId)
+	assertEq(t, testUserID, u.UserID)
 	assertEq(t, 0, u.BattleCount)
 	assertEq(t, 0, u.WinCount)
 	assertEq(t, 0, u.LoseCount)
@@ -93,7 +93,7 @@ func Test103GetInvalidUser(t *testing.T) {
 }
 
 func Test104UpdateUser(t *testing.T) {
-	u, err := testDB.GetUser(testUserId)
+	u, err := testDB.GetUser(testUserID)
 	must(t, err)
 	u.Name = "テストユーザ"
 	u.Team = "テストチーム"
@@ -105,7 +105,7 @@ func Test104UpdateUser(t *testing.T) {
 	u.DailyLoseCount = 1
 	err = testDB.UpdateUser(u)
 	must(t, err)
-	v, err := testDB.GetUser(testUserId)
+	v, err := testDB.GetUser(testUserID)
 	must(t, err)
 	assertEq(t, u, v)
 }
@@ -125,7 +125,7 @@ func Test106GetUserListNone(t *testing.T) {
 func Test200AddBattleRecord(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
-		UserId:     "123456",
+		UserID:     "123456",
 		Players:    4,
 		Pos:        1,
 		Side:       2,
@@ -146,7 +146,7 @@ func Test200AddBattleRecord(t *testing.T) {
 func Test201AddUpdateBattleRecord(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
-		UserId:     "23456",
+		UserID:     "23456",
 		Players:    4,
 		Aggregate:  1,
 		Pos:        1,
@@ -176,7 +176,7 @@ func Test201AddUpdateBattleRecord(t *testing.T) {
 func Test203CalculateUserBattleCount(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
-		UserId:     "11111",
+		UserID:     "11111",
 		Players:    4,
 		Aggregate:  1,
 		Pos:        1,

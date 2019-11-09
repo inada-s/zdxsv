@@ -31,5 +31,4 @@ func (s *TCPServer) ListenAndServe(addr string) error {
 		peer := NewTCPPeer(conn)
 		go peer.Serve(s.logic)
 	}
-	return nil
 }

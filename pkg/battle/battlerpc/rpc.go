@@ -10,7 +10,7 @@ const MaxRoom = 128
 
 type BattleRpc struct {
 	mNext      sync.Mutex
-	nextRoomId int
+	nextRoomID int
 
 	mMap       sync.RWMutex
 	sessionMap map[string]*BattleInfo
@@ -23,8 +23,8 @@ func NewBattleRpc() *BattleRpc {
 }
 
 type User struct {
-	UserId    string
-	SessionId string
+	UserID    string
+	SessionID string
 	Name      string
 	Team      string
 	Entry     byte
@@ -37,37 +37,37 @@ type BattleInfoArgs struct {
 
 type BattleInfo struct {
 	Users  []User
-	RoomId int
+	RoomID int
 }
 
-func (m *BattleRpc) GetBattleInfo(sessionId string) *BattleInfo {
+func (m *BattleRpc) GetBattleInfo(sessionID string) *BattleInfo {
 	m.mMap.Lock()
-	info, _ := m.sessionMap[sessionId]
+	info, _ := m.sessionMap[sessionID]
 	m.mMap.Unlock()
 	return info
 }
 
-func (m *BattleRpc) ClearBattleInfo(sessionId string) {
+func (m *BattleRpc) ClearBattleInfo(sessionID string) {
 	m.mMap.Lock()
-	delete(m.sessionMap, sessionId)
+	delete(m.sessionMap, sessionID)
 	m.mMap.Unlock()
 }
 
 func (m *BattleRpc) NotifyBattleUsers(args *BattleInfoArgs, reply *int) error {
 	m.mNext.Lock()
-	rid := m.nextRoomId
-	m.nextRoomId = (m.nextRoomId + 1) % MaxRoom
+	rid := m.nextRoomID
+	m.nextRoomID = (m.nextRoomID + 1) % MaxRoom
 	m.mNext.Unlock()
 
 	info := &BattleInfo{
 		Users:  args.Users,
-		RoomId: rid,
+		RoomID: rid,
 	}
 
 	glog.Infoln("Receive BattleInfo", *info)
 	m.mMap.Lock()
 	for _, u := range info.Users {
-		m.sessionMap[u.SessionId] = info
+		m.sessionMap[u.SessionID] = info
 	}
 	m.mMap.Unlock()
 	*reply = 1
