@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS battle_record (
 		system      integer default 0,
 		PRIMARY KEY (battle_code, user_id)
 );
+`
+
+const indexes = `
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_USER_ID ON battle_record(user_id);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
@@ -72,7 +75,7 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
 `
 
 func (db SQLiteDB) Init() error {
-	_, err := db.Exec(schema)
+	_, err := db.Exec(schema + indexes)
 	return err
 }
 
@@ -80,11 +83,20 @@ func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
 	tables := []string{"account", "user", "battle_record"}
 
+	// begin tx
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
 		return errors.Wrap(err, "Begin failed")
 	}
 
+	// create table if not exists
+	_, err = tx.Exec(schema)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "Begin failed")
+	}
+
+	// copy all tables
 	for _, table := range tables {
 		tmp := table + "_tmp"
 		_, err = tx.Exec(`ALTER TABLE ` + table + ` RENAME TO ` + tmp)
@@ -94,12 +106,15 @@ func (db SQLiteDB) Migrate() error {
 		}
 	}
 
-	_, err = tx.Exec(schema)
+	// create new table
+	_, err = tx.Exec(schema + indexes)
 	if err != nil {
 		tx.Rollback()
-		return errors.Wrap(err, "Init failed")
+		return errors.Wrap(err, "failed to create new tables")
 	}
 
+	// copy old table into new table and drop old table
+	// it works unless key name is changed
 	for _, table := range tables {
 		tmp := table + "_tmp"
 		rows, err := tx.Query(`SELECT * FROM ` + tmp + ` LIMIT 1`)
