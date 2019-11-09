@@ -152,7 +152,7 @@ var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
 	kind := r.Read8()
 	page := r.Read8()
 
-	invCount := uint32(p.User.BattleCount - p.User.WinCount + p.User.LoseCount)
+	invCount := uint32(p.User.BattleCount - p.User.WinCount - p.User.LoseCount)
 	// FIXME: Consider a reasonable calculation method.
 	c := p.User.WinCount / 100
 	if 14 <= c {
