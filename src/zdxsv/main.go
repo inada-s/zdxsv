@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -74,25 +73,6 @@ func prepareOption(command string) {
 	if *profile >= 2 {
 		runtime.MemProfileRate = 1
 		runtime.SetBlockProfileRate(1)
-	}
-}
-
-func copyFile(dest, src string) {
-	from, err := os.Open(src)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer from.Close()
-
-	to, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer to.Close()
-
-	_, err = io.Copy(to, from)
-	if err != nil {
-		log.Fatal(err)
 	}
 }
 
