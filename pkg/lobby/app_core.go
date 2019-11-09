@@ -358,6 +358,7 @@ func (a *App) startBattle(lobbyId uint16, users []*model.User, rule *model.Rule)
 			peer.Battle = battle
 			err = db.DefaultDB.AddBattleRecord(&db.BattleRecord{
 				BattleCode: battle.BattleCode,
+				Aggregate:  1,
 				UserId:     u.UserId,
 				Players:    len(users),
 				Pos:        int(battle.GetPosition(u.UserId)),
