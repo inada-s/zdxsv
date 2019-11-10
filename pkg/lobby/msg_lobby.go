@@ -3,7 +3,13 @@ package lobby
 
 import (
 	"fmt"
+	"io"
+	"strings"
 	. "zdxsv/pkg/lobby/message"
+
+	"github.com/golang/glog"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 var _ = register(0x6203, "GetPlazaCount", func(p *AppPeer, m *Message) {
@@ -153,10 +159,66 @@ var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	p.app.OnSendChatMessage(p, str)
 })
 
-// TODO
-func NoticeBothGameJoinUser() {
-	_ = NewServerNotice(0x6202)
-}
+var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
+	str := m.Reader().ReadEncryptedString()
+	glog.Infoln("str", str)
+	// 06/INFOR/INFOR00.HTM   : インフォメーション
+	// 06/V_RANK/TOTAL00.HTM  : 通信対戦ランキング > 総合
+	// 06/V_RANK/AEUG00.HTM   : 通信対戦ランキング > 連邦エゥーゴ
+	// 06/V_RANK/TITANS00.HTM : 通信対戦ランキング > ジオンティターンズ
+	// 06/P_RANK/TOTAL00.HTM  : 撃墜数ランキング > 総合
+	// 06/P_RANK/AEUG00.HTM   : 撃墜数ランキング > 連邦エゥーゴ
+	// 06/P_RANK/TITANS00.HTM : 撃墜数ランキング > ジオンティターンズ
+	// 06/E_RANK/TOTAL00.HTM  : イベントランキング > 総合
+	// 06/E_RANK/AEUG00.HTM   : イベントランキング > 連邦エゥーゴ
+	// 06/E_RANK/TITANS00.HTM : イベントランキング > ジオンティターンズ
+
+	m.Writer()
+	a := NewServerAnswer(m)
+	content := `
+	<HTML>
+	<HEAD>
+		<TITLE> UNDER CONSTRUCTION </TITLE>
+	</HEAD>
+	<!--
+		<GAME-STYLE>
+			"MOUSE=OFF",
+			"SCROLL=OFF",
+			"TITLE=OFF",
+			"BACK=ON:afs://02/8",
+			"FORWARD=OFF",
+			"CANCEL=OFF",
+			"RELOAD=OFF",
+			"CHOICE_MV=OFF",
+			"X_SHOW=ON",
+			"LINK_U=OFF",
+		</GAME-STYLE>
+	-->
+	<BODY BGCOLOR=#000000 background=afs://02/114.PNG text=white link=white vlink=white>
+	
+	<TABLE WIDTH=584 CELLSPACING=0 CELLPADDING=0>
+	
+	<!-- タイトル -->
+	 <TR>
+	  <TD BACKGROUND=afs://02/121.PNG WIDTH=256 HEIGHT=44>
+	  <TD BACKGROUND=afs://02/122.PNG WIDTH=32  HEIGHT=44>
+	  <TD BACKGROUND=afs://02/123.PNG WIDTH=296 HEIGHT=44 ALIGN=RIGHT><font size=1>　<br></font>工事中　　　　　
+	 </TR>
+	
+	 <TR><TD COLSPAN=3>
+	
+	<!-- 項目 -->
+	<CENTER>
+	<FONT SIZE=5>
+	</FONT>
+	</CENTER>
+	
+	</BODY>
+	</HTML>
+`
+	io.Copy(a.Writer(), transform.NewReader(strings.NewReader(content), japanese.EUCJP.NewEncoder()))
+	p.SendMessage(a)
+})
 
 func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {
 	n := NewServerNotice(0x6205)
