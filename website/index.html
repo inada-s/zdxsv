@@ -41,27 +41,20 @@
   <p>Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバです。</p>
   <p class="danger">※公式の通信対戦サービスは2011年6月30日に終了しています。非公式サーバに関するお問い合わせは絶対しないでください。 </p>
   <p>接続方法については <a href=#guide data-toggle="tab">接続方法</a> をご覧ください。</p>
-  <p>Discordのチャットグループを作成しました。使い方は <a href="//eeharumt.github.io/how2usediscordjp/basicoperation.html">こちら</a> を参考にしてください。</p>
+  <p>UDPプロキシの使い方は <a href="#zproxy" data-toggle="tab">UDPプロキシ</a> をご覧ください。<p>
+  <p>対戦の募集やボイスチャットは <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank">Discord</a> を使用します。使い方は <a href="//eeharumt.github.io/how2usediscordjp/basicoperation.html">こちら</a>をご覧ください<p>
 
-  <h2>更新情報</h2>
+  <h2>YouTube</h2>
+  <iframe class="latestVideoEmbed" cid="UCmH_v-7wWITjlx9rLk3BJmA" width="600" height="340" frameborder="0" allowfullscreen></iframe>
+  <p><a href="https://www.youtube.com/channel/UCmH_v-7wWITjlx9rLk3BJmA">YouTube</a>で対戦の様子を配信しています。 チャンネル登録、高評価をよろしくおねがいします！</p>
+
+  <h2>新着情報</h2>
   <ul>
-  <li>2019/11/04 ワイドスクリーンに対応するパッチを導入しました</li>
-  <li>2019/11/02 対戦中の入力遅延を軽減するパッチを導入しました</li>
-  <li>2019/10/13 HTTPSに対応し掲示板へのリンクを破棄しました</li>
-  <li>2016/09/28 ドメインを取得しサイトをリニューアルしました</li>
-  <li>2016/02/13 プログラムを一新しました UDPプロキシ最新版を使用してください</li>
-  <li>2015/03/29 対戦サーバがUDPに対応版になりました</li>
-  <li>2014/05/15 部屋が作成可能になりました</li>
-  <li>2014/05/02 接続状況をwebから確認できる機能を追加しました</li>
-  <li>2014/04/06 自動選抜に入った順番に1P-4Pにならない問題を修正</li>
-  <li>2014/04/06 チャット時に一部の特殊文字を使用するとフリーズする問題を修正しました</li>
-  <li>2014/04/02 作戦後部屋が使用可能になりました</li>
-  <li>2014/03/31 右スティックメッセージが使用可能になりました</li>
-  <li>2014/03/30 部隊名 パイロット名が反映されない不具合を修正しました</li>
-  <li>2014/03/27 おすすめ機材 ページを追加しました</li>
-  <li>2014/03/17 掲示板を開設しました 気軽にご利用ください</li>
-  <li>2014/03/11 ２組以上の同時対戦で通信が重くなる問題を暫定対応しました</li>
-  <li>2014/03/10 オープンβを開始しました</li>
+  <li>2019/11/13 戦績の記録とランキングを稼働</li>
+  <li>2019/11/04 ワイドスクリーンに対応するパッチを導入</li>
+  <li>2019/11/02 対戦中の入力遅延を軽減するパッチを導入</li>
+  <li>2016/09/28 ドメインを取得しサイトをリニューアル</li>
+  <li>2014/03/10 オープンβを開始</li>
   </ul>
 </div>  <!-- end of top -->
 
@@ -171,9 +164,31 @@
 <script src="/static/js/bootstrap.min.js"></script>
 <script>
 $(function() {
+// cf. https://codegena.com/auto-embed-latest-video-youtube-channel
+var reqURL = "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.youtube.com/feeds/videos.xml?channel_id=");
+function loadVideo(iframe){
+  $.getJSON(reqURL + iframe.getAttribute('cid'), function(data) {
+      var videoNumber = (iframe.getAttribute('vnum')?Number(iframe.getAttribute('vnum')):0);
+      console.log(videoNumber);
+      var link = data.items[videoNumber].link;
+      var id = link.substr(link.indexOf("=") + 1);  
+      iframe.setAttribute("src","https://youtube.com/embed/"+id + "?controls=1&autoplay=0");
+    }
+  );
+}
+var iframes = document.getElementsByClassName('latestVideoEmbed');
+for (var i = 0, len = iframes.length; i < len; i++){
+  loadVideo(iframes[i]);
+}
+
 function updateOnlineUser(t, u) {
   while(0 < t.rows.length) t.deleteRow(-1)
   if (!u) return
+  u.sort(function(a, b) {
+    if (a.UserID < b.UserID) return -1;
+    if (a.UserID > b.UserID) return 1;
+    return 0;
+  })
   for (var i = 0; i < u.length; i++) {
     var r = t.insertRow(-1);
     var uid = r.insertCell(0)
@@ -183,30 +198,6 @@ function updateOnlineUser(t, u) {
     uname.innerHTML = u[i].Name
     uname.className = "z-user-name"
     r.insertCell(2).innerHTML = u[i].UDP ? '<span class="label label-primary">UDP</span>' : ""
-  }
-}
-function updateChatUser(t, u) {
-  while(0 < t.rows.length) t.deleteRow(-1)
-  if (!u) return
-  u.sort(function(a, b) {
-    if(a.id < b.id) return -1
-    if(a.id > b.id) return 1
-    return 0
-  })
-  for (var i = 0; i < u.length; i++) {
-    var r = t.insertRow(-1);
-    var c = r.insertCell(0)
-    var id = u[i].ID || u[i].id
-    var av = u[i].Avatar || u[i].avatar
-    var vc = u[i].VoiceChat || u[i].voice_chat
-    var un = u[i].Username || u[i].username
-    un = $(c).text(un).text()
-    c.innerHTML = ''
-    if (vc) c.innerHTML += '<span class="glyphicon glyphicon-volume-up" style="color:green"></span>'
-    else c.innerHTML += '<span class="glyphicon glyphicon-volume-off" style="color:gray"></span>'
-    if (av) c.innerHTML += '<img class="img-rounded" width="30" height="30" src="//cdn.discordapp.com/avatars/' + encodeURIComponent(id) + '/' + encodeURIComponent(av) + '.jpg">'
-    else c.innerHTML += '<img class="img-rounded" width="30" height="30" src="/static/img/discord.png">'
-    c.innerHTML += un
   }
 }
 function pollStat(){
