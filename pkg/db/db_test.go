@@ -315,7 +315,7 @@ func Test300Ranking(t *testing.T) {
 		must(t, err)
 	}
 
-	totalRanking, err := testDB.GetWinCountRanking(0, 5, 0)
+	totalRanking, err := testDB.GetWinCountRanking(0)
 	must(t, err)
 
 	assertEq(t, 1000, totalRanking[0].WinCount)
@@ -323,7 +323,7 @@ func Test300Ranking(t *testing.T) {
 	assertEq(t, 1, totalRanking[1].Rank)
 	assertEq(t, 3, totalRanking[2].Rank)
 
-	aeugRanking, err := testDB.GetWinCountRanking(0, 5, 1)
+	aeugRanking, err := testDB.GetWinCountRanking(1)
 	must(t, err)
 
 	assertEq(t, 1000, aeugRanking[0].AeugWinCount)
@@ -335,7 +335,7 @@ func Test300Ranking(t *testing.T) {
 
 	assertEq(t, 1000, aeugRanking[0].WinCount)
 
-	titansRanking, err := testDB.GetWinCountRanking(0, 5, 2)
+	titansRanking, err := testDB.GetWinCountRanking(2)
 	must(t, err)
 
 	assertEq(t, 1000, titansRanking[0].TitansWinCount)
@@ -357,7 +357,10 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	testDB = SQLiteDB{conn}
+	testDB = SQLiteDB{
+		DB:          conn,
+		SQLiteCache: NewSQLiteCache(),
+	}
 	err = testDB.Init()
 	if err != nil {
 		log.Fatalln("Faild to prepare DB. err:", err)

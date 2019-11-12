@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -14,67 +16,85 @@ import (
 
 type SQLiteDB struct {
 	*sqlx.DB
+	*SQLiteCache
+}
+
+type SQLiteCache struct {
+	mtx          sync.Mutex
+	rankingCache map[string][]*RankingRecord
+}
+
+func NewSQLiteCache() *SQLiteCache {
+	return &SQLiteCache{
+		rankingCache: map[string][]*RankingRecord{},
+	}
+}
+
+func (c *SQLiteCache) deleteRankingCache() {
+	c.mtx.Lock()
+	c.rankingCache = map[string][]*RankingRecord{}
+	c.mtx.Unlock()
 }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS account (
-        login_key text,
-        session_id text default '',
-        last_user_id text default '',
-        created_ip text default '',
-        created timestamp,
-        last_login timestamp,
-        system integer default 0,
-        PRIMARY KEY (login_key)
+	login_key text,
+	session_id text default '',
+	last_user_id text default '',
+	created_ip text default '',
+	created timestamp,
+	last_login timestamp,
+	system integer default 0,
+	PRIMARY KEY (login_key)
 );
 CREATE TABLE IF NOT EXISTS user (
-        user_id text,
-        login_key text,
-        session_id text default '',
-        name text default 'default',
-        team text default '',
-        battle_count integer default 0,
-        win_count integer default 0,
-		lose_count integer default 0,
-		kill_count integer default 0,
-		death_count integer default 0,
-        aeug_battle_count integer default 0,
-        aeug_win_count integer default 0,
-		aeug_lose_count integer default 0,
-		aeug_kill_count integer default 0,
-		aeug_death_count integer default 0,
-        titans_battle_count integer default 0,
-        titans_win_count integer default 0,
-		titans_lose_count integer default 0,
-		titans_kill_count integer default 0,
-		titans_death_count integer default 0,
-        daily_battle_count integer default 0,
-        daily_win_count integer default 0,
-        daily_lose_count integer default 0,
-        created timestamp,
-        system integer default 0,
-        PRIMARY KEY (user_id, login_key)
+	user_id text,
+	login_key text,
+	session_id text default '',
+	name text default 'default',
+	team text default '',
+	battle_count integer default 0,
+	win_count integer default 0,
+	lose_count integer default 0,
+	kill_count integer default 0,
+	death_count integer default 0,
+	aeug_battle_count integer default 0,
+	aeug_win_count integer default 0,
+	aeug_lose_count integer default 0,
+	aeug_kill_count integer default 0,
+	aeug_death_count integer default 0,
+	titans_battle_count integer default 0,
+	titans_win_count integer default 0,
+	titans_lose_count integer default 0,
+	titans_kill_count integer default 0,
+	titans_death_count integer default 0,
+	daily_battle_count integer default 0,
+	daily_win_count integer default 0,
+	daily_lose_count integer default 0,
+	created timestamp,
+	system integer default 0,
+	PRIMARY KEY (user_id, login_key)
 );
 CREATE TABLE IF NOT EXISTS battle_record (
-		battle_code text,
-		user_id     text,
-		user_name 	text,
-		pilot_name 	text,
-		players     integer default 0,
-		aggregate   integer default 0,
-		pos         integer default 0,
-		side        integer default 0,
-		round       integer default 0,
-		win         integer default 0,
-		lose        integer default 0,
-		kill        integer default 0,
-		death       integer default 0,
-		frame       integer default 0,
-		result      text default '',
-		created     timestamp,
-		updated     timestamp,
-		system      integer default 0,
-		PRIMARY KEY (battle_code, user_id)
+	battle_code text,
+	user_id     text,
+	user_name 	text,
+	pilot_name 	text,
+	players     integer default 0,
+	aggregate   integer default 0,
+	pos         integer default 0,
+	side        integer default 0,
+	round       integer default 0,
+	win         integer default 0,
+	lose        integer default 0,
+	kill        integer default 0,
+	death       integer default 0,
+	frame       integer default 0,
+	result      text default '',
+	created     timestamp,
+	updated     timestamp,
+	system      integer default 0,
+	PRIMARY KEY (battle_code, user_id)
 );
 `
 
@@ -328,9 +348,14 @@ SET
 	frame = :frame,
 	result = :result,
 	updated = :updated,
-	system =:system
+	system = :system
 WHERE
 	battle_code = :battle_code AND user_id = :user_id`, battle)
+
+	if err == nil {
+		// refresh rakning page
+		db.deleteRankingCache()
+	}
 	return err
 }
 
@@ -364,7 +389,15 @@ func (db SQLiteDB) CalculateUserDailyBattleCount(userID string) (ret BattleCount
 	return
 }
 
-func (db SQLiteDB) GetWinCountRanking(offset, limit int, side byte) ([]*RankingRecord, error) {
+func (db SQLiteDB) GetWinCountRanking(side byte) ([]*RankingRecord, error) {
+	cacheKey := fmt.Sprint("win", side)
+	db.mtx.Lock()
+	ranking, ok := db.rankingCache[cacheKey]
+	db.mtx.Unlock()
+	if ok {
+		return ranking, nil
+	}
+
 	var rows *sqlx.Rows
 	var err error
 
@@ -381,13 +414,13 @@ func (db SQLiteDB) GetWinCountRanking(offset, limit int, side byte) ([]*RankingR
 		battle_count, win_count, lose_count, kill_count, death_count,
 		aeug_battle_count, aeug_win_count, aeug_lose_count, aeug_kill_count, aeug_death_count,
 		titans_battle_count, titans_win_count, titans_lose_count, titans_kill_count, titans_death_count
-		FROM user ORDER BY rank LIMIT ?`, limit)
+		FROM user ORDER BY rank LIMIT ?`, 100)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	ranks := []*RankingRecord{}
+	ranking = []*RankingRecord{}
 	for rows.Next() {
 		u := new(RankingRecord)
 		err = rows.StructScan(u)
@@ -400,12 +433,25 @@ func (db SQLiteDB) GetWinCountRanking(offset, limit int, side byte) ([]*RankingR
 		if !utf8.ValidString(u.Team) {
 			u.Team = "？"
 		}
-		ranks = append(ranks, u)
+		ranking = append(ranking, u)
 	}
-	return ranks, nil
+
+	db.mtx.Lock()
+	db.rankingCache[cacheKey] = ranking
+	db.mtx.Unlock()
+
+	return ranking, nil
 }
 
-func (db SQLiteDB) GetKillCountRanking(offset, limit int, side byte) ([]*RankingRecord, error) {
+func (db SQLiteDB) GetKillCountRanking(side byte) ([]*RankingRecord, error) {
+	cacheKey := fmt.Sprint("kill", side)
+	db.mtx.Lock()
+	ranking, ok := db.rankingCache[cacheKey]
+	db.mtx.Unlock()
+	if ok {
+		return ranking, nil
+	}
+
 	var rows *sqlx.Rows
 	var err error
 
@@ -422,13 +468,13 @@ func (db SQLiteDB) GetKillCountRanking(offset, limit int, side byte) ([]*Ranking
 		battle_count, win_count, lose_count, kill_count, death_count,
 		aeug_battle_count, aeug_win_count, aeug_lose_count, aeug_kill_count, aeug_death_count,
 		titans_battle_count, titans_win_count, titans_lose_count, titans_kill_count, titans_death_count
-		FROM user ORDER BY rank LIMIT ?`, limit)
+		FROM user ORDER BY rank LIMIT ?`, 100)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	ranks := []*RankingRecord{}
+	ranking = []*RankingRecord{}
 	for rows.Next() {
 		u := new(RankingRecord)
 		err = rows.StructScan(u)
@@ -441,7 +487,12 @@ func (db SQLiteDB) GetKillCountRanking(offset, limit int, side byte) ([]*Ranking
 		if !utf8.ValidString(u.Team) {
 			u.Team = "？"
 		}
-		ranks = append(ranks, u)
+		ranking = append(ranking, u)
 	}
-	return ranks, nil
+
+	db.mtx.Lock()
+	db.rankingCache[cacheKey] = ranking
+	db.mtx.Unlock()
+
+	return ranking, nil
 }

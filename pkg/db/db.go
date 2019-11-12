@@ -172,8 +172,8 @@ type DB interface {
 	CalculateUserDailyBattleCount(userID string) (ret BattleCountResult, err error)
 
 	// GetWinCountRanking returns top users of win count.
-	GetWinCountRanking(offset, limit int, side byte) (ret []*RankingRecord, err error)
+	GetWinCountRanking(side byte) (ret []*RankingRecord, err error)
 
 	// GetWinCountRanking returns top users of kill count.
-	GetKillCountRanking(offset, limit int, side byte) (ret []*RankingRecord, err error)
+	GetKillCountRanking(side byte) (ret []*RankingRecord, err error)
 }
