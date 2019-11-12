@@ -177,6 +177,30 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 	p.User.KillCount = rec.Kill
 	p.User.DeathCount = rec.Death
 
+	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 1)
+	if err != nil {
+		glog.Errorln("Failed to calculate battle count", err)
+		return
+	}
+
+	p.User.AeugBattleCount = rec.Battle
+	p.User.AeugWinCount = rec.Win
+	p.User.AeugLoseCount = rec.Lose
+	p.User.AeugKillCount = rec.Kill
+	p.User.AeugDeathCount = rec.Death
+
+	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 2)
+	if err != nil {
+		glog.Errorln("Failed to calculate battle count", err)
+		return
+	}
+
+	p.User.TitansBattleCount = rec.Battle
+	p.User.TitansWinCount = rec.Win
+	p.User.TitansLoseCount = rec.Lose
+	p.User.TitansKillCount = rec.Kill
+	p.User.TitansDeathCount = rec.Death
+
 	rec, err = db.DefaultDB.CalculateUserDailyBattleCount(p.UserID)
 	if err != nil {
 		glog.Errorln("Failed to calculate battle count", err)
