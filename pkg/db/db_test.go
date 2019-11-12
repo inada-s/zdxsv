@@ -319,6 +319,7 @@ func Test300Ranking(t *testing.T) {
 	must(t, err)
 
 	assertEq(t, 1000, totalRanking[0].WinCount)
+	assertEq(t, 1000, totalRanking[0].BattleCount)
 	assertEq(t, 1, totalRanking[0].Rank)
 	assertEq(t, 1, totalRanking[1].Rank)
 	assertEq(t, 3, totalRanking[2].Rank)
@@ -327,6 +328,7 @@ func Test300Ranking(t *testing.T) {
 	must(t, err)
 
 	assertEq(t, 1000, aeugRanking[0].AeugWinCount)
+	assertEq(t, 1000, aeugRanking[0].BattleCount)
 	assertEq(t, 0, aeugRanking[1].AeugWinCount)
 
 	assertEq(t, 1, aeugRanking[0].Rank)
@@ -339,6 +341,7 @@ func Test300Ranking(t *testing.T) {
 	must(t, err)
 
 	assertEq(t, 1000, titansRanking[0].TitansWinCount)
+	assertEq(t, 1000, titansRanking[0].BattleCount)
 	assertEq(t, 5, titansRanking[1].TitansWinCount)
 
 	assertEq(t, 1, titansRanking[0].Rank)
