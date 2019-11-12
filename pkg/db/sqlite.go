@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -386,12 +387,18 @@ func (db SQLiteDB) GetWinCountRanking(offset, limit int, side byte) ([]*RankingR
 	}
 	defer rows.Close()
 
-	ranks := make([]*RankingRecord, 0, limit)
+	ranks := []*RankingRecord{}
 	for rows.Next() {
 		u := new(RankingRecord)
 		err = rows.StructScan(u)
 		if err != nil {
 			return nil, err
+		}
+		if !utf8.ValidString(u.Name) {
+			u.Name = "？"
+		}
+		if !utf8.ValidString(u.Team) {
+			u.Team = "？"
 		}
 		ranks = append(ranks, u)
 	}
@@ -421,12 +428,18 @@ func (db SQLiteDB) GetKillCountRanking(offset, limit int, side byte) ([]*Ranking
 	}
 	defer rows.Close()
 
-	ranks := make([]*RankingRecord, 0, limit)
+	ranks := []*RankingRecord{}
 	for rows.Next() {
 		u := new(RankingRecord)
 		err = rows.StructScan(u)
 		if err != nil {
 			return nil, err
+		}
+		if !utf8.ValidString(u.Name) {
+			u.Name = "？"
+		}
+		if !utf8.ValidString(u.Team) {
+			u.Team = "？"
 		}
 		ranks = append(ranks, u)
 	}
