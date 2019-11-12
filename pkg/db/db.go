@@ -57,11 +57,22 @@ type User struct {
 	Name   string `db:"name" json:"name,omitempty"`
 	Team   string `db:"team" json:"team,omitempty"`
 
-	BattleCount      int `db:"battle_count" json:"battle_count,omitempty"`
-	WinCount         int `db:"win_count" json:"win_count,omitempty"`
-	LoseCount        int `db:"lose_count" json:"lose_count,omitempty"`
-	KillCount        int `db:"kill_count" json:"kill_count,omitempty"`
-	DeathCount       int `db:"death_count" json:"death_count,omitempty"`
+	BattleCount       int `db:"battle_count" json:"battle_count,omitempty"`
+	WinCount          int `db:"win_count" json:"win_count,omitempty"`
+	LoseCount         int `db:"lose_count" json:"lose_count,omitempty"`
+	KillCount         int `db:"kill_count" json:"kill_count,omitempty"`
+	DeathCount        int `db:"death_count" json:"death_count,omitempty"`
+	AeugBattleCount   int `db:"aeug_battle_count" json:"aeug_battle_count,omitempty"`
+	AeugWinCount      int `db:"aeug_win_count" json:"aeug_win_count,omitempty"`
+	AeugLoseCount     int `db:"aeug_lose_count" json:"aeug_lose_count,omitempty"`
+	AeugKillCount     int `db:"aeug_kill_count" json:"aeug_kill_count,omitempty"`
+	AeugDeathCount    int `db:"aeug_death_count" json:"aeug_death_count,omitempty"`
+	TitansBattleCount int `db:"titans_battle_count" json:"titans_battle_count,omitempty"`
+	TitansWinCount    int `db:"titans_win_count" json:"titans_win_count,omitempty"`
+	TitansLoseCount   int `db:"titans_lose_count" json:"titans_lose_count,omitempty"`
+	TitansKillCount   int `db:"titans_kill_count" json:"titans_kill_count,omitempty"`
+	TitansDeathCount  int `db:"titans_death_count" json:"titans_death_count,omitempty"`
+
 	DailyBattleCount int `db:"daily_battle_count" json:"daily_battle_count,omitempty"`
 	DailyWinCount    int `db:"daily_win_count" json:"daily_win_count,omitempty"`
 	DailyLoseCount   int `db:"daily_lose_count" json:"daily_lose_count,omitempty"`
@@ -99,6 +110,11 @@ type BattleCountResult struct {
 	Lose   int `json:"lose,omitempty"`
 	Kill   int `json:"kill,omitempty"`
 	Death  int `json:"death,omitempty"`
+}
+
+type RankingRecord struct {
+	Rank int `db:"rank"`
+	User
 }
 
 // DB is an interface of database operation.
@@ -154,4 +170,10 @@ type DB interface {
 
 	// CalculateUserDailyBattleCount calculates daily battle count of the user.
 	CalculateUserDailyBattleCount(userID string) (ret BattleCountResult, err error)
+
+	// GetWinCountRanking returns top users of win count.
+	GetWinCountRanking(side byte) (ret []*RankingRecord, err error)
+
+	// GetWinCountRanking returns top users of kill count.
+	GetKillCountRanking(side byte) (ret []*RankingRecord, err error)
 }
