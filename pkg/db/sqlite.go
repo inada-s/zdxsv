@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS user (
 		lose_count integer default 0,
 		kill_count integer default 0,
 		death_count integer default 0,
+        aeug_battle_count integer default 0,
+        aeug_win_count integer default 0,
+		aeug_lose_count integer default 0,
+		aeug_kill_count integer default 0,
+		aeug_death_count integer default 0,
+        titans_battle_count integer default 0,
+        titans_win_count integer default 0,
+		titans_lose_count integer default 0,
+		titans_kill_count integer default 0,
+		titans_death_count integer default 0,
         daily_battle_count integer default 0,
         daily_win_count integer default 0,
         daily_lose_count integer default 0,
@@ -274,6 +284,14 @@ SET
 	lose_count = :lose_count,
 	kill_count = :kill_count,
 	death_count = :death_count,
+	aeug_win_count = :aeug_win_count,
+	aeug_lose_count = :aeug_lose_count,
+	aeug_kill_count = :aeug_kill_count,
+	aeug_death_count = :aeug_death_count,
+	titans_win_count = :titans_win_count,
+	titans_lose_count = :titans_lose_count,
+	titans_kill_count = :titans_kill_count,
+	titans_death_count = :titans_death_count,
 	daily_battle_count = :daily_battle_count,
 	daily_win_count = :daily_win_count,
 	daily_lose_count = :daily_lose_count,
@@ -343,4 +361,74 @@ func (db SQLiteDB) CalculateUserDailyBattleCount(userID string) (ret BattleCount
 		userID, time.Now().AddDate(0, 0, -1))
 	err = r.Scan(&ret.Battle, &ret.Win, &ret.Lose, &ret.Kill, &ret.Death)
 	return
+}
+
+func (db SQLiteDB) GetWinCountRanking(offset, limit int, side byte) ([]*RankingRecord, error) {
+	var rows *sqlx.Rows
+	var err error
+
+	target := "win_count"
+	if side == 1 {
+		target = "aeug_win_count"
+	} else if side == 2 {
+		target = "titans_win_count"
+	}
+
+	rows, err = db.Queryx(`
+		SELECT RANK() OVER(ORDER BY `+target+` DESC) as rank,
+		user_id, name, team,
+		battle_count, win_count, lose_count, kill_count, death_count,
+		aeug_battle_count, aeug_win_count, aeug_lose_count, aeug_kill_count, aeug_death_count,
+		titans_battle_count, titans_win_count, titans_lose_count, titans_kill_count, titans_death_count
+		FROM user ORDER BY rank LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ranks := make([]*RankingRecord, 0, limit)
+	for rows.Next() {
+		u := new(RankingRecord)
+		err = rows.StructScan(u)
+		if err != nil {
+			return nil, err
+		}
+		ranks = append(ranks, u)
+	}
+	return ranks, nil
+}
+
+func (db SQLiteDB) GetKillCountRanking(offset, limit int, side byte) ([]*RankingRecord, error) {
+	var rows *sqlx.Rows
+	var err error
+
+	target := "kill_count"
+	if side == 1 {
+		target = "aeug_kill_count"
+	} else if side == 2 {
+		target = "titans_kill_count"
+	}
+
+	rows, err = db.Queryx(`
+		SELECT RANK() OVER(ORDER BY `+target+` DESC) as rank,
+		user_id, name, team,
+		battle_count, win_count, lose_count, kill_count, death_count,
+		aeug_battle_count, aeug_win_count, aeug_lose_count, aeug_kill_count, aeug_death_count,
+		titans_battle_count, titans_win_count, titans_lose_count, titans_kill_count, titans_death_count
+		FROM user ORDER BY rank LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ranks := make([]*RankingRecord, 0, limit)
+	for rows.Next() {
+		u := new(RankingRecord)
+		err = rows.StructScan(u)
+		if err != nil {
+			return nil, err
+		}
+		ranks = append(ranks, u)
+	}
+	return ranks, nil
 }

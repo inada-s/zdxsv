@@ -216,6 +216,136 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 	assertEq(t, br.Round, rec.Battle)
 }
 
+func Test300Ranking(t *testing.T) {
+	// ugly...
+	testDB.(SQLiteDB).Exec("DELETE FROM user")
+
+	var users []*User
+	for i := 0; i < 3; i++ {
+		ac, err := testDB.RegisterAccount("12.34.56.78")
+		must(t, err)
+		u, err := testDB.RegisterUser(ac.LoginKey)
+		must(t, err)
+		users = append(users, u)
+	}
+
+	for _, br := range []*BattleRecord{
+		&BattleRecord{
+			BattleCode: "rankingtest0",
+			UserID:     users[0].UserID,
+			Players:    4,
+			Aggregate:  1,
+			Pos:        1,
+			Round:      1000,
+			Win:        1000,
+			Lose:       0,
+			Kill:       1000,
+			Death:      456,
+			Frame:      9999,
+			Result:     "result",
+			Side:       1,
+			System:     123,
+		},
+		&BattleRecord{
+			BattleCode: "rankingtest1",
+			UserID:     users[1].UserID,
+			Players:    4,
+			Aggregate:  1,
+			Pos:        2,
+			Round:      1000,
+			Win:        1000,
+			Lose:       0,
+			Kill:       1000,
+			Death:      456,
+			Frame:      9999,
+			Result:     "result",
+			Side:       2,
+			System:     123,
+		},
+		&BattleRecord{
+			BattleCode: "rankingtest2",
+			UserID:     users[2].UserID,
+			Players:    4,
+			Aggregate:  1,
+			Pos:        2,
+			Round:      10,
+			Win:        5,
+			Lose:       5,
+			Kill:       100,
+			Death:      100,
+			Frame:      9999,
+			Result:     "result",
+			Side:       2,
+			System:     123,
+		},
+	} {
+		err := testDB.AddBattleRecord(br)
+		must(t, err)
+		err = testDB.UpdateBattleRecord(br)
+		must(t, err)
+	}
+
+	for _, u := range users {
+		rec, err := testDB.CalculateUserTotalBattleCount(u.UserID, 0)
+		must(t, err)
+		u.BattleCount = rec.Battle
+		u.WinCount = rec.Win
+		u.LoseCount = rec.Lose
+		u.KillCount = rec.Kill
+		u.DeathCount = rec.Death
+
+		rec, err = testDB.CalculateUserTotalBattleCount(u.UserID, 1)
+		must(t, err)
+		u.AeugBattleCount = rec.Battle
+		u.AeugWinCount = rec.Win
+		u.AeugLoseCount = rec.Lose
+		u.AeugKillCount = rec.Kill
+		u.AeugDeathCount = rec.Death
+
+		rec, err = testDB.CalculateUserTotalBattleCount(u.UserID, 2)
+		must(t, err)
+		u.TitansBattleCount = rec.Battle
+		u.TitansWinCount = rec.Win
+		u.TitansLoseCount = rec.Lose
+		u.TitansKillCount = rec.Kill
+		u.TitansDeathCount = rec.Death
+
+		err = testDB.UpdateUser(u)
+		t.Log(*u)
+		must(t, err)
+	}
+
+	totalRanking, err := testDB.GetWinCountRanking(0, 5, 0)
+	must(t, err)
+
+	assertEq(t, 1000, totalRanking[0].WinCount)
+	assertEq(t, 1, totalRanking[0].Rank)
+	assertEq(t, 1, totalRanking[1].Rank)
+	assertEq(t, 3, totalRanking[2].Rank)
+
+	aeugRanking, err := testDB.GetWinCountRanking(0, 5, 1)
+	must(t, err)
+
+	assertEq(t, 1000, aeugRanking[0].AeugWinCount)
+	assertEq(t, 0, aeugRanking[1].AeugWinCount)
+
+	assertEq(t, 1, aeugRanking[0].Rank)
+	assertEq(t, 2, aeugRanking[1].Rank)
+	assertEq(t, 2, aeugRanking[2].Rank)
+
+	assertEq(t, 1000, aeugRanking[0].WinCount)
+
+	titansRanking, err := testDB.GetWinCountRanking(0, 5, 2)
+	must(t, err)
+
+	assertEq(t, 1000, titansRanking[0].TitansWinCount)
+	assertEq(t, 5, titansRanking[1].TitansWinCount)
+
+	assertEq(t, 1, titansRanking[0].Rank)
+	assertEq(t, 2, titansRanking[1].Rank)
+	assertEq(t, 3, titansRanking[2].Rank)
+}
+
 func TestMain(m *testing.M) {
 	flag.Set("logtostderr", "true")
 	flag.Parse()

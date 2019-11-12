@@ -3,7 +3,9 @@ package login
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"text/template"
 
 	"zdxsv/pkg/assets"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/golang/glog"
 	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 var (
@@ -152,4 +155,22 @@ func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 	p.Message = message
 	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplMessage.Execute(sw, p)
+}
+
+// HandleTestPage handles a test page for editing HTML.
+// Not used in production environments.
+func HandleTestPage(w http.ResponseWriter, r *http.Request) {
+	glog.Infoln("HandleTestPage")
+	file, err := os.Open("work/src/testpage.html")
+	if err != nil {
+		glog.Errorln(err)
+		w.Header().Set("Content-Type", "text/html; charset=cp932")
+		w.WriteHeader(200)
+		writeMessagePage(w, r, "Page not found")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=cp932")
+	w.WriteHeader(200)
+	// writeMessagePage(w, r, messageRegister)
+	io.Copy(w, transform.NewReader(file, japanese.EUCJP.NewEncoder()))
 }
