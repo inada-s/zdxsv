@@ -352,7 +352,7 @@ SET
 WHERE
 	battle_code = :battle_code AND user_id = :user_id`, battle)
 
-	if err == nil {
+	if err == nil && battle.Aggregate != 0 {
 		// refresh rakning page
 		db.deleteRankingCache()
 	}
