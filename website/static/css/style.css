@@ -53,6 +53,11 @@ font-family: "monospace sans-serif";
 color: darkorange;
 }
 
+.links-wrapper {
+width: 100%;
+background-color: #333333;
+}
+
 div.links > a {
 background-color: #333333;
 color: skyblue;
