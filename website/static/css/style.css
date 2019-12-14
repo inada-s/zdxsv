@@ -1,7 +1,7 @@
 .jumbotron { 
 background:url(../img/title.png) center no-repeat;
 background-size: cover;
-background-position: center center;
+background-position: center 30%;
 margin-bottom: 0px;
 }
 
