@@ -58,7 +58,10 @@ func prepareDB() {
 	if err != nil {
 		glog.Fatal(err)
 	}
-	db.DefaultDB = db.SQLiteDB{DB: conn}
+	db.DefaultDB = db.SQLiteDB{
+		DB:          conn,
+		SQLiteCache: db.NewSQLiteCache(),
+	}
 }
 
 func prepareOption(command string) {

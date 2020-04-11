@@ -153,11 +153,6 @@ var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	p.app.OnSendChatMessage(p, str)
 })
 
-// TODO
-func NoticeBothGameJoinUser() {
-	_ = NewServerNotice(0x6202)
-}
-
 func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {
 	n := NewServerNotice(0x6205)
 	w := n.Writer()
