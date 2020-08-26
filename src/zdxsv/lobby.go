@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/lobby"
 )
