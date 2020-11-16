@@ -2,6 +2,8 @@ zdxsv
 =====
 Gundam vs Zeta Gundam private game server.
 
+The brother project [gdxsv is here](https://github.com/inada-s/gdxsv).
+
 ## Introduction
 
 [Mobile Suit Gundam: Gundam vs. Zeta Gundam](https://en.wikipedia.org/wiki/Mobile_Suit_Gundam:_Gundam_vs._Zeta_Gundam) was released on Playstation2 December 9, 2004.
