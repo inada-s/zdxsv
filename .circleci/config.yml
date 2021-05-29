@@ -4,7 +4,7 @@ executors:
   default:
     docker:
       # CircleCI Go images available at: https://hub.docker.com/r/circleci/golang/
-      - image: circleci/golang:1.12.2
+      - image: circleci/golang
     working_directory: /go/src/github.com/inada-s/zdxsv
     environment:
       - GO111MODULE: "on"

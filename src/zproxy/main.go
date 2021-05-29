@@ -212,7 +212,7 @@ func (z *Zproxy) PollLobby() error {
 
 		mtx          sync.Mutex
 		lobbyUsers   []lobbyrpc.User
-		pongReceived map[string]pingResult = make(map[string]pingResult)
+		pongReceived = make(map[string]pingResult)
 	)
 
 	sendPingToLobbyUsers := func() {
