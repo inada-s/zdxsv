@@ -9,7 +9,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/huin/goupnp v1.0.1-0.20210522212431-b5cf3be9f29c
 	github.com/jmoiron/sqlx v1.3.4
-	github.com/mattn/go-sqlite3 v1.14.7
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/miekg/dns v1.1.42
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/go-github-selfupdate v1.2.3
