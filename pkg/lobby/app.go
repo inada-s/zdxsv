@@ -54,6 +54,8 @@ type AppPeer struct {
 	conn              *Conn
 	app               *App
 	inBattleAfterRoom bool
+	Platform          string
+	PlatformInfo      map[string]string
 
 	proxyIP           net.IP
 	proxyPort         uint16
@@ -86,7 +88,7 @@ type App struct {
 	*handlerHolder
 	battleServer *rpc.Client
 	users        map[string]*AppPeer
-	lobbys       map[uint16]*model.Lobby
+	lobbys       map[string]map[uint16]*model.Lobby // platform -> lobby id -> lobby
 	battles      map[string]*model.Battle
 	chEvent      chan interface{}
 	chQuit       chan interface{}
@@ -96,21 +98,37 @@ func NewApp() *App {
 	app := &App{
 		handlerHolder: defaultHandlers,
 		users:         make(map[string]*AppPeer),
-		lobbys:        make(map[uint16]*model.Lobby),
+		lobbys:        make(map[string]map[uint16]*model.Lobby),
 		battles:       make(map[string]*model.Battle),
 		chEvent:       make(chan interface{}, 64),
 		chQuit:        make(chan interface{}),
 	}
-	for i := 0; i < 26; i++ {
-		app.lobbys[uint16(i)] = model.NewLobby(uint16(i))
-	}
+	app.getLobby(model.PlatformConsole, 0)
+	app.getLobby(model.PlatformEmuX8664, 0)
 	return app
+}
+
+const lobbyCount = 26
+
+// getLobby returns the lobby of the platform, creating the platform's lobbies on first use.
+func (a *App) getLobby(platform string, lobbyID uint16) (*model.Lobby, bool) {
+	lobbys, ok := a.lobbys[platform]
+	if !ok {
+		lobbys = make(map[uint16]*model.Lobby)
+		for i := 0; i < lobbyCount; i++ {
+			lobbys[uint16(i)] = model.NewLobby(platform, uint16(i))
+		}
+		a.lobbys[platform] = lobbys
+	}
+	l, ok := lobbys[lobbyID]
+	return l, ok
 }
 
 func (a *App) NewPeer(conn *Conn) Peer {
 	return &AppPeer{
-		conn: conn,
-		app:  a,
+		conn:     conn,
+		app:      a,
+		Platform: model.PlatformConsole,
 	}
 }
 

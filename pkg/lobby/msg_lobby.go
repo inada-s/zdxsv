@@ -21,7 +21,7 @@ var _ = register(0x6205, "GetPlazaJoinUser", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	id := m.Reader().Read16()
-	count := p.app.OnGetPlazaJoinUser()
+	count := p.app.OnGetPlazaJoinUser(p)
 	w.Write16(id)
 	w.Write16(0)
 	w.Write16(count) // 全体対戦中ユーザ数

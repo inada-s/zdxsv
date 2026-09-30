@@ -4,15 +4,17 @@ const roomCount = 5
 
 type Lobby struct {
 	ID         uint16
+	Platform   string
 	Rule       *Rule
 	Users      map[string]*User
 	Rooms      map[uint16]*Room
 	EntryUsers []string
 }
 
-func NewLobby(lobbyID uint16) *Lobby {
+func NewLobby(platform string, lobbyID uint16) *Lobby {
 	lobby := &Lobby{
 		ID:         lobbyID,
+		Platform:   platform,
 		Rule:       NewRule(),
 		Users:      make(map[string]*User),
 		Rooms:      make(map[uint16]*Room),
