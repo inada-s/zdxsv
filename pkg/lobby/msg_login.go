@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/lobby/model"
 
 	"github.com/golang/glog"
 )
@@ -61,6 +62,12 @@ func RequestKeyPair(p *AppPeer) {
 	w.Write16(0x2837)
 	p.SendMessage(m)
 }
+
+// PlatformInfo is sent only by emulators (pcsx2 ai/zdxsv), before the key pair answer.
+// Custom category, no answer: the game never sees it.
+var _ = register(0x9950, "PlatformInfo", func(p *AppPeer, m *Message) {
+	p.app.OnPlatformInfo(p, model.ParsePlatformInfo(string(m.Body)))
+})
 
 var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	r := m.Reader()

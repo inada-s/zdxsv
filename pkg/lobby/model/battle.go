@@ -16,11 +16,12 @@ type Battle struct {
 	P2PMap     map[string]map[string]struct{}
 	Rule       *Rule
 	LobbyID    uint16
+	Platform   string
 	StartTime  time.Time
 	TestBattle bool
 }
 
-func NewBattle(lobbyID uint16) *Battle {
+func NewBattle(platform string, lobbyID uint16) *Battle {
 	return &Battle{
 		Users:     make([]User, 0),
 		AeugIDs:   make([]string, 0),
@@ -29,6 +30,7 @@ func NewBattle(lobbyID uint16) *Battle {
 		P2PMap:    map[string]map[string]struct{}{},
 		Rule:      NewRule(),
 		LobbyID:   lobbyID,
+		Platform:  platform,
 	}
 }
 

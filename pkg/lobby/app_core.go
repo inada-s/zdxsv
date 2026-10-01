@@ -309,7 +309,7 @@ func (a *App) OnUserTopPageJump(p *AppPeer) {
 // Utility
 // ===========================
 
-func (a *App) startTestBattle(lobbyID uint16, users []*model.User) (string, bool) {
+func (a *App) startTestBattle(platform string, lobbyID uint16, users []*model.User) (string, bool) {
 	if len(users) != 1 {
 		return "ユーザー数エラー", false
 	}
@@ -322,7 +322,7 @@ func (a *App) startTestBattle(lobbyID uint16, users []*model.User) (string, bool
 	if !ok {
 		return "UDPプロキシが登録されていません", false
 	}
-	battle := model.NewBattle(lobbyID)
+	battle := model.NewBattle(platform, lobbyID)
 	battle.TestBattle = true
 	battle.UDPUsers[u.UserID] = true
 	battle.P2PMap[u.UserID] = map[string]struct{}{}
@@ -341,7 +341,7 @@ func (a *App) startTestBattle(lobbyID uint16, users []*model.User) (string, bool
 	return "接続テスト対戦開始", true
 }
 
-func (a *App) startBattle(lobbyID uint16, users []*model.User, rule *model.Rule) bool {
+func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, rule *model.Rule) bool {
 	if a.battleServer == nil {
 		glog.Errorln("Failed to battle start because App.battleServer is nil")
 		return false
@@ -354,7 +354,7 @@ func (a *App) startBattle(lobbyID uint16, users []*model.User, rule *model.Rule)
 		}
 	}
 
-	battle := model.NewBattle(lobbyID)
+	battle := model.NewBattle(platform, lobbyID)
 	if rule != nil {
 		battle.Rule = rule
 	}
@@ -457,32 +457,54 @@ func (a *App) startBattle(lobbyID uint16, users []*model.User, rule *model.Rule)
 // Lobby
 // ===========================
 
-func (a *App) OnGetPlazaJoinUser() uint16 {
-	return uint16(len(a.battles))
+func (a *App) countBattles(platform string) int {
+	count := 0
+	for _, battle := range a.battles {
+		if battle.Platform == platform {
+			count++
+		}
+	}
+	return count
 }
 
-func (a *App) noticeLobbyUserCountAll(lobbyID uint16) {
-	l, ok := a.lobbys[lobbyID]
+func (a *App) OnGetPlazaJoinUser(p *AppPeer) uint16 {
+	return uint16(a.countBattles(p.Platform))
+}
+
+func (a *App) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
+	l, ok := a.getLobby(platform, lobbyID)
 	if ok {
 		lb := uint16(len(l.Users))
 		bt := uint16(0)
 		for _, battle := range a.battles {
-			if battle.LobbyID == lobbyID {
+			if battle.Platform == platform && battle.LobbyID == lobbyID {
 				bt++
 			}
 		}
 		for _, peer := range a.users {
-			NoticeLobbyUserCount(peer, lobbyID, lb, bt)
+			if peer.Platform == platform {
+				NoticeLobbyUserCount(peer, lobbyID, lb, bt)
+			}
 		}
 	}
 }
 
+func (a *App) OnPlatformInfo(p *AppPeer, info map[string]string) {
+	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
+		glog.Warningln("platform info after lobby entry ignored", p.UserID, info)
+		return
+	}
+	p.PlatformInfo = info
+	p.Platform = model.PlatformFromInfo(info)
+	glog.Infoln("platform", p.Platform, info)
+}
+
 func (a *App) OnEnterLobby(p *AppPeer, lobbyID uint16) {
-	l, ok := a.lobbys[lobbyID]
+	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
 		p.Lobby = l
 		p.Lobby.Enter(&p.User)
-		a.noticeLobbyUserCountAll(p.Lobby.ID)
+		a.noticeLobbyUserCountAll(l.Platform, l.ID)
 	}
 }
 
@@ -493,13 +515,13 @@ func (a *App) OnExitLobby(p *AppPeer) {
 	}
 	if p.Lobby != nil {
 		p.Lobby.Exit(p.UserID)
-		a.noticeLobbyUserCountAll(p.Lobby.ID)
+		a.noticeLobbyUserCountAll(p.Lobby.Platform, p.Lobby.ID)
 		p.Lobby = nil
 	}
 }
 
 func (a *App) OnGetLobbyUserCount(p *AppPeer, lobbyID uint16) (count uint16) {
-	lb, ok := a.lobbys[lobbyID]
+	lb, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
 		count = uint16(len(lb.Users))
 	}
@@ -507,7 +529,7 @@ func (a *App) OnGetLobbyUserCount(p *AppPeer, lobbyID uint16) (count uint16) {
 }
 
 func (a *App) OnGetLobbyEntryUserCount(p *AppPeer, lobbyID uint16) (uint16, uint16) {
-	l, ok := a.lobbys[lobbyID]
+	l, ok := a.getLobby(p.Platform, lobbyID)
 	if !ok {
 		return 0, 0
 	}
@@ -521,7 +543,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 
 		if lobby.ID == uint16(1) && side != model.EntryNone {
 			users := lobby.StartBattleUsers()
-			message, result := a.startTestBattle(lobby.ID, users)
+			message, result := a.startTestBattle(lobby.Platform, lobby.ID, users)
 			NoticeChatMessage(p, "SERVER", ">", message)
 			if result {
 				for _, u := range users {
@@ -532,7 +554,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 			}
 		} else if lobby.CanBattleStart() {
 			users := lobby.StartBattleUsers()
-			result := a.startBattle(lobby.ID, users, nil)
+			result := a.startBattle(lobby.Platform, lobby.ID, users, nil)
 			if result {
 				for _, u := range users {
 					u.Entry = model.EntryNone
@@ -626,15 +648,15 @@ func (a *App) OnEnterBattleAfterRoom(p *AppPeer) {
 	}
 	delete(a.battles, p.SessionID)
 	if battle.LobbyID != 0 {
-		a.noticeLobbyUserCountAll(battle.LobbyID)
+		a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
 	}
 	p.Battle = battle
 	p.inBattleAfterRoom = true
 	a.noticeBattleAfterRoomUserCountAll(battle)
 
-	count := len(a.battles)
+	count := a.countBattles(battle.Platform)
 	for _, peer := range a.users {
-		if peer.Lobby == nil {
+		if peer.Lobby == nil && peer.Platform == battle.Platform {
 			NoticeBothPlazaJoinUser(peer, 1, uint16(count))
 		}
 	}
@@ -1004,7 +1026,7 @@ func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {
 		return
 	}
 	active, inactive := p.Room.StartBattleUsers()
-	ok := a.startBattle(p.Room.LobbyID, active, p.Room.Rule)
+	ok := a.startBattle(p.Platform, p.Room.LobbyID, active, p.Room.Rule)
 	if ok {
 		for _, u := range inactive {
 			peer, ok := a.users[u.UserID]
