@@ -105,8 +105,45 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
+// battleInfoNotice returns the custom notice 0x9951 for an emulator that runs
+// the zproxy bridge itself (platform info "udp=1"), else nil.
+// Sent just before the battle server address: the emulator strips it from the
+// game's stream and bridges the game's battle TCP to the battle server over UDP.
+// Body: "key=value" lines like 0x9950; users = every player's user id, in battle order.
+func battleInfoNotice(p *AppPeer) *Message {
+	b := p.Battle
+	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
+		return nil
+	}
+	if b.ServerIP == nil || b.ServerIP.To4() == nil || b.ServerPort == 0 {
+		return nil
+	}
+	sessionID := ""
+	var users []string
+	for _, u := range b.Users {
+		users = append(users, u.UserID)
+		if u.UserID == p.UserID {
+			sessionID = u.SessionID
+		}
+	}
+	if sessionID == "" {
+		return nil
+	}
+	n := NewServerNotice(0x9951)
+	n.Category = CategoryCustom
+	n.Body = []byte("session_id=" + sessionID + "\n" +
+		"user_id=" + p.UserID + "\n" +
+		"battle_server=" + b.ServerIP.String() + ":" + strconv.Itoa(int(b.ServerPort)) + "\n" +
+		"users=" + strings.Join(users, ",") + "\n")
+	return n
+}
+
 var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
+	if n := battleInfoNotice(p); n != nil {
+		glog.Infoln("udp bridge battle info", p.UserID)
+		p.SendMessage(n)
+	}
 	a := NewServerAnswer(m)
 
 	if ip == nil || ip.To4() == nil || port == 0 {
