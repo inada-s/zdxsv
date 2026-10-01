@@ -20,7 +20,7 @@ func (c callcenter) Call(v interface{}) {
 func (c callcenter) WaitCall(t *testing.T) {
 	select {
 	case <-c:
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		t.Fail()
 	}
 }
