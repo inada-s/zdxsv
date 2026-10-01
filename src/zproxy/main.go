@@ -200,7 +200,9 @@ func (z *Zproxy) Setup() bool {
 	log.Println("UDPアドレス:", z.selfUDPAddrs)
 
 	setupLobbyRPC()
-	go addUDPPortMapping(z.selfLocalIP.String(), conf.UDPListenPort)
+	if conf.EnableUPnP {
+		go addUDPPortMapping(z.selfLocalIP.String(), conf.UDPListenPort)
+	}
 	return true
 }
 
