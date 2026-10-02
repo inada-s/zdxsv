@@ -1,5 +1,6 @@
 FROM ubuntu:16.04
 WORKDIR /work
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
   libssl-dev ssl-cert php7.0 libapache2-mod-php7.0 \
   wget unzip php7.0-mcrypt libmcrypt-dev \

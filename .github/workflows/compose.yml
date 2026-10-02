@@ -18,7 +18,8 @@ jobs:
       - name: go test
         run: go test ./...
       - name: build images
-        run: docker compose -f docker-compose.yml build && docker compose -f docker-compose.yml pull https-portal
+        timeout-minutes: 15
+        run: docker compose -f docker-compose.yml --progress plain build && docker compose -f docker-compose.yml pull https-portal
       - name: free port 53
         # systemd-resolved holds 127.0.0.53:53; images are built, so DNS is no longer needed
         run: sudo systemctl stop systemd-resolved
