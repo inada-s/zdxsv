@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/caarlos0/env/v6 v6.6.0
-	github.com/golang/glog v0.0.0-20210429001901-424d2337a529
+	github.com/golang/glog v1.2.4
 	github.com/golang/protobuf v1.5.2
 	github.com/huin/goupnp v1.0.1-0.20210522212431-b5cf3be9f29c
 	github.com/jmoiron/sqlx v1.3.4
