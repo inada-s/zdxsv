@@ -36,6 +36,8 @@ func pprofPort(mode string) int {
 		return 16064
 	case "status":
 		return 16065
+	case "dnas":
+		return 16066
 	default:
 		return 16060
 	}
@@ -112,6 +114,14 @@ func main() {
 		mainLogin()
 	case "status":
 		mainStatus()
+	case "dnas":
+		mainDNAS()
+	case "dnascheck":
+		if len(args) != 2 {
+			log.Println("Usage: ", os.Args[0], "dnascheck host:port")
+			os.Exit(1)
+		}
+		mainDNASCheck(args[1])
 	case "initdb":
 		os.Remove(config.Conf.DB.Name)
 		prepareDB()

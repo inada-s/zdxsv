@@ -1,0 +1,25 @@
+# Temporary: answers of the old Apache/PHP DNASrep (docker/legacyweb) for pkg/dnas/testdata/golden.txt.
+name: dnas-golden
+on:
+  push:
+    branches: [ai/m7-dnas]
+permissions:
+  contents: read
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: build legacyweb
+        timeout-minutes: 10
+        run: docker build --progress plain -t legacyweb docker/legacyweb
+      - name: run legacyweb
+        run: docker run -d --name lw -p 8443:443 legacyweb && sleep 5 && docker logs lw
+      - name: golden
+        timeout-minutes: 5
+        run: python3 pkg/dnas/testdata/golden.py https://127.0.0.1:8443 > golden.txt; rc=$?; wc -l golden.txt; head -3 golden.txt; docker logs --tail 5 lw; exit $rc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: golden
+          path: golden.txt
