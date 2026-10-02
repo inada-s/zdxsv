@@ -4,6 +4,9 @@ on:
   push:
     branches: [master, "ai/**"]
   workflow_dispatch:
+concurrency:
+  group: compose-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -17,8 +20,15 @@ jobs:
           go-version: stable
       - name: go test
         run: go test ./...
-      - name: build images
+      # one build per image first: the 5 zdxsv services share one Dockerfile, so compose then hits the cache
+      - name: build zdxsv image
         timeout-minutes: 15
+        run: docker build --progress plain -f docker/zdxsv/Dockerfile .
+      - name: build legacyweb image
+        timeout-minutes: 15
+        run: docker build --progress plain docker/legacyweb
+      - name: build compose images
+        timeout-minutes: 10
         run: docker compose -f docker-compose.yml --progress plain build && docker compose -f docker-compose.yml pull https-portal
       - name: free port 53
         # systemd-resolved holds 127.0.0.53:53; images are built, so DNS is no longer needed
