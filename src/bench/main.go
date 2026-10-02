@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ var tcp_players *int = flag.Int("tcp", 2, "tcp client num")
 var udp_players *int = flag.Int("udp", 2, "udp client num")
 var remote *string = flag.String("remote", "127.0.0.1:8210", "battle server ip and port as ip:port")
 var rpcsv *string = flag.String("rpcsv", "127.0.0.1:3080", "battle server ip and port as ip:port")
+var bridge *string = flag.String("bridge", "", "comma-separated ip:port: TCP bot i connects to the i-th address (e.g. an emulator UDP bridge) instead of remote")
 
 func main() {
 	flag.Set("logtostderr", "true")
@@ -27,13 +29,21 @@ func main() {
 	if err != nil {
 		glog.Fatalln(err)
 	}
+	var bridges []string
+	if *bridge != "" {
+		bridges = strings.Split(*bridge, ",")
+	}
 	glog.Infoln("Start Bots")
 	var wg sync.WaitGroup
 	fin := make(chan interface{})
 	for i := 0; i < players; i++ {
 		var b bot.Bot
 		if i < *tcp_players {
-			b = bot.NewTCPBot(i, sessionIDs[i], players, *remote)
+			addr := *remote
+			if i < len(bridges) {
+				addr = bridges[i]
+			}
+			b = bot.NewTCPBot(i, sessionIDs[i], players, addr)
 		} else {
 			b = bot.NewUDPBot(i, sessionIDs[i], players, *remote)
 		}

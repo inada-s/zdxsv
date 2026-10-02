@@ -105,8 +105,73 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
+// battleInfoNotice returns the custom notice 0x9951 for an emulator that runs
+// the zproxy bridge itself (platform info "udp=1"), else nil.
+// Sent just before the battle server address: the emulator strips it from the
+// game's stream and bridges the game's battle TCP to the battle server over UDP.
+// Body: "key=value" lines like 0x9950; users = every player's user id, in battle order;
+// p2p_<user id> = that player's udp_addr,udp_local (platform info from its own
+// bridge, looked up by info) for direct peering, only for players that sent them.
+func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
+	b := p.Battle
+	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
+		return nil
+	}
+	if b.ServerIP == nil || b.ServerIP.To4() == nil || b.ServerPort == 0 {
+		return nil
+	}
+	sessionID := ""
+	var users []string
+	for _, u := range b.Users {
+		users = append(users, u.UserID)
+		if u.UserID == p.UserID {
+			sessionID = u.SessionID
+		}
+	}
+	if sessionID == "" {
+		return nil
+	}
+	p2p := ""
+	for _, id := range users {
+		if id == p.UserID || info == nil {
+			continue
+		}
+		pi := info(id)
+		if pi["udp"] != "1" {
+			continue
+		}
+		var addrs []string
+		for _, k := range []string{"udp_addr", "udp_local"} {
+			if a := pi[k]; a != "" && !strings.ContainsAny(a, ",\n") {
+				addrs = append(addrs, a)
+			}
+		}
+		if len(addrs) > 0 {
+			p2p += "p2p_" + id + "=" + strings.Join(addrs, ",") + "\n"
+		}
+	}
+	n := NewServerNotice(0x9951)
+	n.Category = CategoryCustom
+	n.Body = []byte("session_id=" + sessionID + "\n" +
+		"user_id=" + p.UserID + "\n" +
+		"battle_server=" + b.ServerIP.String() + ":" + strconv.Itoa(int(b.ServerPort)) + "\n" +
+		"users=" + strings.Join(users, ",") + "\n" +
+		p2p)
+	return n
+}
+
 var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
+	info := func(userID string) map[string]string {
+		if peer, ok := p.app.users[userID]; ok {
+			return peer.PlatformInfo
+		}
+		return nil
+	}
+	if n := battleInfoNotice(p, info); n != nil {
+		glog.Infoln("udp bridge battle info", p.UserID)
+		p.SendMessage(n)
+	}
 	a := NewServerAnswer(m)
 
 	if ip == nil || ip.To4() == nil || port == 0 {

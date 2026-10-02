@@ -45,11 +45,11 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 	defer bot.conn.Close()
 
 	send := make(chan bool, 32)
-	bb := proto.NewBattleBuffer(fmt.Sprintf("%6d", bot.id))
+	bb := proto.NewBattleBuffer(fmt.Sprintf("%06d", bot.id))
 	var otherIDs []string
 	for i := 0; i < bot.players; i++ {
 		if i != bot.id {
-			otherIDs = append(otherIDs, fmt.Sprintf("%6d", i))
+			otherIDs = append(otherIDs, fmt.Sprintf("%06d", i))
 		}
 	}
 	mf := proto.NewMessageFilter(otherIDs)
