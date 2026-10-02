@@ -20,6 +20,8 @@ Just call `make` to build the executable, which requires go1.13.
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 
+To run a server with docker, see [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ### Commands
 - `./bin/zdxsv initdb` initializes database file.
 - `./bin/zdxsv dns` serves dns server, which is used to direct the game console to your server.
