@@ -210,13 +210,16 @@ function updateOnlineUser(t, u) {
     uname.innerHTML = u[i].Name
     uname.className = "z-user-name"
     r.insertCell(2).innerHTML = u[i].UDP ? '<span class="label label-primary">UDP</span>' : ""
+    r.insertCell(3).innerHTML = u[i].Platform && u[i].Platform != "console" ? '<span class="label label-default">エミュ</span>' : '<span class="label label-default">PS2</span>'
   }
 }
 function pollStat(){
   $.ajax({url: '/api/stat', type: 'GET', dataType: 'json'}).done(function(res) {
     document.getElementById("stat-updated").innerHTML = res.NowDate + "現在"
-    document.getElementById("lobby-user-count").innerHTML = "ロビー " + res.LobbyUsers.length + " 人"
-    document.getElementById("battle-user-count").innerHTML = "対戦中 " + res.BattleUsers.length + " 人"
+    var ps2 = (res.Platforms || {})["console"] || {LobbyUserCount: 0, BattleUserCount: 0}
+    var emu = (res.Platforms || {})["emu-x86/64"] || {LobbyUserCount: 0, BattleUserCount: 0}
+    document.getElementById("lobby-user-count").innerHTML = "ロビー " + res.LobbyUsers.length + " 人 (PS2 " + ps2.LobbyUserCount + " / エミュ " + emu.LobbyUserCount + ")"
+    document.getElementById("battle-user-count").innerHTML = "対戦中 " + res.BattleUsers.length + " 人 (PS2 " + ps2.BattleUserCount + " / エミュ " + emu.BattleUserCount + ")"
     updateOnlineUser(document.getElementById("lobby-users-table"), res.LobbyUsers)
     updateOnlineUser(document.getElementById("battle-users-table"), res.BattleUsers)
   });

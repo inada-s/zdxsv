@@ -13,14 +13,10 @@ build:
 test:
 	go test -v zdxsv/...
 
-# build router binary.
+# build router image (built from source inside docker).
 .PHONY: router
 router:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
-		-tags netgo \
-		--ldflags '-extldflags "-static"' \
-		-o docker/router/router ./src/router
-	docker-compose build router
+	docker compose build router
 
 # run go-bindata to pack all assets into a go package.
 .PHONY: assets
