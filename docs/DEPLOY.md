@@ -10,7 +10,7 @@ This runs the whole server (DNS, DNAS front end, login, lobby, battle, status pa
 | port | proto | service | used by |
 |---|---|---|---|
 | 53 | udp | dns | PS2 / emulator DNS (points the game's hosts at this server) |
-| 443 | tcp | router -> legacyweb (DNAS, login) / https-portal (website) | everyone |
+| 443 | tcp | router -> dnas (DNAS, login) / https-portal (website) | everyone |
 | 8200 | tcp | lobby | everyone |
 | 8201 | tcp, udp | lobby RPC | zproxy (UDP proxy for real PS2) |
 | 8210 | tcp, udp | battle | everyone |
@@ -61,7 +61,8 @@ The 5 zdxsv services (dns, login, lobby, battle, status) share one Dockerfile wi
 - every service is running;
 - DNS answers the 4 game hosts (`gate1.jp.dnas.playstation.org`, `www01.kddi-mmbb.jp`, `ca1202.mmcp6`, `ca1203.mmcp6`) with your public IP;
 - ports 443, 8200, 8201, 8210 accept connections;
-- login answers through nginx and through the DNAS front end (`/00000020/health`);
+- login answers through nginx;
+- `zdxsv dnascheck router:443` (the console's SSLv2 hello, TLS 1.0 RC4) gets the expected DNAS answers and the login page through the DNAS front end (`/00000020/health`);
 - the status API (`/api/stat` through nginx) has polled the lobby.
 
 It ends with `smoke: all PASS`, else it prints the failures and the service logs. CI (`.github/workflows/compose.yml`) runs it on every push.
@@ -94,4 +95,4 @@ $DC run --rm lobby migratedb # only when a release says the schema changed
 
 ## Known limits
 
-- `legacyweb` (the DNAS front end, needed for the console's SSLv2 handshake) is Ubuntu 16.04 + Apache/PHP and downloads DNASrep from GitHub at build time.
+- `dnas` (`zdxsv dnas`, the DNAS front end) speaks only what the PS2 needs: SSLv2-format hello, TLS 1.0, RSA + RC4. Its certificates expired (cert-jp 2026-04-16); the PS2 accepts them.

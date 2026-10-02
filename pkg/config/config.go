@@ -48,6 +48,8 @@ type Config struct {
 // DNASConfig stores settings for DNAS server.
 type DNASConfig struct {
 	PublicAddr string `env:"ZDXSV_DNAS_PUBLIC_ADDR"`
+	Addr       string `env:"ZDXSV_DNAS_ADDR" envDefault:":443"`
+	Region     string `env:"ZDXSV_DNAS_REGION" envDefault:"jp"` // certificate: jp, us, eu
 }
 
 // LoginConfig stores settings for login server.

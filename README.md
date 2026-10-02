@@ -48,7 +48,7 @@ ZDXSV_DB_NAME=zdxsv.db ./bin/zdxsv initdb
 make router
 ```
 
-That bahaves proxy server, which detects incomming connection is GameConsole or not, and proxy it to upstream web or legacyweb server.
+That bahaves proxy server, which detects incomming connection is GameConsole or not, and proxy it to upstream web or dnas server.
 
 
 ### Prepare .env file

@@ -79,7 +79,7 @@ func (c *Conn) proxy() {
 
 	c.backend = "https-portal:443"
 	if isGameConsole {
-		c.backend = "legacyweb:443"
+		c.backend = "dnas:443"
 	}
 
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)

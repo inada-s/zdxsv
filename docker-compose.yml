@@ -29,9 +29,14 @@ services:
     build: "./docker/web"
     volumes:
       - ./website:/var/www/html
-  legacyweb:
+
+  dnas:
+    build:
+      context: .
+      dockerfile: "./docker/zdxsv/Dockerfile"
     restart: always
-    build: "./docker/legacyweb"
+    command: dnas
+    environment: *zdxsv-environment
 
   dns:
     build:
