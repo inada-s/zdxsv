@@ -168,40 +168,47 @@ func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *Bat
 }
 
 func (m *lobbyRPC) getStatus(remoteAddr string, _ *StatusRequest) *StatusResponse {
-	res := new(StatusResponse)
-
+	var res *StatusResponse
 	m.app.Locked(func(app *App) {
-		for _, u := range app.users {
-			user := User{
-				UserID: u.UserID,
-				Name:   u.Name,
-				Team:   u.Team,
-				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
-			}
-			res.LobbyUsers = append(res.LobbyUsers, user)
-		}
-
-		checked := map[string]bool{}
-		for sid, b := range app.battles {
-			if _, ok := checked[sid]; ok {
-				continue
-			}
-			battle := Battle{}
-			battle.AeugIDs = append(battle.AeugIDs, b.AeugIDs...)
-			battle.TitansIDs = append(battle.TitansIDs, b.TitansIDs...)
-			for _, u := range b.Users {
-				_, isUDP := b.UDPUsers[u.UserID]
-				battle.Users = append(battle.Users, User{
-					UserID: u.UserID,
-					Name:   u.Name,
-					Team:   u.Team,
-					UDP:    isUDP,
-				})
-				checked[u.SessionID] = true
-			}
-			res.Battles = append(res.Battles, battle)
-		}
+		res = app.status()
 	})
+	return res
+}
 
+// status lists lobby users and battles with their platform. Call it locked.
+func (app *App) status() *StatusResponse {
+	res := new(StatusResponse)
+	for _, u := range app.users {
+		user := User{
+			UserID:   u.UserID,
+			Name:     u.Name,
+			Team:     u.Team,
+			UDP:      time.Since(u.proxyRegTime).Seconds() < 20,
+			Platform: u.Platform,
+		}
+		res.LobbyUsers = append(res.LobbyUsers, user)
+	}
+
+	checked := map[string]bool{}
+	for sid, b := range app.battles {
+		if _, ok := checked[sid]; ok {
+			continue
+		}
+		battle := Battle{Platform: b.Platform}
+		battle.AeugIDs = append(battle.AeugIDs, b.AeugIDs...)
+		battle.TitansIDs = append(battle.TitansIDs, b.TitansIDs...)
+		for _, u := range b.Users {
+			_, isUDP := b.UDPUsers[u.UserID]
+			battle.Users = append(battle.Users, User{
+				UserID:   u.UserID,
+				Name:     u.Name,
+				Team:     u.Team,
+				UDP:      isUDP,
+				Platform: b.Platform,
+			})
+			checked[u.SessionID] = true
+		}
+		res.Battles = append(res.Battles, battle)
+	}
 	return res
 }
