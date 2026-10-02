@@ -30,7 +30,7 @@ All commands below use `DC="docker compose -f docker-compose.yml"`. Add `-f dock
 
 ```sh
 git clone https://github.com/inada-s/zdxsv && cd zdxsv
-# .env: put your public IP in the *_PUBLIC_ADDR lines (docker/smoke.sh writes this template when .env is absent)
+# .env: the tracked one is a development sample; write yours with your public IP in the *_PUBLIC_ADDR lines
 IP=203.0.113.10
 sed "s/127.0.0.1/$IP/" <<'EOS' > .env
 ZDXSV_DNAS_PUBLIC_ADDR=127.0.0.1
@@ -45,15 +45,18 @@ ZDXSV_BATTLE_PUBLIC_ADDR=127.0.0.1:8210
 ZDXSV_STATUS_ADDR=status:8080
 ZDXSV_DB_NAME=zdxsv.db
 EOS
+docker build -f docker/zdxsv/Dockerfile . && $DC build   # zdxsv image once first, see below
 # the database: create the file first, or docker mounts a directory in its place.
 # initdb wipes the tables: run it on the first deploy only.
 touch zdxsv.db && $DC run --rm lobby initdb
-$DC up -d --build
+$DC up -d
 ```
+
+The 5 zdxsv services (dns, login, lobby, battle, status) share one Dockerfile with a cgo sqlite build. A plain `$DC up --build` builds all 5 at once, and on the CI runner that build stalled until the job was killed (2 runs). Building the image once first lets compose take the other 4 from the cache.
 
 ## Check it
 
-`docker/smoke.sh` brings the stack up (it keeps an existing `.env` and `zdxsv.db`) and checks:
+`docker/smoke.sh` builds the images, brings the stack up (it keeps an existing `.env` and `zdxsv.db`) and checks:
 
 - every service is running;
 - DNS answers the 4 game hosts (`gate1.jp.dnas.playstation.org`, `www01.kddi-mmbb.jp`, `ca1202.mmcp6`, `ca1203.mmcp6`) with your public IP;
@@ -79,7 +82,8 @@ The `web` service serves `website/` and proxies `/api/` to the `status` service.
 ```sh
 cp zdxsv.db zdxsv.db.bak     # with the lobby and login stopped for a consistent copy
 git pull
-$DC up -d --build
+docker build -f docker/zdxsv/Dockerfile . && $DC build   # zdxsv image once first, see below
+$DC up -d
 $DC run --rm lobby migratedb # only when a release says the schema changed
 ```
 

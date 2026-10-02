@@ -29,12 +29,15 @@ EOS
 fi
 IP=$(sed -n 's/^ZDXSV_DNAS_PUBLIC_ADDR=//p' .env)
 
+# the 5 zdxsv services share one image: build it once, or compose builds it 5 times in parallel
+# (that stalled the CI runner until the job was killed)
+docker build -q -f docker/zdxsv/Dockerfile . > /dev/null && $DC build -q || exit 1
 # first deploy only: an empty file, else docker bind-mounts a directory
 if [ ! -s zdxsv.db ]; then
 	touch zdxsv.db
 	$DC run --rm lobby initdb || exit 1
 fi
-$DC up -d --build || exit 1
+$DC up -d || exit 1
 
 for s in dns login lobby battle status router legacyweb web; do
 	for i in $(seq 1 30); do
