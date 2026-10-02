@@ -340,7 +340,8 @@ func (z *Zproxy) PollLobby() error {
 		if !resp.IsTest {
 			svAddrStr := fmt.Sprintf("%s:%d", resp.BattleIP.String(), resp.Port)
 			if z.selfLocalIP.String() == resp.BattleIP.String() {
-				svAddrStr = fmt.Sprintf(":%d", resp.Port) // for local testing
+				// for local testing; not ":port": Windows refuses to send to 0.0.0.0
+				svAddrStr = fmt.Sprintf("127.0.0.1:%d", resp.Port)
 			}
 			svAddr, err := net.ResolveUDPAddr("udp4", svAddrStr)
 			if err != nil {
