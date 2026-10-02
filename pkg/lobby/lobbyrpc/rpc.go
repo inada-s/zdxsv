@@ -54,12 +54,14 @@ type User struct {
 	Team     string
 	UDP      bool
 	UDPAddrs []string
+	Platform string
 }
 
 type Battle struct {
 	Users     []User
 	AeugIDs   []string
 	TitansIDs []string
+	Platform  string
 }
 
 type StatusResponse struct {

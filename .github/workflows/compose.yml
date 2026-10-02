@@ -1,0 +1,45 @@
+# Production compose smoke test on a hosted runner. No secrets.
+name: compose
+on:
+  push:
+    branches: [master, "ai/**"]
+  workflow_dispatch:
+concurrency:
+  group: compose-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: go test
+        run: go test ./...
+      # one build per image first: the 5 zdxsv services share one Dockerfile, so compose then hits the cache
+      - name: build zdxsv image
+        timeout-minutes: 15
+        run: docker build --progress plain -f docker/zdxsv/Dockerfile .
+      - name: build legacyweb image
+        timeout-minutes: 15
+        run: docker build --progress plain docker/legacyweb
+      - name: build compose images
+        timeout-minutes: 10
+        run: docker compose -f docker-compose.yml --progress plain build && docker compose -f docker-compose.yml pull https-portal
+      - name: free port 53
+        # systemd-resolved's stub holds 127.0.0.53:53; drop only the stub (stopping resolved cut the runner off)
+        run: |
+          echo DNSStubListener=no | sudo tee -a /etc/systemd/resolved.conf
+          sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+          sudo systemctl restart systemd-resolved
+          getent hosts github.com
+      - name: smoke
+        timeout-minutes: 10
+        run: docker/smoke.sh
+      - name: down
+        if: always()
+        run: docker compose -f docker-compose.yml down
