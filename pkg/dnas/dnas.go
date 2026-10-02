@@ -32,7 +32,8 @@ import (
 	"github.com/golang/glog"
 )
 
-// data: DNASrep etc/dnas (certificates) and www/dnas/<gateway>/{error.raw,packets}.
+// data: DNASrep (8e8dad3) etc/dnas (certificates) and www/dnas/<gateway>/{error.raw,packets}.
+// testdata/golden.txt: the PHP DNASrep's answers (testdata/golden.py).
 //
 //go:embed data
 var data embed.FS

@@ -24,7 +24,8 @@ func mainDNAS() {
 }
 
 // mainDNASCheck queries a DNAS server at addr as the game's PS2 does
-// (i-connect, then others) and exits 1 unless both answers are the expected ones.
+// (i-connect, then others), then the login page proxy (/00000020/health), and
+// exits 1 unless all three answer as expected.
 func mainDNASCheck(addr string) {
 	ok := true
 	for _, q := range []struct {
@@ -51,6 +52,21 @@ func mainDNASCheck(addr string) {
 		} else {
 			fmt.Println("OK", q.kind, note, len(want), "B")
 		}
+	}
+	c, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err == nil {
+		c.SetDeadline(time.Now().Add(20 * time.Second))
+		var status int
+		status, _, err = dnas.Query(c, "GET", "/00000020/health", nil)
+		if err == nil && status != 200 {
+			err = fmt.Errorf("status %d", status)
+		}
+	}
+	if err != nil {
+		ok = false
+		fmt.Println("FAIL login proxy /00000020/health", err)
+	} else {
+		fmt.Println("OK login proxy /00000020/health")
 	}
 	if !ok {
 		os.Exit(1)

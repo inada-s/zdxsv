@@ -24,9 +24,6 @@ jobs:
       - name: build zdxsv image
         timeout-minutes: 15
         run: docker build --progress plain -f docker/zdxsv/Dockerfile .
-      - name: build legacyweb image
-        timeout-minutes: 15
-        run: docker build --progress plain docker/legacyweb
       - name: build compose images
         timeout-minutes: 10
         run: docker compose -f docker-compose.yml --progress plain build && docker compose -f docker-compose.yml pull https-portal

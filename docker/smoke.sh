@@ -39,7 +39,7 @@ if [ ! -s zdxsv.db ]; then
 fi
 $DC up -d || exit 1
 
-for s in dns login lobby battle status router legacyweb web; do
+for s in dns login lobby battle status router dnas web; do
 	for i in $(seq 1 30); do
 		$DC ps --status running --services | grep -qx $s && break
 		sleep 2
@@ -54,7 +54,7 @@ for p in 443 8200 8201 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
 check "login health (web -> login)" $DC exec -T web curl -sf http://login/health
-check "dnas proxy (legacyweb -> login)" $DC exec -T legacyweb wget -qO- --no-check-certificate https://localhost/00000020/health
+check "dnas via router (DNAS answers, login proxy)" $DC run --rm --no-deps dns dnascheck router:443
 
 sleep 12 # status polls the lobby every 10 s
 stat=$($DC exec -T web curl -sf http://localhost/api/stat)
