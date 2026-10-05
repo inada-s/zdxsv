@@ -31,7 +31,7 @@ func TestBattleInfoNotice(t *testing.T) {
 	if n.Direction != ServerToClient || n.Category != CategoryCustom || n.Command != 0x9951 {
 		t.Errorf("header %x %x %x", n.Direction, n.Category, n.Command)
 	}
-	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB\n"
+	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB\n"
 	if string(n.Body) != want {
 		t.Errorf("body %q want %q", n.Body, want)
 	}
@@ -70,7 +70,7 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	p.Battle.BattleCode = "1696492800000"
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	// ggpo_session = FNV-1 32 of "1696492800000" (independent python computation)
-	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
+	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
 		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
 		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003\n" +
 		"ggpo_session=1462212142\nggpo_ping_ms=7500\n"
@@ -79,5 +79,14 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	}
 	if string(n.Body) != want {
 		t.Fatalf("body %q want %q", n.Body, want)
+	}
+}
+
+func TestP2PMatchingReportLine(t *testing.T) {
+	body := "battle_code=1696492800000\nuser_id=BBBBBB\nresult=ggpo\ndelay=2\nrtt_0=12\nframes=21563\nclose=net battle end\n"
+	got := p2pMatchingReportLine(model.ParsePlatformInfo(body))
+	want := `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" close="net battle end" delay="2" frames="21563" rtt_0="12"`
+	if got != want {
+		t.Errorf("got %s\nwant %s", got, want)
 	}
 }

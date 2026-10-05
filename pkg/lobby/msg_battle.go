@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"hash/fnv"
+	"sort"
 	"strconv"
 	"strings"
 	. "zdxsv/pkg/lobby/message"
@@ -117,6 +118,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // ggpo_<user id> = that player's GGPO UDP port (platform info "ggpo"), only for
 // bridges that sent one: the client runs the battle over GGPO at those ports and
 // the p2p_ addresses' IPs when every other player has one, else over the bridge;
+// battle_code = the battle's code (echoed in the client's P2PMatchingReport);
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
 // packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt).
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
@@ -172,10 +174,42 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	n.Category = CategoryCustom
 	n.Body = []byte("session_id=" + sessionID + "\n" +
 		"user_id=" + p.UserID + "\n" +
+		"battle_code=" + b.BattleCode + "\n" +
 		"battle_server=" + b.ServerIP.String() + ":" + strconv.Itoa(int(b.ServerPort)) + "\n" +
 		"users=" + strings.Join(users, ",") + "\n" +
 		p2p)
 	return n
+}
+
+// P2PMatchingReport is sent by emulators with lobby GGPO (pcsx2 ZDXSV_GGPO lobby=1), as
+// gdxsv's lbsP2PMatchingReport: on the first lobby connection after a battle, after the
+// platform info, "key=value" lines on how the battle ran (battle_code, user_id, result =
+// ggpo / cut / server, per-peer ping test rtt, delay, frames, close reason).
+// Custom category, no answer: logged for server-side stats and troubleshooting.
+var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
+	if p.PlatformInfo == nil {
+		glog.Warningln("p2p matching report without platform info ignored", p.UserID)
+		return
+	}
+	glog.Infoln(p2pMatchingReportLine(model.ParsePlatformInfo(string(m.Body))))
+})
+
+// p2pMatchingReportLine formats a report as one log line: battle_code, user_id and result
+// first, then the other keys sorted.
+func p2pMatchingReportLine(report map[string]string) string {
+	head := []string{"battle_code", "user_id", "result"}
+	var rest []string
+	for k := range report {
+		if k != head[0] && k != head[1] && k != head[2] {
+			rest = append(rest, k)
+		}
+	}
+	sort.Strings(rest)
+	line := "p2p matching report:"
+	for _, k := range append(head, rest...) {
+		line += " " + k + "=" + strconv.Quote(report[k])
+	}
+	return line
 }
 
 var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
