@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
-	"golang.org/x/text/encoding/japanese"
 )
 
 func NoticeBattleStart(p *AppPeer) {
@@ -188,13 +187,10 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	return n
 }
 
-// battleInfoName returns a player's name (Shift-JIS, as the game sent it) as UTF-8
-// without control characters, for the emulator's network status OSD; "" if none.
-func battleInfoName(sjis string) string {
-	s, err := japanese.ShiftJIS.NewDecoder().String(sjis)
-	if err != nil {
-		return ""
-	}
+// battleInfoName returns a player's name (UTF-8: login's ReadEncryptedString decoded
+// the game's Shift-JIS) without control characters, for the emulator's network
+// status OSD; "" if none.
+func battleInfoName(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return -1

@@ -68,8 +68,9 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
 	}
 	p.Battle.BattleCode = "1696492800000"
-	// names as the game sends them (Shift-JIS): "アムロ", a control byte (dropped), none (no line)
-	p.Battle.Users[0].Name = "\x83\x41\x83\x80\x83\x8d"
+	// names as login stores them (ReadEncryptedString already decoded Shift-JIS):
+	// "アムロ", a control byte (dropped), none (no line)
+	p.Battle.Users[0].Name = "アムロ"
 	p.Battle.Users[1].Name = "Bob\n"
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	// ggpo_session = FNV-1 32 of "1696492800000" (independent python computation)
