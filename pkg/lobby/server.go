@@ -6,10 +6,8 @@ import (
 	"sync"
 	"time"
 	"zdxsv/pkg/lobby/message"
-	"zdxsv/pkg/proto"
 
 	"github.com/golang/glog"
-	pb "github.com/golang/protobuf/proto"
 )
 
 type PeerFactory interface {
@@ -30,53 +28,6 @@ type Server struct {
 func NewServer(pf PeerFactory) *Server {
 	return &Server{
 		pf: pf,
-	}
-}
-
-func (s *Server) ServeUDPStunServer(addr string) error {
-	glog.Infoln("Start UDPStun", addr)
-	for {
-		udpAddr, err := net.ResolveUDPAddr("udp4", addr)
-		if err != nil {
-			return err
-		}
-		udpConn, err := net.ListenUDP("udp4", udpAddr)
-		if err != nil {
-			return err
-		}
-		defer udpConn.Close()
-
-		req := new(proto.Packet)
-		res := new(proto.Packet)
-		buf := make([]byte, 4096)
-		for {
-			n, addr, err := udpConn.ReadFromUDP(buf)
-			if err != nil {
-				glog.Errorln(err)
-				continue
-			}
-			if err := pb.Unmarshal(buf[:n], req); err != nil {
-				glog.Errorln(err)
-				continue
-			}
-			switch req.GetType() {
-			case proto.MessageType_Ping:
-				res.Type = proto.MessageType_Pong.Enum()
-				res.PongData = &proto.PongMessage{
-					PublicAddr: pb.String(addr.String()),
-					UserId:     pb.String("SERVER"),
-					Timestamp:  pb.Int64(req.GetPingData().GetTimestamp()),
-				}
-				data, err := pb.Marshal(res)
-				if err != nil {
-					glog.Errorln(err)
-					continue
-				}
-				udpConn.WriteToUDP(data, addr)
-			default:
-				glog.Warningln("unexpected packet received", req)
-			}
-		}
 	}
 }
 

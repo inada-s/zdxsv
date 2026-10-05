@@ -12,7 +12,8 @@ This runs the whole server (DNS, DNAS front end, login, lobby, battle, status pa
 | 53 | udp | dns | PS2 / emulator DNS (points the game's hosts at this server) |
 | 443 | tcp | router -> dnas (DNAS, login) / https-portal (website) | everyone |
 | 8200 | tcp | lobby | everyone |
-| 8201 | tcp, udp | lobby RPC | zproxy (UDP proxy for real PS2) |
+| 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
+| 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
 
 Port 80 does not need to be open: the game reaches the login pages through the DNAS front end on 443.
