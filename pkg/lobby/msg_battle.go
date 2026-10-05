@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"hash/fnv"
 	"strconv"
 	"strings"
 	. "zdxsv/pkg/lobby/message"
@@ -110,11 +111,14 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // Sent just before the battle server address: the emulator strips it from the
 // game's stream and bridges the game's battle TCP to the battle server over UDP.
 // Body: "key=value" lines like 0x9950; users = every player's user id, in battle order;
-// p2p_<user id> = that player's udp_addr,udp_local (platform info from its own
+// p2p_<user id> = that player's udp_addr,udp_local,udp_addr6 (IPv4 public, local, "[IPv6]:port";
+// platform info from its own
 // bridge, looked up by info) for direct peering, only for players that sent them;
 // ggpo_<user id> = that player's GGPO UDP port (platform info "ggpo"), only for
 // bridges that sent one: the client runs the battle over GGPO at those ports and
-// the p2p_ addresses' IPs when every other player has one, else over the bridge.
+// the p2p_ addresses' IPs when every other player has one, else over the bridge;
+// with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
+// packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt).
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
@@ -135,6 +139,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		return nil
 	}
 	p2p := ""
+	ggpo := false
 	for _, id := range users {
 		if id == p.UserID || info == nil {
 			continue
@@ -144,7 +149,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 			continue
 		}
 		var addrs []string
-		for _, k := range []string{"udp_addr", "udp_local"} {
+		for _, k := range []string{"udp_addr", "udp_local", "udp_addr6"} {
 			if a := pi[k]; a != "" && !strings.ContainsAny(a, ",\n") {
 				addrs = append(addrs, a)
 			}
@@ -154,7 +159,14 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		if port, err := strconv.Atoi(pi["ggpo"]); err == nil && 0 < port && port < 65536 {
 			p2p += "ggpo_" + id + "=" + strconv.Itoa(port) + "\n"
+			ggpo = true
 		}
+	}
+	if ggpo {
+		// as gdxsv's P2PMatching: session id = fnv32 of the battle code, ping test 7500 ms
+		h := fnv.New32()
+		h.Write([]byte(b.BattleCode))
+		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
 	}
 	n := NewServerNotice(0x9951)
 	n.Category = CategoryCustom
