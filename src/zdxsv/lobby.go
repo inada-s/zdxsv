@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"zdxsv/pkg/config"
@@ -37,4 +38,25 @@ func mainLobby() {
 	s := <-c
 	fmt.Println("Got signal:", s)
 	app.Quit()
+}
+
+// mainRelayTest: `zdxsv relay <session id> <hex token>` runs only the GGPO relay on
+// ZDXSV_LOBBY_RELAY_ADDR (default :8203) with one session, for rigs without a lobby.
+func mainRelayTest(args []string) {
+	if len(args) != 2 {
+		glog.Fatalln("usage: zdxsv relay <session id> <hex token>")
+	}
+	id, err := strconv.ParseUint(args[0], 10, 32)
+	if err != nil {
+		glog.Fatalln("session id:", err)
+	}
+	token, err := strconv.ParseUint(args[1], 16, 64)
+	if err != nil {
+		glog.Fatalln("token:", err)
+	}
+	addr := config.Conf.Lobby.RelayAddr
+	if addr == "" {
+		addr = ":8203"
+	}
+	glog.Fatalln(lobby.ServeTestRelay(addr, uint32(id), token))
 }

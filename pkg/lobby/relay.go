@@ -136,6 +136,40 @@ func (r *Relay) SessionToken(id uint32) uint64 {
 	return token
 }
 
+// ServeTestRelay runs a relay on addr without a lobby, for rigs (as gdxsv's
+// -relay_test_session): session id with token, registered again while it has expired.
+func ServeTestRelay(addr string, id uint32, token uint64) error {
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	r := NewRelay()
+	register := func() {
+		r.mtx.Lock()
+		defer r.mtx.Unlock()
+		if _, ok := r.sessions[id]; !ok {
+			now := r.now()
+			r.sessions[id] = &relaySession{id: id, token: token, created: now, lastActive: now}
+			glog.Infoln("relay test session registered", id)
+		}
+	}
+	register()
+	glog.Infoln("Start test relay", addr)
+	go func() {
+		for range time.Tick(10 * time.Second) {
+			r.RemoveStaleSessions()
+			register()
+		}
+	}()
+	r.Serve(conn)
+	return nil
+}
+
 func (r *Relay) removeSessionLocked(s *relaySession) {
 	for _, p := range s.peers {
 		for _, addr := range p.addrs {

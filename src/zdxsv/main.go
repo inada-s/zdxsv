@@ -52,7 +52,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[login, lobby, battle]")
+	log.Println("Usage: ", os.Args[0], "[login, lobby, battle, relay <session id> <hex token>]")
 }
 
 func prepareDB() {
@@ -114,6 +114,8 @@ func main() {
 		mainLogin()
 	case "status":
 		mainStatus()
+	case "relay":
+		mainRelayTest(args[1:])
 	case "dnas":
 		mainDNAS()
 	case "dnascheck":
