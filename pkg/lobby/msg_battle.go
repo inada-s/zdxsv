@@ -111,7 +111,10 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // game's stream and bridges the game's battle TCP to the battle server over UDP.
 // Body: "key=value" lines like 0x9950; users = every player's user id, in battle order;
 // p2p_<user id> = that player's udp_addr,udp_local (platform info from its own
-// bridge, looked up by info) for direct peering, only for players that sent them.
+// bridge, looked up by info) for direct peering, only for players that sent them;
+// ggpo_<user id> = that player's GGPO UDP port (platform info "ggpo"), only for
+// bridges that sent one: the client runs the battle over GGPO at those ports and
+// the p2p_ addresses' IPs when every other player has one, else over the bridge.
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
@@ -148,6 +151,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		if len(addrs) > 0 {
 			p2p += "p2p_" + id + "=" + strings.Join(addrs, ",") + "\n"
+		}
+		if port, err := strconv.Atoi(pi["ggpo"]); err == nil && 0 < port && port < 65536 {
+			p2p += "ggpo_" + id + "=" + strconv.Itoa(port) + "\n"
 		}
 	}
 	n := NewServerNotice(0x9951)

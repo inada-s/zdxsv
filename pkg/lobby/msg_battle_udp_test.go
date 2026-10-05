@@ -59,17 +59,17 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 		model.User{User: db.User{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
 	infos := map[string]map[string]string{
 		// both addresses
-		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001"},
+		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "ggpo": "7001"},
 		// self: never listed
 		"BBBBBB": {"udp": "1", "udp_addr": "203.0.113.6:40002"},
 		// local only (no STUN answer)
-		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003"},
+		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "ggpo": "70000"},
 		// not a bridge: no p2p line even with an address
 		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
 	}
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
-		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001\np2p_CCCCCC=192.168.1.21:40003\n"
+		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001\nggpo_AAAAAA=7001\np2p_CCCCCC=192.168.1.21:40003\n"
 	if n == nil {
 		t.Fatal("no notice")
 	}
