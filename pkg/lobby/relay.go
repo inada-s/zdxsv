@@ -162,6 +162,11 @@ func ServeTestRelay(addr string, id uint32, token uint64) error {
 	glog.Infoln("Start test relay", addr)
 	go func() {
 		for range time.Tick(10 * time.Second) {
+			r.mtx.Lock()
+			if s, ok := r.sessions[id]; ok {
+				glog.Infoln("relay test session", id, "forwarded", s.forwarded)
+			}
+			r.mtx.Unlock()
 			r.RemoveStaleSessions()
 			register()
 		}
