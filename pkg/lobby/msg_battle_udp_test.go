@@ -70,9 +70,14 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
 	}
 	p.Battle.BattleCode = "1696492800000"
+	// names as login stores them (ReadEncryptedString already decoded Shift-JIS):
+	// "アムロ", a control byte (dropped), none (no line)
+	p.Battle.Users[0].Name = "アムロ"
+	p.Battle.Users[1].Name = "Bob\n"
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	// ggpo_session = FNV-1 32 of "1696492800000" (independent python computation)
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
+		"name_AAAAAA=アムロ\nname_BBBBBB=Bob\n" +
 		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
 		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003\n" +
 		"ggpo_session=1462212142\nggpo_ping_ms=7500\n"
