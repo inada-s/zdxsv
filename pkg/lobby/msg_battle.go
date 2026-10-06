@@ -119,6 +119,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // bridges that sent one: the client runs the battle over GGPO at those ports and
 // the p2p_ addresses' IPs when every other player has one, else over the bridge;
 // battle_code = the battle's code (echoed in the client's P2PMatchingReport);
+// name_<user id> = that player's name (UTF-8), for the network status OSD;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
 // packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt).
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
@@ -131,10 +132,14 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	}
 	sessionID := ""
 	var users []string
+	names := ""
 	for _, u := range b.Users {
 		users = append(users, u.UserID)
 		if u.UserID == p.UserID {
 			sessionID = u.SessionID
+		}
+		if name := battleInfoName(u.Name); name != "" {
+			names += "name_" + u.UserID + "=" + name + "\n"
 		}
 	}
 	if sessionID == "" {
@@ -177,8 +182,21 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		"battle_code=" + b.BattleCode + "\n" +
 		"battle_server=" + b.ServerIP.String() + ":" + strconv.Itoa(int(b.ServerPort)) + "\n" +
 		"users=" + strings.Join(users, ",") + "\n" +
+		names +
 		p2p)
 	return n
+}
+
+// battleInfoName returns a player's name (UTF-8: login's ReadEncryptedString decoded
+// the game's Shift-JIS) without control characters, for the emulator's network
+// status OSD; "" if none.
+func battleInfoName(s string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s))
 }
 
 // P2PMatchingReport is sent by emulators with lobby GGPO (pcsx2 ZDXSV_GGPO lobby=1), as
