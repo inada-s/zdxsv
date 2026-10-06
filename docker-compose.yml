@@ -68,6 +68,7 @@ services:
       - "8200:8200"
       - "8201:8201"     # for UDP proxy
       - "8201:8201/udp" # for UDP proxy
+      - "8202:8202/udp" # STUN test socket (emulator connectivity test)
     volumes:
       - ./zdxsv.db:/zdxsv.db
     environment: *zdxsv-environment
