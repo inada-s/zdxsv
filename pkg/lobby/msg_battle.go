@@ -121,7 +121,8 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // battle_code = the battle's code (echoed in the client's P2PMatchingReport);
 // name_<user id> = that player's name (UTF-8), for the network status OSD;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
-// packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt).
+// packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt);
+// relay_0 = the lobby's relay server (relayLine), when every player supports it.
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
@@ -174,6 +175,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		h := fnv.New32()
 		h.Write([]byte(b.BattleCode))
 		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
+		if line := relayLine(p, users, info, h.Sum32()); line != "" {
+			p2p += line
+		}
 	}
 	n := NewServerNotice(0x9951)
 	n.Category = CategoryCustom
@@ -185,6 +189,26 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		names +
 		p2p)
 	return n
+}
+
+// relayLine offers the lobby's relay to a GGPO battle as gdxsv's P2PMatching.relays, only
+// when every player reports relay_server=1 (platform info): "relay_0=<token hex>,<ip:port>
+// [,<[ip6]:port>]". The relay session is the battle's ggpo_session, so every player gets the
+// same token.
+func relayLine(p *AppPeer, users []string, info func(userID string) map[string]string, session uint32) string {
+	if LobbyRelay == nil || RelayPublicAddr == "" || info == nil || p.PlatformInfo["relay_server"] != "1" {
+		return ""
+	}
+	for _, id := range users {
+		if id != p.UserID && info(id)["relay_server"] != "1" {
+			return ""
+		}
+	}
+	line := "relay_0=" + strconv.FormatUint(LobbyRelay.SessionToken(session), 16) + "," + RelayPublicAddr
+	if RelayPublicAddr6 != "" {
+		line += "," + RelayPublicAddr6
+	}
+	return line + "\n"
 }
 
 // battleInfoName returns a player's name (UTF-8: login's ReadEncryptedString decoded

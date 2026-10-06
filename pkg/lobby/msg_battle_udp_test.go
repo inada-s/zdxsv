@@ -2,6 +2,8 @@ package lobby
 
 import (
 	"net"
+	"strconv"
+	"strings"
 	"testing"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
@@ -93,5 +95,38 @@ func TestP2PMatchingReportLine(t *testing.T) {
 	want := `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" close="net battle end" delay="2" frames="21563" rtt_0="12"`
 	if got != want {
 		t.Errorf("got %s\nwant %s", got, want)
+	}
+}
+
+func TestBattleInfoNoticeRelay(t *testing.T) {
+	r := NewRelay()
+	LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = r, "192.168.1.8:8203", "[2001:db8::8]:8203"
+	defer func() { LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = nil, "", "" }()
+	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "relay_server": "1"}
+	p := newUDPTestPeer(emu, false)
+	p.Battle.BattleCode = "1696492800000"
+	other := map[string]string{"udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
+	info := func(id string) map[string]string { return other }
+
+	n := battleInfoNotice(p, info)
+	// session 1462212142 = ggpo_session of this battle code (TestBattleInfoNoticeP2P)
+	want := "ggpo_session=1462212142\nggpo_ping_ms=7500\nrelay_0=" +
+		strconv.FormatUint(r.SessionToken(1462212142), 16) + ",192.168.1.8:8203,[2001:db8::8]:8203\n"
+	if n == nil || !strings.HasSuffix(string(n.Body), want) {
+		t.Fatalf("body %q, want suffix %q", n.Body, want)
+	}
+	if len(r.sessions) != 1 {
+		t.Fatalf("relay sessions %d, want 1", len(r.sessions))
+	}
+
+	// a player without relay support: no relay for the battle
+	delete(other, "relay_server")
+	if n := battleInfoNotice(p, info); strings.Contains(string(n.Body), "relay_") {
+		t.Fatalf("relay offered to a battle with a player without relay_server=1: %q", n.Body)
+	}
+	other["relay_server"] = "1"
+	p.PlatformInfo = map[string]string{"emulator": "pcsx2", "udp": "1"}
+	if n := battleInfoNotice(p, info); strings.Contains(string(n.Body), "relay_") {
+		t.Fatalf("relay offered to a client without relay_server=1: %q", n.Body)
 	}
 }
