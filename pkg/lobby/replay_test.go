@@ -93,7 +93,7 @@ func TestReplayServerSizeLimit(t *testing.T) {
 }
 
 func TestBattleInfoReplayUpload(t *testing.T) {
-	defer func(u string) { ReplayUploadURL = u }(ReplayUploadURL)
+	defer func(u, l string) { ReplayUploadURL, LiveURL = u, l }(ReplayUploadURL, LiveURL)
 	infos := map[string]map[string]string{"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001"}}
 	info := func(id string) map[string]string { return infos[id] }
 	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
@@ -103,7 +103,8 @@ func TestBattleInfoReplayUpload(t *testing.T) {
 		t.Fatalf("server off: %q", n.Body)
 	}
 	ReplayUploadURL = "http://192.168.1.8:8204/replay"
-	if n := battleInfoNotice(newUDPTestPeer(emu, false), info); !strings.HasSuffix(string(n.Body), "\nreplay_upload=http://192.168.1.8:8204/replay\n") {
+	LiveURL = "http://192.168.1.8:8204/live"
+	if n := battleInfoNotice(newUDPTestPeer(emu, false), info); !strings.HasSuffix(string(n.Body), "\nreplay_upload=http://192.168.1.8:8204/replay\nlive=http://192.168.1.8:8204/live\n") {
 		t.Fatalf("server on: %q", n.Body)
 	}
 	// no GGPO battle (no ggpo_ line): no replay is recorded, nothing offered

@@ -31,11 +31,13 @@ var battleCodeRe = regexp.MustCompile(`^[0-9]{1,20}$`)
 //	  stored (first upload wins: one file holds every player's input), 400 bad file,
 //	  403 U has no record of battle C.
 //	GET /replay/C.zdxr: the stored file.
+//	/live...: live spectating (serveLive).
 type ReplayServer struct {
 	Dir string
 	// Known reports whether userID played battleCode.
 	Known func(battleCode, userID string) bool
 	mtx   sync.Mutex
+	live  map[string]*liveStream // by battle code (serveLive)
 }
 
 // ServeReplay runs a ReplayServer for dir on addr and offers publicURL + "/replay" to players.
@@ -52,11 +54,16 @@ func ServeReplay(addr, dir, publicURL string) error {
 		return err
 	}
 	ReplayUploadURL = publicURL + "/replay"
+	LiveURL = publicURL + "/live"
 	glog.Infoln("Start replay server", addr, "dir", dir, "public", ReplayUploadURL)
 	return http.Serve(ln, s)
 }
 
 func (s *ReplayServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/live" || strings.HasPrefix(r.URL.Path, "/live/") {
+		s.serveLive(w, r)
+		return
+	}
 	if r.Method == http.MethodPost && r.URL.Path == "/replay" {
 		s.upload(w, r)
 		return
