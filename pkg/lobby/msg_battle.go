@@ -122,7 +122,8 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // name_<user id> = that player's name (UTF-8), for the network status OSD;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
 // packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt);
-// relay_0 = the lobby's relay server (relayLine), when every player supports it.
+// relay_0 = the lobby's relay server (relayLine), when every player supports it;
+// replay_upload = where the client posts its replay (ReplayServer), when that runs.
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
@@ -177,6 +178,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
 		if line := relayLine(p, users, info, h.Sum32()); line != "" {
 			p2p += line
+		}
+		if ReplayUploadURL != "" {
+			p2p += "replay_upload=" + ReplayUploadURL + "\n"
 		}
 	}
 	n := NewServerNotice(0x9951)

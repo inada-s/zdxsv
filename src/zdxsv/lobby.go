@@ -32,6 +32,18 @@ func mainLobby() {
 			}
 		}()
 	}
+	if c := config.Conf.Lobby; c.ReplayAddr != "" {
+		public := c.ReplayPublicURL
+		if public == "" {
+			host, _, _ := net.SplitHostPort(c.PublicAddr)
+			public = "http://" + net.JoinHostPort(host, strings.TrimPrefix(stripHost(c.ReplayAddr), ":"))
+		}
+		go func() {
+			if err := lobby.ServeReplay(stripHost(c.ReplayAddr), c.ReplayDir, public); err != nil {
+				glog.Errorln("replay server:", err)
+			}
+		}()
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

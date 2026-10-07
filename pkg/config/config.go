@@ -68,6 +68,11 @@ type LobbyConfig struct {
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
 	RelayPublicAddr  string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR"`
 	RelayPublicAddr6 string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6"`
+	// Replay server (HTTP, lobby.ReplayServer) storing GGPO battle replays in ReplayDir, off when
+	// ReplayAddr is empty. Offered to players at ReplayPublicURL (default: http://PublicAddr's host:ReplayAddr's port).
+	ReplayAddr      string `env:"ZDXSV_LOBBY_REPLAY_ADDR"`
+	ReplayDir       string `env:"ZDXSV_LOBBY_REPLAY_DIR" envDefault:"replays"`
+	ReplayPublicURL string `env:"ZDXSV_LOBBY_REPLAY_PUBLIC_URL"`
 }
 
 // BattleConfig stores settings for battle server.
