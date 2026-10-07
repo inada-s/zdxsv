@@ -34,6 +34,9 @@ jobs:
           sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
           sudo systemctl restart systemd-resolved
           getent hosts github.com
+          # dockerd still holds the old 127.0.0.53 resolver: restart it and wait until it reaches the registry
+          sudo systemctl restart docker
+          for i in $(seq 30); do docker pull -q alpine:latest > /dev/null && exit 0; sleep 2; done; exit 1
       - name: smoke
         timeout-minutes: 10
         run: docker/smoke.sh
