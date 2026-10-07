@@ -16,4 +16,5 @@ require (
 	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.6
+	google.golang.org/protobuf v1.26.0
 )

@@ -1,11 +1,19 @@
 syntax = "proto2";
 package proto;
 
+option go_package = "zdxsv/pkg/proto";
+
+// Type and Packet field numbers 20-25 are gdxsv's (inada-s/gdxsv gdxsv/proto/gdxsv.proto);
+// 22/23 (round event / result) are unused: a zdxsv replay has no round data.
 enum MessageType {
   HelloServer = 1;
   Ping = 2;
   Pong = 3;
   Battle = 4;
+  SpectatorInputPushType = 20;
+  SpectatorInputAckType = 21;
+  SpectatorSubscribeType = 24;
+  SpectatorSubscribeChallengeType = 25;
 }
 
 message BattleMessage {
@@ -30,6 +38,45 @@ message HelloServerMessage {
   optional bool ok = 2;
 }
 
+// Live spectating (pkg/lobby/spectator.go): the battle's uplink participant pushes
+// to the lobby's UDP socket, the lobby pushes to each subscribed spectator. Each
+// stream (header, start state, inputs) resends from the receiver's ack.
+// Fields 1-10 as gdxsv; zdxsv's from 40.
+message SpectatorInputPush {
+  optional string battle_code = 1;
+  optional int32 session_id = 2;  // uplink -> lobby: the battle's ggpo_session
+  optional int32 start_frame = 3;  // first frame of input_data
+  optional string close_reason = 8;  // set: the battle ended at start_frame
+  optional bytes header = 10;  // a replay BattleLogFile (pcsx2 Zdxsv/replay.proto) without inputs and start_state
+  optional bytes input_data = 40;  // frames x frame_bytes
+  optional int32 frame_bytes = 41;  // players x input_size
+  optional bytes state = 42;  // a chunk of the start state (BattleLogFile.start_state)
+  optional int32 state_offset = 43;
+  optional int32 state_total = 44;
+}
+
+// Receiver -> sender: how much of each stream arrived contiguously.
+message SpectatorInputAck {
+  optional string battle_code = 1;
+  optional int32 ack_frame = 2;
+  optional bool header_ack = 40;
+  optional int32 state_ack = 41;  // bytes
+  optional bool close_ack = 42;
+}
+
+// Spectator -> lobby, resent every 2 s as keepalive. An empty battle_code asks for
+// the newest live battle: the challenge names it.
+message SpectatorSubscribeRequest {
+  optional string battle_code = 1;
+  optional int32 from_frame = 3;
+  optional bytes cookie = 4;  // the challenge's 16 bytes; 16 zero bytes at first
+}
+
+message SpectatorSubscribeChallenge {
+  optional string battle_code = 1;
+  optional bytes cookie = 2;
+}
+
 message Packet {
   required MessageType type = 1;
   optional uint32 seq = 2;
@@ -39,5 +86,9 @@ message Packet {
   optional PingMessage ping_data = 11;
   optional PongMessage pong_data = 12;
   repeated BattleMessage battle_data = 13;
-}
 
+  optional SpectatorInputPush spectator_input_push_data = 20;
+  optional SpectatorInputAck spectator_input_ack_data = 21;
+  optional SpectatorSubscribeRequest spectator_subscribe_data = 24;
+  optional SpectatorSubscribeChallenge spectator_subscribe_challenge_data = 25;
+}
