@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -365,6 +366,78 @@ WHERE
 func (db SQLiteDB) SetReplayURL(battleCode string, url string) error {
 	_, err := db.Exec(`UPDATE battle_record SET replay_url = ? WHERE battle_code = ?`, url, battleCode)
 	return err
+}
+
+func (db SQLiteDB) FindReplay(q *FindReplayQuery) ([]*FoundReplay, error) {
+	where := []string{"replay_url <> ''"}
+	var args []interface{}
+	if q.BattleCode != "" {
+		where = append(where, "battle_code = ?")
+		args = append(args, q.BattleCode)
+	}
+	if q.Players >= 0 {
+		where = append(where, "players = ?")
+		args = append(args, q.Players)
+	}
+	if q.Aggregate >= 0 {
+		where = append(where, "aggregate = ?")
+		args = append(args, q.Aggregate)
+	}
+	for _, f := range []struct {
+		column, op string
+		values     []string
+	}{
+		{"user_id", "=", q.UserIDs},
+		{"user_name", "LIKE", q.UserNames},
+		{"pilot_name", "LIKE", q.PilotNames},
+	} {
+		if len(f.values) == 0 {
+			continue
+		}
+		var or []string
+		for _, v := range f.values {
+			or = append(or, f.column+" "+f.op+" ?")
+			args = append(args, v)
+		}
+		where = append(where, "battle_code IN (SELECT battle_code FROM battle_record WHERE "+strings.Join(or, " OR ")+")")
+	}
+	order := "DESC"
+	if q.Reverse {
+		order = "ASC"
+	}
+	page := q.Page
+	if page < 0 {
+		page = 0
+	}
+	args = append(args, page*100)
+
+	var rs []*BattleRecord
+	err := db.Select(&rs, `SELECT * FROM battle_record WHERE battle_code IN (
+	SELECT battle_code FROM battle_record WHERE `+strings.Join(where, " AND ")+`
+	GROUP BY battle_code ORDER BY MIN(created) `+order+` LIMIT 100 OFFSET ?)
+ORDER BY created `+order, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var found []*FoundReplay
+	byCode := map[string]*FoundReplay{}
+	for _, r := range rs {
+		f := byCode[r.BattleCode]
+		if f == nil {
+			f = &FoundReplay{BattleCode: r.BattleCode, StartUnix: r.Created.Unix(), StartDate: r.Created, ReplayURL: r.ReplayURL}
+			byCode[r.BattleCode] = f
+			found = append(found, f)
+		}
+		f.Users = append(f.Users, &ReplayUser{UserID: r.UserID, UserName: r.UserName, PilotName: r.PilotName, Team: r.Side, Pos: r.Pos})
+		if f.Round < r.Round {
+			f.Round = r.Round
+		}
+	}
+	for _, f := range found {
+		sort.Slice(f.Users, func(i, j int) bool { return f.Users[i].Pos < f.Users[j].Pos })
+	}
+	return found, nil
 }
 
 func (db SQLiteDB) GetBattleRecordUser(battleCode string, userID string) (*BattleRecord, error) {

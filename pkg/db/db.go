@@ -106,6 +106,40 @@ type BattleRecord struct {
 	System  uint32    `db:"system" json:"system,omitempty"`
 }
 
+// FindReplayQuery filters FindReplay (as gdxsv). A battle matches each player filter when one of its
+// players matches one of the values (names are LIKE patterns); -1 = any players / aggregate.
+type FindReplayQuery struct {
+	BattleCode string   `json:"battle_code"`
+	UserIDs    []string `json:"user_id"`
+	UserNames  []string `json:"user_name"`
+	PilotNames []string `json:"pilot_name"`
+	Players    int      `json:"players"`
+	Aggregate  int      `json:"aggregate"`
+	Reverse    bool     `json:"reverse"` // oldest first
+	Page       int      `json:"page"`
+}
+
+func NewFindReplayQuery() *FindReplayQuery {
+	return &FindReplayQuery{Players: -1, Aggregate: -1}
+}
+
+type ReplayUser struct {
+	UserID    string `json:"user_id"`
+	UserName  string `json:"user_name"`
+	PilotName string `json:"pilot_name"`
+	Team      int    `json:"team"`
+	Pos       int    `json:"pos"`
+}
+
+type FoundReplay struct {
+	BattleCode string        `json:"battle_code,omitempty"`
+	Users      []*ReplayUser `json:"users,omitempty"`
+	Round      int           `json:"round,omitempty"`
+	StartUnix  int64         `json:"start_unix,omitempty"`
+	StartDate  time.Time     `json:"start_date,omitempty"`
+	ReplayURL  string        `json:"replay_url,omitempty"`
+}
+
 type BattleCountResult struct {
 	Battle int `json:"battle,omitempty"`
 	Win    int `json:"win,omitempty"`
@@ -168,6 +202,9 @@ type DB interface {
 
 	// SetReplayURL sets the replay url of every player's record of the battle.
 	SetReplayURL(battleCode string, url string) error
+
+	// FindReplay returns the battles with an uploaded replay that match q, 100 per page.
+	FindReplay(q *FindReplayQuery) ([]*FoundReplay, error)
 
 	// CalculateUserTotalBattleCount calculates battle count of the user.
 	// You can get the results of one army using the `side` parameter.

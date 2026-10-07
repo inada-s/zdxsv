@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -188,6 +189,51 @@ func Test202SetReplayURL(t *testing.T) {
 	other, err := testDB.GetBattleRecordUser("othercode", "r1")
 	must(t, err)
 	assertEq(t, "", other.ReplayURL)
+}
+
+func Test204FindReplay(t *testing.T) {
+	// after Test202: replaycode (r1, r2) has a replay, othercode none
+	time.Sleep(10 * time.Millisecond)
+	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r4", PilotName: "zaku", Players: 2, Pos: 2, Side: 2}))
+	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r3", PilotName: "gundam", Players: 2, Pos: 1, Side: 1}))
+	must(t, testDB.SetReplayURL("replaycode2", "https://example.com/replaycode2.pb"))
+
+	codes := func(q *FindReplayQuery) []string {
+		found, err := testDB.FindReplay(q)
+		must(t, err)
+		var ret []string
+		for _, f := range found {
+			ret = append(ret, f.BattleCode)
+		}
+		return ret
+	}
+	assertEq(t, []string{"replaycode2", "replaycode"}, codes(NewFindReplayQuery()))
+	q := NewFindReplayQuery()
+	q.Reverse = true
+	assertEq(t, []string{"replaycode", "replaycode2"}, codes(q))
+	q = NewFindReplayQuery()
+	q.UserIDs = []string{"r3", "nobody"}
+	assertEq(t, []string{"replaycode2"}, codes(q))
+	q = NewFindReplayQuery()
+	q.PilotNames = []string{"gun%"}
+	assertEq(t, []string{"replaycode2"}, codes(q))
+	q = NewFindReplayQuery()
+	q.BattleCode = "othercode"
+	assertEq(t, []string(nil), codes(q))
+	q = NewFindReplayQuery()
+	q.Page = 1
+	assertEq(t, []string(nil), codes(q))
+
+	q = NewFindReplayQuery()
+	q.BattleCode = "replaycode2"
+	found, err := testDB.FindReplay(q)
+	must(t, err)
+	assertEq(t, 1, len(found))
+	assertEq(t, "https://example.com/replaycode2.pb", found[0].ReplayURL)
+	assertEq(t, 2, len(found[0].Users))
+	assertEq(t, "r3", found[0].Users[0].UserID)
+	assertEq(t, 1, found[0].Users[0].Team)
+	assertEq(t, "r4", found[0].Users[1].UserID)
 }
 
 func Test203CalculateUserBattleCount(t *testing.T) {
