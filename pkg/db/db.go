@@ -98,6 +98,8 @@ type BattleRecord struct {
 	Death  int    `db:"death" json:"death,omitempty"`
 	Frame  int    `db:"frame" json:"frame,omitempty"`
 	Result string `db:"result" json:"result,omitempty"`
+	// ReplayURL is where the battle's replay was uploaded (SetReplayURL), "" if none.
+	ReplayURL string `db:"replay_url" json:"replay_url,omitempty"`
 
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
@@ -163,6 +165,9 @@ type DB interface {
 
 	// UpdateBattleRecord updates all mutable information of battle_record.
 	UpdateBattleRecord(record *BattleRecord) error
+
+	// SetReplayURL sets the replay url of every player's record of the battle.
+	SetReplayURL(battleCode string, url string) error
 
 	// CalculateUserTotalBattleCount calculates battle count of the user.
 	// You can get the results of one army using the `side` parameter.

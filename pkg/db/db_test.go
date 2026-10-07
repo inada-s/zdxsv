@@ -173,6 +173,23 @@ func Test201AddUpdateBattleRecord(t *testing.T) {
 	assertEq(t, br, actual)
 }
 
+func Test202SetReplayURL(t *testing.T) {
+	for _, u := range []string{"r1", "r2"} {
+		must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode", UserID: u, Players: 2}))
+	}
+	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "othercode", UserID: "r1", Players: 2}))
+	must(t, testDB.SetReplayURL("replaycode", "https://example.com/replaycode.pb"))
+
+	for _, u := range []string{"r1", "r2"} {
+		actual, err := testDB.GetBattleRecordUser("replaycode", u)
+		must(t, err)
+		assertEq(t, "https://example.com/replaycode.pb", actual.ReplayURL)
+	}
+	other, err := testDB.GetBattleRecordUser("othercode", "r1")
+	must(t, err)
+	assertEq(t, "", other.ReplayURL)
+}
+
 func Test203CalculateUserBattleCount(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",

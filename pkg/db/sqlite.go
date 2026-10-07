@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	death       integer default 0,
 	frame       integer default 0,
 	result      text default '',
+	replay_url  text default '',
 	created     timestamp,
 	updated     timestamp,
 	system      integer default 0,
@@ -358,6 +359,11 @@ WHERE
 		// refresh rakning page
 		db.deleteRankingCache()
 	}
+	return err
+}
+
+func (db SQLiteDB) SetReplayURL(battleCode string, url string) error {
+	_, err := db.Exec(`UPDATE battle_record SET replay_url = ? WHERE battle_code = ?`, url, battleCode)
 	return err
 }
 
