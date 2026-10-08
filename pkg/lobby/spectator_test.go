@@ -65,18 +65,10 @@ func TestLiveUplinkPush(t *testing.T) {
 	if a := lastAck(t, *out); !a.GetHeaderAck() || a.GetStateAck() != 0 || a.GetAckFrame() != 0 {
 		t.Fatalf("ack %v", a)
 	}
-	// state: a gap is dropped, an overlap appends its new tail
-	st := func(off int, data string) *proto.Packet {
-		return livePush("B1", 7, &proto.SpectatorInputPush{State: []byte(data), StateOffset: pb.Int32(int32(off)), StateTotal: pb.Int32(8)})
-	}
-	r.Handle(st(4, "efgh"), liveUp, now)
-	if a := lastAck(t, *out); a.GetStateAck() != 0 {
-		t.Fatalf("gap kept: %v", a)
-	}
-	r.Handle(st(0, "abc"), liveUp, now)
-	r.Handle(st(2, "cdefgh"), liveUp, now)
-	if a := lastAck(t, *out); a.GetStateAck() != 8 {
-		t.Fatalf("state ack %v", a)
+	// a start state (older uplinks) is neither kept nor acked
+	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{State: []byte("abcd"), StateOffset: pb.Int32(0), StateTotal: pb.Int32(8)}), liveUp, now)
+	if a := lastAck(t, *out); a.StateAck != nil {
+		t.Fatalf("state acked: %v", a)
 	}
 	// inputs: 2 bytes a frame
 	in := func(f int, data string) *proto.Packet {
@@ -106,8 +98,8 @@ func TestLiveUplinkPush(t *testing.T) {
 	if a := lastAck(t, *out); !a.GetCloseAck() {
 		t.Fatal("close not acked")
 	}
-	if s := r.sessions["B1"]; string(s.inputs) != "a0a1a2" || string(s.state) != "abcdefgh" || string(s.header) != "hdr" {
-		t.Fatalf("session %q %q %q", s.header, s.state, s.inputs)
+	if s := r.sessions["B1"]; string(s.inputs) != "a0a1a2" || string(s.header) != "hdr" {
+		t.Fatalf("session %q %q", s.header, s.inputs)
 	}
 }
 
@@ -171,6 +163,7 @@ func TestLiveFanoutLossy(t *testing.T) {
 		inputs[i] = byte(i * 13)
 	}
 	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("header")}), liveUp, now)
+	// an older uplink also pushes a start state: not fanned out
 	for off := 0; off < len(state); off += liveChunkBytes {
 		end := off + liveChunkBytes
 		if end > len(state) {
@@ -221,8 +214,8 @@ func TestLiveFanoutLossy(t *testing.T) {
 			r.Handle(c.subscribe(), liveSpec, now)
 		}
 	}
-	if c.code != "B1" || !c.closed || string(c.header) != "header" || !bytes.Equal(c.state, state) || !bytes.Equal(c.inputs, inputs) {
-		t.Fatalf("code %s closed %v header %q state %d/%d inputs %d/%d", c.code, c.closed, c.header, len(c.state), len(state), len(c.inputs), len(inputs))
+	if c.code != "B1" || !c.closed || string(c.header) != "header" || len(c.state) != 0 || !bytes.Equal(c.inputs, inputs) {
+		t.Fatalf("code %s closed %v header %q state %d/%d inputs %d/%d", c.code, c.closed, c.header, len(c.state), 0, len(c.inputs), len(inputs))
 	}
 	t.Logf("pushes %d, dropped %d, until %v", c.pushes, c.dropped, now.Sub(time.Unix(1700000000, 0)))
 

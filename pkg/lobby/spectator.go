@@ -21,18 +21,17 @@ import (
 // battle info) pushes its replay as it records it, and the lobby fans it out to
 // spectators that subscribed with a cookie proving their address.
 //
-// A pcsx2 replay starts from a save state (~8 MB), so unlike gdxsv every stream
-// (header, start state, inputs) is go-back-N: up to liveWindow datagrams past the
-// receiver's ack, back to the ack after liveResend without progress. Receivers
-// keep contiguous data only and ack every push. Order to a spectator: header,
-// state, inputs, close.
+// No start state: a spectator plays the battle start from the hosted common state
+// and the header's lobby answers. Every stream (header, inputs) is go-back-N: up
+// to liveWindow datagrams past the receiver's ack, back to the ack after
+// liveResend without progress. Receivers keep contiguous data only and ack every
+// push. Order to a spectator: header, inputs, close.
 const (
 	liveChunkBytes          = 1000
 	liveWindow              = 32
 	liveResend              = 200 * time.Millisecond
 	liveMaxFramesPerPush    = 128
 	liveMaxHeaderBytes      = 16 << 10
-	liveMaxStateBytes       = 64 << 20
 	liveMaxFrameBytes       = 4 * 64
 	liveFanoutInterval      = 50 * time.Millisecond
 	liveSubscriberTimeout   = 10 * time.Second
@@ -63,15 +62,13 @@ type liveSession struct {
 	closed      time.Time // zero while running
 	publisher   *net.UDPAddr
 	header      []byte
-	state       []byte
-	stateTotal  int
 	frameBytes  int
 	inputs      []byte
 	closeReason string
 	subs        map[string]*liveSubscriber
 }
 
-// liveStream is a receiver's go-back-N position: bytes of the state, or frames.
+// liveStream is a receiver's go-back-N position in frames.
 type liveStream struct {
 	acked, next int
 	progress    time.Time
@@ -82,7 +79,6 @@ type liveSubscriber struct {
 	seen       time.Time
 	headerAck  bool
 	headerSent time.Time
-	state      liveStream
 	frames     liveStream
 	closeAck   bool
 	closeSent  time.Time
@@ -169,15 +165,6 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 	if h := m.GetHeader(); len(h) > 0 && s.header == nil && len(h) <= liveMaxHeaderBytes {
 		s.header = append([]byte(nil), h...)
 	}
-	if t := int(m.GetStateTotal()); 0 < t && t <= liveMaxStateBytes && (s.stateTotal == 0 || s.stateTotal == t) {
-		s.stateTotal = t
-		if st := m.GetState(); int(m.GetStateOffset()) <= len(s.state) {
-			end := int(m.GetStateOffset()) + len(st)
-			if len(s.state) < end && end <= t {
-				s.state = append(s.state, st[len(s.state)-int(m.GetStateOffset()):]...)
-			}
-		}
-	}
 	if fb := int(m.GetFrameBytes()); 0 < fb && fb <= liveMaxFrameBytes && (s.frameBytes == 0 || s.frameBytes == fb) {
 		s.frameBytes = fb
 		in := m.GetInputData()
@@ -197,7 +184,6 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 			BattleCode: pb.String(s.code),
 			AckFrame:   pb.Int32(int32(s.frames())),
 			HeaderAck:  pb.Bool(s.header != nil),
-			StateAck:   pb.Int32(int32(len(s.state))),
 			CloseAck:   pb.Bool(!s.closed.IsZero()),
 		},
 	}, from)
@@ -220,7 +206,6 @@ func (r *SpectatorRegistry) onAck(m *proto.SpectatorInputAck, from *net.UDPAddr,
 		return
 	}
 	sub.headerAck = sub.headerAck || m.GetHeaderAck()
-	sub.state.ack(int(m.GetStateAck()), now)
 	sub.frames.ack(int(m.GetAckFrame()), now)
 	sub.closeAck = sub.closeAck || m.GetCloseAck()
 	r.fanoutTo(s, sub, now)
@@ -261,7 +246,7 @@ func (r *SpectatorRegistry) onSubscribe(m *proto.SpectatorSubscribeRequest, from
 		if r.nsubs >= liveMaxSubscribers || len(s.subs) >= liveMaxBattleSubscriber {
 			return
 		}
-		sub = &liveSubscriber{addr: from, state: liveStream{progress: now}, frames: liveStream{progress: now}}
+		sub = &liveSubscriber{addr: from, frames: liveStream{progress: now}}
 		s.subs[key] = sub
 		r.nsubs++
 		glog.Infoln("live subscribe", code, from)
@@ -313,12 +298,6 @@ func (r *SpectatorRegistry) fanoutTo(s *liveSession, sub *liveSubscriber, now ti
 			sub.headerSent = now
 			push(&proto.SpectatorInputPush{Header: s.header})
 		}
-		return
-	}
-	if s.stateTotal == 0 || sub.state.acked < s.stateTotal {
-		sub.state.window(now, len(s.state), liveChunkBytes, func(off, n int) {
-			push(&proto.SpectatorInputPush{State: s.state[off : off+n], StateOffset: pb.Int32(int32(off)), StateTotal: pb.Int32(int32(s.stateTotal))})
-		})
 		return
 	}
 	if fb := s.frameBytes; fb > 0 {
