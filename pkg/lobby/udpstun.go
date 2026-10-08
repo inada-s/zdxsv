@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"net"
+	"time"
 
 	"zdxsv/pkg/proto"
 
@@ -38,14 +39,16 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 	} else {
 		glog.Infoln("Start UDPStun test", testAddr)
 		defer test.Close()
-		go serveUDPStun(test, nil)
+		go serveUDPStun(test, nil, nil)
 	}
-	serveUDPStun(conn, test)
+	go Spectators.Serve(conn)
+	serveUDPStun(conn, test, Spectators)
 	return nil
 }
 
-func serveUDPStun(conn, test *net.UDPConn) {
-	buf := make([]byte, 4096)
+// serveUDPStun answers Pings and hands spectator packets to live (nil: none).
+func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
+	buf := make([]byte, 64<<10)
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -55,7 +58,15 @@ func serveUDPStun(conn, test *net.UDPConn) {
 			}
 			continue
 		}
-		data, test2 := udpStunAnswer(buf[:n], addr)
+		req := new(proto.Packet)
+		if err := pb.Unmarshal(buf[:n], req); err != nil {
+			glog.Errorln(err)
+			continue
+		}
+		if live != nil && live.Handle(req, addr, time.Now()) {
+			continue
+		}
+		data, test2 := udpStunAnswer(req, addr)
 		if data == nil {
 			continue
 		}
@@ -68,12 +79,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 
 // udpStunAnswer returns the Pong for a Ping packet (nil for anything else), and
 // whether the Ping asked for the reachability test.
-func udpStunAnswer(pkt []byte, addr *net.UDPAddr) ([]byte, bool) {
-	req := new(proto.Packet)
-	if err := pb.Unmarshal(pkt, req); err != nil {
-		glog.Errorln(err)
-		return nil, false
-	}
+func udpStunAnswer(req *proto.Packet, addr *net.UDPAddr) ([]byte, bool) {
 	if req.GetType() != proto.MessageType_Ping {
 		glog.Warningln("unexpected packet received", req)
 		return nil, false

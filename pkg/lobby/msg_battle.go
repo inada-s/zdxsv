@@ -2,9 +2,11 @@ package lobby
 
 import (
 	"hash/fnv"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	. "zdxsv/pkg/lobby/message"
 
 	"zdxsv/pkg/lobby/model"
@@ -175,6 +177,10 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		h := fnv.New32()
 		h.Write([]byte(b.BattleCode))
 		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
+		Spectators.Open(b.BattleCode, h.Sum32(), time.Now())
+		if liveUplink(p, users, info) == p.UserID {
+			p2p += "live_uplink=1\n"
+		}
 		if line := relayLine(p, users, info, h.Sum32()); line != "" {
 			p2p += line
 		}
@@ -189,6 +195,33 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		names +
 		p2p)
 	return n
+}
+
+// liveUplink returns the GGPO player that streams the battle to live spectators
+// (pkg/lobby/spectator.go): the lowest udp_rtt (platform info, ms to the lobby's UDP
+// socket), ties and unknown in battle order; "" if no player has GGPO.
+func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]string) string {
+	best, bestRtt := "", math.MaxInt32
+	for _, id := range users {
+		pi := p.PlatformInfo
+		if id != p.UserID {
+			if info == nil {
+				continue
+			}
+			pi = info(id)
+		}
+		if port, err := strconv.Atoi(pi["ggpo"]); err != nil || port <= 0 || 65536 <= port {
+			continue
+		}
+		rtt, err := strconv.Atoi(pi["udp_rtt"])
+		if err != nil || rtt < 0 {
+			rtt = math.MaxInt32 - 1
+		}
+		if rtt < bestRtt {
+			best, bestRtt = id, rtt
+		}
+	}
+	return best
 }
 
 // relayLine offers the lobby's relay to a GGPO battle as gdxsv's P2PMatching.relays, only
