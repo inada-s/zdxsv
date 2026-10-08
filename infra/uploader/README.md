@@ -15,6 +15,9 @@ curl -F file=@123.pb http://127.0.0.1:8080/
 ```
 The lobby needs `ZDXSV_LOBBY_OPS_ADDR=:9880`, `ZDXSV_LOBBY_REPLAY_URL_PREFIX=http://127.0.0.1:8081/`
 and a DB with `battle_record.replay_url` (`zdxsv migratedb` on an older DB).
+Players find stored replays through the lobby's public API (`ZDXSV_LOBBY_API_ADDR`, e.g. `:9881`):
+`curl 'http://127.0.0.1:9881/lbs/replay?battle_code=123'` gives JSON with `replay_url` (filters: see
+`pkg/lobby/api.go`, as gdxsv `/lbs/replay`).
 
 ## Deploy
 ```shell

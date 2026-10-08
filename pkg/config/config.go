@@ -72,6 +72,8 @@ type LobbyConfig struct {
 	// Uploaded replay urls must start with ReplayURLPrefix.
 	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
 	ReplayURLPrefix string `env:"ZDXSV_LOBBY_REPLAY_URL_PREFIX" envDefault:"https://storage.googleapis.com/zdxsv/"`
+	// Public HTTP API (lobby.APIHandler, /lbs/replay: uploaded replays), off when empty.
+	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
 }
 
 // BattleConfig stores settings for battle server.

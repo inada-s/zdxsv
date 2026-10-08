@@ -41,6 +41,14 @@ func mainLobby() {
 			}
 		}()
 	}
+	if c := config.Conf.Lobby; c.APIAddr != "" {
+		go func() {
+			glog.Infoln("Start public api", c.APIAddr)
+			if err := http.ListenAndServe(stripHost(c.APIAddr), &lobby.APIHandler{}); err != nil {
+				glog.Errorln("public api:", err)
+			}
+		}()
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
