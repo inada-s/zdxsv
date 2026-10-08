@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,6 +30,14 @@ func mainLobby() {
 		go func() {
 			if err := lobby.ServeRelay(c.RelayAddr, public, c.RelayPublicAddr6); err != nil {
 				glog.Errorln("relay:", err)
+			}
+		}()
+	}
+	if c := config.Conf.Lobby; c.OpsAddr != "" {
+		go func() {
+			glog.Infoln("Start ops api", c.OpsAddr)
+			if err := http.ListenAndServe(stripHost(c.OpsAddr), &lobby.OpsHandler{ReplayURLPrefix: c.ReplayURLPrefix}); err != nil {
+				glog.Errorln("ops api:", err)
 			}
 		}()
 	}

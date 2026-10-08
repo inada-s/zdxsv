@@ -68,6 +68,10 @@ type LobbyConfig struct {
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
 	RelayPublicAddr  string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR"`
 	RelayPublicAddr6 string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6"`
+	// Private HTTP API (lobby.OpsHandler, /ops/replay_uploaded for infra/uploader), off when empty.
+	// Uploaded replay urls must start with ReplayURLPrefix.
+	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
+	ReplayURLPrefix string `env:"ZDXSV_LOBBY_REPLAY_URL_PREFIX" envDefault:"https://storage.googleapis.com/zdxsv/"`
 }
 
 // BattleConfig stores settings for battle server.
