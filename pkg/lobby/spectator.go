@@ -223,7 +223,11 @@ func (st *liveStream) ack(n int, now time.Time) {
 
 func (r *SpectatorRegistry) onSubscribe(m *proto.SpectatorSubscribeRequest, from *net.UDPAddr, now time.Time) {
 	code := m.GetBattleCode()
-	if code == "" {
+	if code == "" && len(m.GetSkipCodes()) > 0 {
+		if code = r.next(m.GetSkipCodes()); code != "" {
+			glog.Infoln("live next", code, "for", from, "skipping", len(m.GetSkipCodes()))
+		}
+	} else if code == "" {
 		code = r.newest()
 	}
 	s := r.sessions[code]
@@ -263,6 +267,24 @@ func (r *SpectatorRegistry) newest() string {
 			continue
 		}
 		if best == nil || (best.closed.IsZero() == s.closed.IsZero() && best.opened.Before(s.opened)) || (!best.closed.IsZero() && s.closed.IsZero()) {
+			best = s
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return best.code
+}
+
+// next is auto-next's pick (gdxsv's live_autoplay_pick): the latest opened running
+// battle with an uplink that the spectator has not watched, so it joins near the start.
+func (r *SpectatorRegistry) next(skip []string) string {
+	var best *liveSession
+	for _, s := range r.sessions {
+		if s.publisher == nil || !s.closed.IsZero() || containsCode(skip, s.code) {
+			continue
+		}
+		if best == nil || best.opened.Before(s.opened) {
 			best = s
 		}
 	}
@@ -374,4 +396,13 @@ func (r *SpectatorRegistry) validCookie(code string, addr *net.UDPAddr, c []byte
 
 func sameAddr(a, b *net.UDPAddr) bool {
 	return a.Port == b.Port && bytes.Equal(a.IP.To16(), b.IP.To16())
+}
+
+func containsCode(codes []string, code string) bool {
+	for _, c := range codes {
+		if c == code {
+			return true
+		}
+	}
+	return false
 }

@@ -281,3 +281,35 @@ func TestLiveUplinkChoice(t *testing.T) {
 		t.Errorf("no ggpo: %s", got)
 	}
 }
+
+func TestLiveAutoNextPick(t *testing.T) {
+	r, out := newLiveTest(t)
+	now := time.Unix(1700000020, 0)
+	for i, code := range []string{"A", "B", "C"} {
+		r.Open(code, uint32(i+1), now.Add(time.Duration(i-3)*time.Minute))
+		r.Handle(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
+	}
+	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("a0a1")}), liveUp, now)
+	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(1), CloseReason: pb.String("end")}), liveUp, now)
+	r.Open("D", 4, now) // no uplink yet
+	pick := func(skip ...string) string {
+		*out = nil
+		r.Handle(&proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{
+			Cookie: make([]byte, liveCookieBytes), SkipCodes: skip}}, liveSpec, now)
+		for _, s := range *out {
+			if ch := s.pkt.GetSpectatorSubscribeChallengeData(); ch != nil {
+				return ch.GetBattleCode()
+			}
+		}
+		return ""
+	}
+	// running before closed, latest opened first, never one without an uplink
+	for _, c := range []struct {
+		skip []string
+		want string
+	}{{nil, "B"}, {[]string{"B"}, "A"}, {[]string{"X"}, "B"}, {[]string{"A", "B"}, ""}} {
+		if got := pick(c.skip...); got != c.want {
+			t.Errorf("skip %v: %q, want %q", c.skip, got, c.want)
+		}
+	}
+}

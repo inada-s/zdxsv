@@ -70,6 +70,9 @@ message SpectatorSubscribeRequest {
   optional string battle_code = 1;
   optional int32 from_frame = 3;
   optional bytes cookie = 4;  // the challenge's 16 bytes; 16 zero bytes at first
+  // Live auto-next (gdxsv's LiveAutoNext pick), with an empty battle_code: the
+  // newest running battle not in this list; no challenge if there is none.
+  repeated string skip_codes = 5;
 }
 
 message SpectatorSubscribeChallenge {
