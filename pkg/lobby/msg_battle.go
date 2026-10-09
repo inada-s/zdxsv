@@ -14,6 +14,8 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 func NoticeBattleStart(p *AppPeer) {
@@ -122,6 +124,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // the p2p_ addresses' IPs when every other player has one, else over the bridge;
 // battle_code = the battle's code (echoed in the client's P2PMatchingReport);
 // name_<user id> = that player's name (UTF-8), for the network status OSD;
+// pilot_<user id> = that player's pilot name (UTF-8, pilotName), for the OSD too;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
 // packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt);
 // relay_0 = the lobby's relay server (relayLine), when every player supports it.
@@ -143,6 +146,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		if name := battleInfoName(u.Name); name != "" {
 			names += "name_" + u.UserID + "=" + name + "\n"
+		}
+		if pilot := pilotName(u.Bin); pilot != "" {
+			names += "pilot_" + u.UserID + "=" + pilot + "\n"
 		}
 	}
 	if sessionID == "" {
@@ -254,6 +260,31 @@ func battleInfoName(s string) string {
 		}
 		return r
 	}, s))
+}
+
+// userBinaryField is the size of each Shift-JIS field of the game's user binary
+// (SetUserBinary, 110 bytes): pilot name, then four quick chat messages.
+const userBinaryField = 22
+
+// pilotName returns the pilot name in a user binary as login stores it
+// (ReadEncryptedString decoded the Shift-JIS): the first field up to its NUL,
+// without control characters; "" if none.
+func pilotName(bin string) string {
+	b, _, err := transform.String(japanese.ShiftJIS.NewEncoder(), bin)
+	if err != nil {
+		return ""
+	}
+	if len(b) > userBinaryField {
+		b = b[:userBinaryField]
+	}
+	if i := strings.IndexByte(b, 0); i >= 0 {
+		b = b[:i]
+	}
+	s, _, err := transform.String(japanese.ShiftJIS.NewDecoder(), b)
+	if err != nil {
+		return ""
+	}
+	return battleInfoName(s)
 }
 
 // P2PMatchingReport is sent by emulators with lobby GGPO (pcsx2 ZDXSV_GGPO lobby=1), as

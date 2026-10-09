@@ -74,10 +74,12 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	// "アムロ", a control byte (dropped), none (no line)
 	p.Battle.Users[0].Name = "アムロ"
 	p.Battle.Users[1].Name = "Bob\n"
+	// a pilot name as login stores the game's user binary (rig capture, NULs at both ends trimmed)
+	p.Battle.Users[0].Bin = capturedUserBinary
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	// ggpo_session = FNV-1 32 of "1696492800000" (independent python computation)
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
-		"name_AAAAAA=アムロ\nname_BBBBBB=Bob\n" +
+		"name_AAAAAA=アムロ\npilot_AAAAAA=カミーユ・ビダン\nname_BBBBBB=Bob\n" +
 		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
 		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003\n" +
 		"ggpo_session=1462212142\nggpo_ping_ms=7500\n"
@@ -86,6 +88,29 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	}
 	if string(n.Body) != want {
 		t.Fatalf("body %q want %q", n.Body, want)
+	}
+}
+
+// capturedUserBinary is a SetUserBinary body from a pcsx2 rig after ReadEncryptedString:
+// five 22-byte Shift-JIS fields (pilot name, four quick chat messages), NUL padded.
+var capturedUserBinary = "カミーユ・ビダン" + strings.Repeat("\x00", 6) +
+	"了解！" + strings.Repeat("\x00", 16) +
+	"そちらの被害状況は？" + strings.Repeat("\x00", 2) +
+	"敵機撃破！" + strings.Repeat("\x00", 12) +
+	"俺に任せろ！"
+
+func TestPilotName(t *testing.T) {
+	for _, c := range []struct{ bin, want string }{
+		{capturedUserBinary, "カミーユ・ビダン"},
+		{"", ""},
+		// a full field (11 two-byte characters, no NUL) ends at its 22 bytes
+		{strings.Repeat("ア", 11) + "了解！", strings.Repeat("ア", 11)},
+		// ASCII and control characters
+		{"Amuro\t\x00x", "Amuro"},
+	} {
+		if got := pilotName(c.bin); got != c.want {
+			t.Errorf("pilotName(%q) = %q want %q", c.bin, got, c.want)
+		}
 	}
 }
 
