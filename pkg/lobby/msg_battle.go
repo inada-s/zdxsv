@@ -9,6 +9,7 @@ import (
 	"time"
 	. "zdxsv/pkg/lobby/message"
 
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
 
 	"encoding/json"
@@ -183,7 +184,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		h := fnv.New32()
 		h.Write([]byte(b.BattleCode))
 		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
-		Spectators.Open(b.BattleCode, h.Sum32(), time.Now())
+		Spectators.Open(b.BattleCode, h.Sum32(), liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
 			p2p += "live_uplink=1\n"
 		}
@@ -429,3 +430,18 @@ var _ = register(0x6138, "AnswerBattleResult", func(p *AppPeer, m *Message) {
 
 	p.app.OnGetBattleResult(p, result)
 })
+
+// liveUsers returns the battle's players for the /lbs/live list, as /lbs/replay's users.
+func liveUsers(b *model.Battle) []*db.ReplayUser {
+	users := make([]*db.ReplayUser, 0, len(b.Users))
+	for _, u := range b.Users {
+		users = append(users, &db.ReplayUser{
+			UserID:    u.UserID,
+			UserName:  battleInfoName(u.Name),
+			PilotName: pilotName(u.Bin),
+			Team:      int(u.Entry),
+			Pos:       int(b.GetPosition(u.UserID)),
+		})
+	}
+	return users
+}

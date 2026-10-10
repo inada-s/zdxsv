@@ -1,7 +1,9 @@
 package lobby
 
 import (
+	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -153,5 +155,19 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	p.PlatformInfo = map[string]string{"emulator": "pcsx2", "udp": "1"}
 	if n := battleInfoNotice(p, info); strings.Contains(string(n.Body), "relay_") {
 		t.Fatalf("relay offered to a client without relay_server=1: %q", n.Body)
+	}
+}
+
+func TestLiveUsers(t *testing.T) {
+	b := model.NewBattle("", 0)
+	b.Users = []model.User{{User: db.User{UserID: "AAAAAA", Name: "アムロ\n"}, Bin: capturedUserBinary, Entry: model.EntryTitans},
+		{User: db.User{UserID: "BBBBBB", Name: "Bob"}, Entry: model.EntryAeug}}
+	var got []string
+	for _, u := range liveUsers(b) {
+		got = append(got, fmt.Sprintf("%s/%s/%s/%d/%d", u.UserID, u.UserName, u.PilotName, u.Team, u.Pos))
+	}
+	want := []string{fmt.Sprintf("AAAAAA/アムロ/カミーユ・ビダン/%d/1", model.EntryTitans), fmt.Sprintf("BBBBBB/Bob//%d/2", model.EntryAeug)}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("users %v, want %v", got, want)
 	}
 }
