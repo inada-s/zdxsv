@@ -64,3 +64,25 @@ func TestAPIReplay(t *testing.T) {
 		t.Fatalf("ops path on the public api: code %d", w.Code)
 	}
 }
+
+func TestAPILive(t *testing.T) {
+	var result []*LiveBattle
+	h := &APIHandler{LiveList: func() []*LiveBattle { return result }}
+	get := func() string {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "/lbs/live", nil))
+		if w.Code != 200 || w.Header().Get("Content-Type") != "application/json" {
+			t.Fatalf("code %d, content type %q", w.Code, w.Header().Get("Content-Type"))
+		}
+		return strings.TrimSpace(w.Body.String())
+	}
+	if got := get(); got != "[]" {
+		t.Fatalf("empty: %s", got)
+	}
+	result = []*LiveBattle{{BattleCode: "B1", StartUnix: 1700000000, Frames: 60, Spectators: 2,
+		Users: []*db.ReplayUser{{UserID: "u1", UserName: "n1", PilotName: "p1", Team: 2, Pos: 1}}}}
+	want := `[{"battle_code":"B1","users":[{"user_id":"u1","user_name":"n1","pilot_name":"p1","team":2,"pos":1}],"start_unix":1700000000,"frames":60,"closed":false,"spectators":2}]`
+	if got := get(); got != want {
+		t.Fatalf("body %s", got)
+	}
+}

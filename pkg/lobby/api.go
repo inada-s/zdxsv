@@ -20,12 +20,20 @@ const (
 //	GET /lbs/replay?battle_code=C&user_id=U&user_name=N&pilot_name=P&players=4&aggregate=1&reverse=1&page=0:
 //	  the battles with an uploaded replay, newest first, 100 per page, as JSON (db.FoundReplay);
 //	  204 when none. user_id, user_name and pilot_name may repeat; names are LIKE patterns.
+//	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
+//	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
+	// LiveList lists the live battles (Spectators.List when nil).
+	LiveList func() []*LiveBattle
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/lbs/live" {
+		h.serveLive(w)
+		return
+	}
 	if r.URL.Path != "/lbs/replay" {
 		http.NotFound(w, r)
 		return
@@ -91,5 +99,20 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(replays); err != nil {
 		glog.Warningln("lbs/replay: JSON encode failure", err)
+	}
+}
+
+func (h *APIHandler) serveLive(w http.ResponseWriter) {
+	list := h.LiveList
+	if list == nil {
+		list = Spectators.List
+	}
+	battles := list()
+	if battles == nil {
+		battles = []*LiveBattle{} // [], not null
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(battles); err != nil {
+		glog.Warningln("lbs/live: JSON encode failure", err)
 	}
 }

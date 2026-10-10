@@ -2,10 +2,13 @@ package lobby
 
 import (
 	"bytes"
+	"fmt"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/proto"
 
 	pb "github.com/golang/protobuf/proto"
@@ -56,7 +59,7 @@ func TestLiveUplinkPush(t *testing.T) {
 	if len(*out) != 0 {
 		t.Fatal("push to a battle that was not opened answered")
 	}
-	r.Open("B1", 7, now)
+	r.Open("B1", 7, nil, now)
 	r.Handle(livePush("B1", 8, &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
 	if len(*out) != 0 {
 		t.Fatal("push with a wrong session answered")
@@ -151,9 +154,9 @@ func (c *liveSpectator) receive(pkt *proto.Packet) *proto.Packet {
 func TestLiveFanoutLossy(t *testing.T) {
 	r, out := newLiveTest(t)
 	now := time.Unix(1700000000, 0)
-	r.Open("OLD", 1, now.Add(-time.Minute))
+	r.Open("OLD", 1, nil, now.Add(-time.Minute))
 	r.Handle(livePush("OLD", 1, &proto.SpectatorInputPush{Header: []byte("old")}), liveOther, now)
-	r.Open("B1", 7, now)
+	r.Open("B1", 7, nil, now)
 	state := make([]byte, 100000)
 	for i := range state {
 		state[i] = byte(i * 7)
@@ -233,7 +236,7 @@ func TestLiveFanoutLossy(t *testing.T) {
 func TestLiveCookie(t *testing.T) {
 	r, out := newLiveTest(t)
 	now := time.Unix(1700000010, 0)
-	r.Open("B1", 7, now)
+	r.Open("B1", 7, nil, now)
 	sub := func(cookie []byte, from *net.UDPAddr, at time.Time) {
 		r.Handle(&proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{BattleCode: pb.String("B1"), Cookie: cookie}}, from, at)
 	}
@@ -286,12 +289,12 @@ func TestLiveAutoNextPick(t *testing.T) {
 	r, out := newLiveTest(t)
 	now := time.Unix(1700000020, 0)
 	for i, code := range []string{"A", "B", "C"} {
-		r.Open(code, uint32(i+1), now.Add(time.Duration(i-3)*time.Minute))
+		r.Open(code, uint32(i+1), nil, now.Add(time.Duration(i-3)*time.Minute))
 		r.Handle(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
 	}
 	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("a0a1")}), liveUp, now)
 	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(1), CloseReason: pb.String("end")}), liveUp, now)
-	r.Open("D", 4, now) // no uplink yet
+	r.Open("D", 4, nil, now) // no uplink yet
 	pick := func(skip ...string) string {
 		*out = nil
 		r.Handle(&proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{
@@ -311,5 +314,27 @@ func TestLiveAutoNextPick(t *testing.T) {
 		if got := pick(c.skip...); got != c.want {
 			t.Errorf("skip %v: %q, want %q", c.skip, got, c.want)
 		}
+	}
+}
+
+func TestLiveList(t *testing.T) {
+	r, _ := newLiveTest(t)
+	now := time.Unix(1700000030, 0)
+	users := []*db.ReplayUser{{UserID: "u1", UserName: "n1", Team: 1, Pos: 1}}
+	for i, code := range []string{"A", "B", "C"} {
+		r.Open(code, uint32(i+1), users, now.Add(time.Duration(i-3)*time.Minute))
+		r.Handle(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
+	}
+	r.Handle(livePush("A", 1, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("a0a1b0b1")}), liveUp, now)
+	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("c0c1")}), liveUp, now)
+	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(1), CloseReason: pb.String("end")}), liveUp, now)
+	r.Open("D", 4, users, now) // no uplink yet
+	var got []string
+	for _, b := range r.List() {
+		got = append(got, fmt.Sprintf("%s:%d:%d:%v:%s", b.BattleCode, b.StartUnix-now.Unix(), b.Frames, b.Closed, b.Users[0].UserName))
+	}
+	want := []string{"B:-120:0:false:n1", "A:-180:2:false:n1", "C:-60:1:true:n1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("list %v, want %v", got, want)
 	}
 }

@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/proto"
 
 	"github.com/golang/glog"
@@ -66,6 +68,7 @@ type liveSession struct {
 	inputs      []byte
 	closeReason string
 	subs        map[string]*liveSubscriber
+	users       []*db.ReplayUser // for the /lbs/live list
 }
 
 // liveStream is a receiver's go-back-N position in frames.
@@ -92,14 +95,14 @@ func NewSpectatorRegistry() *SpectatorRegistry {
 	return r
 }
 
-// Open starts accepting the battle's uplink (session = its ggpo_session). Idempotent.
-func (r *SpectatorRegistry) Open(code string, session uint32, now time.Time) {
+// Open starts accepting the battle's uplink (session = its ggpo_session; users for List). Idempotent.
+func (r *SpectatorRegistry) Open(code string, session uint32, users []*db.ReplayUser, now time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.sessions[code]; ok {
 		return
 	}
-	r.sessions[code] = &liveSession{code: code, session: int32(session), opened: now, lastPush: now, subs: map[string]*liveSubscriber{}}
+	r.sessions[code] = &liveSession{code: code, session: int32(session), opened: now, lastPush: now, subs: map[string]*liveSubscriber{}, users: users}
 	glog.Infoln("live open", code)
 }
 
@@ -274,6 +277,46 @@ func (r *SpectatorRegistry) newest() string {
 		return ""
 	}
 	return best.code
+}
+
+// LiveBattle is one /lbs/live entry: a battle whose uplink has pushed.
+type LiveBattle struct {
+	BattleCode string           `json:"battle_code"`
+	Users      []*db.ReplayUser `json:"users,omitempty"`
+	StartUnix  int64            `json:"start_unix"`
+	Frames     int              `json:"frames"`
+	Closed     bool             `json:"closed"`
+	Spectators int              `json:"spectators"`
+}
+
+// List returns the battles with an uplink, running first, then newest opened first.
+func (r *SpectatorRegistry) List() []*LiveBattle {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var ss []*liveSession
+	for _, s := range r.sessions {
+		if s.publisher != nil {
+			ss = append(ss, s)
+		}
+	}
+	sort.Slice(ss, func(i, j int) bool {
+		if ss[i].closed.IsZero() != ss[j].closed.IsZero() {
+			return ss[i].closed.IsZero()
+		}
+		return ss[i].opened.After(ss[j].opened)
+	})
+	list := make([]*LiveBattle, 0, len(ss))
+	for _, s := range ss {
+		list = append(list, &LiveBattle{
+			BattleCode: s.code,
+			Users:      s.users,
+			StartUnix:  s.opened.Unix(),
+			Frames:     s.frames(),
+			Closed:     !s.closed.IsZero(),
+			Spectators: len(s.subs),
+		})
+	}
+	return list
 }
 
 // next is auto-next's pick (gdxsv's live_autoplay_pick): the latest opened running
