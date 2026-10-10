@@ -93,6 +93,23 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	}
 }
 
+func TestBattleInfoNoticeSync(t *testing.T) {
+	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
+	p := newUDPTestPeer(emu, false)
+	p.Battle.Users = append(p.Battle.Users, model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}})
+	infos := map[string]map[string]string{
+		"AAAAAA": {"udp": "1", "sync": "fedcba9876543210"},
+		// not 16 lowercase hex digits: no line
+		"CCCCCC": {"udp": "1", "sync": "FEDCBA9876543210"},
+	}
+	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
+	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC\n" +
+		"sync_AAAAAA=fedcba9876543210\nsync_BBBBBB=0123456789abcdef\n"
+	if n == nil || string(n.Body) != want {
+		t.Fatalf("body %q want %q", n.Body, want)
+	}
+}
+
 // capturedUserBinary is a SetUserBinary body from a pcsx2 rig after ReadEncryptedString:
 // five 22-byte Shift-JIS fields (pilot name, four quick chat messages), NUL padded.
 var capturedUserBinary = "カミーユ・ビダン" + strings.Repeat("\x00", 6) +

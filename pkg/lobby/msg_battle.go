@@ -3,6 +3,7 @@ package lobby
 import (
 	"hash/fnv"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,7 +129,11 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // pilot_<user id> = that player's pilot name (UTF-8, pilotName), for the OSD too;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
 // packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt);
-// relay_0 = the lobby's relay server (relayLine), when every player supports it.
+// relay_0 = the lobby's relay server (relayLine), when every player supports it;
+// sync_<user id> = that player's sync-settings fingerprint (platform info "sync", 16
+// lowercase hex digits), self included: the client cuts the battle when one differs from its own.
+var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
@@ -150,6 +155,16 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		if pilot := pilotName(u.Bin); pilot != "" {
 			names += "pilot_" + u.UserID + "=" + pilot + "\n"
+		}
+		pi := p.PlatformInfo
+		if u.UserID != p.UserID {
+			pi = nil
+			if info != nil {
+				pi = info(u.UserID)
+			}
+		}
+		if s := pi["sync"]; syncFingerprint.MatchString(s) {
+			names += "sync_" + u.UserID + "=" + s + "\n"
 		}
 	}
 	if sessionID == "" {
