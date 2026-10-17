@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// Backends: game consoles go to dnas, anything else (with a PROXY header) to https-portal.
+var (
+	dnasBackend  = "dnas:443"
+	httpsBackend = "https-portal:443"
+)
+
 func main() {
 	flag.Parse()
 	log.Fatal(listenAndServe(":443"))
@@ -22,7 +28,10 @@ func listenAndServe(addr string) error {
 	if err != nil {
 		return fmt.Errorf("create listener: %s", err)
 	}
+	return serve(l)
+}
 
+func serve(l net.Listener) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -77,9 +86,9 @@ func (c *Conn) proxy() {
 		return
 	}
 
-	c.backend = "https-portal:443"
+	c.backend = httpsBackend
 	if isGameConsole {
-		c.backend = "dnas:443"
+		c.backend = dnasBackend
 	}
 
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
