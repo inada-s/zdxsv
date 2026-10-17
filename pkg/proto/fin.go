@@ -1,16 +1,27 @@
 package proto
 
+// PS2JoinSize is how much of the PS2's first data the battle server reads:
+// the session id is at bytes 12..22.
+const PS2JoinSize = 22
+
 // FinScanner finds the battle end frame (04 F0 00 00) in a PS2 TCP stream.
-// The stream is a run of frames whose first byte is the frame size; a read
-// can hold several frames or end inside one, so the scanner keeps the
-// partial frame between reads. It must see the stream from its first byte.
+// The stream starts with the join (first byte 130, not a frame size); like
+// the battle server's TCP peer, the scanner drops reads until PS2JoinSize
+// bytes came, then frames what follows. Frames start with their size; a read
+// can hold several frames or end inside one, so the scanner keeps the partial
+// frame between reads. It must see the stream from its first byte.
 type FinScanner struct {
-	frame []byte
-	lost  bool
+	joined int
+	frame  []byte
+	lost   bool
 }
 
 // Scan consumes one read and reports whether a fin frame completed in it.
 func (s *FinScanner) Scan(data []byte) bool {
+	if s.joined < PS2JoinSize {
+		s.joined += len(data)
+		return false
+	}
 	if s.lost {
 		// Without framing only a read that is exactly the fin frame is trusted.
 		return len(data) == 4 && data[0] == 4 && data[1] == 0xF0 && data[2] == 0 && data[3] == 0
