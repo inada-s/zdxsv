@@ -5,36 +5,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/db/dbtest"
 
-	"github.com/jmoiron/sqlx"
 	"golang.org/x/text/encoding/japanese"
 )
-
-func useLoginTestDB(t *testing.T) *sqlx.DB {
-	t.Helper()
-	conn, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "login_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sdb := db.SQLiteDB{DB: conn, SQLiteCache: db.NewSQLiteCache()}
-	if err := sdb.Init(); err != nil {
-		t.Fatal(err)
-	}
-	old := db.DefaultDB
-	db.DefaultDB = sdb
-	t.Cleanup(func() {
-		db.DefaultDB = old
-		conn.Close()
-	})
-	return conn
-}
 
 // startLoginServer serves the login handlers the way src/zdxsv mainLogin routes them.
 func startLoginServer(t *testing.T) *httptest.Server {
@@ -100,7 +80,7 @@ func TestTopPage(t *testing.T) {
 }
 
 func TestRegisterThenLogin(t *testing.T) {
-	useLoginTestDB(t)
+	dbtest.Use(t)
 	ts := startLoginServer(t)
 
 	code, _, body := fetch(t)(http.Get(ts.URL + "/register"))
@@ -142,7 +122,7 @@ func TestRegisterThenLogin(t *testing.T) {
 }
 
 func TestLoginUnknownKey(t *testing.T) {
-	useLoginTestDB(t)
+	dbtest.Use(t)
 	ts := startLoginServer(t)
 
 	// A 10 char key from another server is registered on first use.
@@ -170,7 +150,7 @@ func TestLoginUnknownKey(t *testing.T) {
 }
 
 func TestDBErrorPages(t *testing.T) {
-	conn := useLoginTestDB(t)
+	conn := dbtest.Use(t)
 	Prepare()
 	conn.Close()
 
