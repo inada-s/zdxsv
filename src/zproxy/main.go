@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -327,7 +328,7 @@ func (z *Zproxy) PollLobby() error {
 			return err
 		}
 		if !resp.Result {
-			return fmt.Errorf(resp.Message)
+			return errors.New(resp.Message)
 		}
 
 		z.otherIDs = nil

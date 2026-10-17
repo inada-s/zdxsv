@@ -56,11 +56,11 @@ func readMsg(in []byte) message {
 }
 
 func EncodeSessionID(sessionID int) string {
-		return fmt.Sprintf("%010d", sessionID+100001)
+	return fmt.Sprintf("%010d", sessionID+100001)
 }
 
 func ToStringSessionID(sessionID int) string {
-		return fmt.Sprintf("%08d", sessionID)
+	return fmt.Sprintf("%08d", sessionID)
 }
 
 func PrepareServer(n int, remote string) ([]int, error) {
