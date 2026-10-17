@@ -1,6 +1,7 @@
 package battle
 
 import (
+	"errors"
 	"net"
 	"sync"
 
@@ -34,6 +35,9 @@ func (s *UDPServer) readLoop() error {
 
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
+		if errors.Is(err, net.ErrClosed) {
+			return err
+		}
 		if err != nil {
 			glog.Errorln(err)
 			continue
@@ -112,9 +116,13 @@ func (s *UDPServer) ListenAndServe(addr string) error {
 	if err != nil {
 		return err
 	}
+	return s.Serve(conn)
+}
+
+// Serve handles packets on conn until it is closed.
+func (s *UDPServer) Serve(conn *net.UDPConn) error {
 	s.conn = conn
 	s.conn.SetReadBuffer(16 * 1024 * 1024)
 	s.conn.SetWriteBuffer(16 * 1024 * 1024)
-	s.readLoop()
-	return nil
+	return s.readLoop()
 }
