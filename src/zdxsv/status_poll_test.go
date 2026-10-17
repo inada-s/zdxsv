@@ -24,6 +24,10 @@ func TestUpdateStatus(t *testing.T) {
 		if _, ok := req.(*StatusRequest); !ok {
 			t.Errorf("request %T", req)
 		}
+		if release, ok := answer.(chan struct{}); ok {
+			<-release
+			return nil
+		}
 		return answer
 	})
 	if err := s.Start(); err != nil {
@@ -51,14 +55,22 @@ func TestUpdateStatus(t *testing.T) {
 		t.Errorf("lobby users %d after a wrong answer, want the last status", n)
 	}
 
+	release := make(chan struct{})
+	answer = release
+	start := time.Now()
+	updateStatus(c)
+	close(release)
+	if n := lobbyUserCount(); n != 2 {
+		t.Errorf("lobby users %d with the lobby hung, want the last status", n)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("call to a hung lobby took %v", d)
+	}
+
 	s.Stop()
 	stopped = true
-	start := time.Now()
 	updateStatus(c)
 	if n := lobbyUserCount(); n != 2 {
 		t.Errorf("lobby users %d with the lobby down, want the last status", n)
-	}
-	if d := time.Since(start); d > 3*time.Second {
-		t.Errorf("call with the lobby down took %v", d)
 	}
 }
