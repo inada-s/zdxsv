@@ -10,5 +10,7 @@ bin/
 dist/
 cover.out
 cover.txt
+cover-pkg.txt
+covdata/
 cover.html
 test.txt

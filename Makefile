@@ -13,12 +13,17 @@ build:
 test:
 	go test -v zdxsv/...
 
-# test with coverage; per-function report in cover.txt, html in cover.html.
+# test with coverage, counting code a test reaches in any package (an e2e test in src/zdxsv
+# covers pkg/lobby); per-package report in cover-pkg.txt, per-function in cover.txt, html in cover.html.
 .PHONY: cover
 cover:
-	go test -coverprofile=cover.out ./...
+	rm -rf covdata && mkdir covdata
+	go test -cover -coverpkg=./... ./... -args -test.gocoverdir=$(CURDIR)/covdata
+	go tool covdata percent -i=covdata > cover-pkg.txt
+	go tool covdata textfmt -i=covdata -o cover.out
 	go tool cover -func=cover.out > cover.txt
 	go tool cover -html=cover.out -o cover.html
+	cat cover-pkg.txt
 	tail -1 cover.txt
 
 # build router image (built from source inside docker).

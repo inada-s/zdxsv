@@ -19,10 +19,10 @@ jobs:
         with:
           go-version: stable
       - name: go test
-        run: go test -coverprofile=cover.out ./... | tee test.txt
+        run: make cover
       - name: coverage summary
         run: |
-          { echo '### Go coverage'; echo '```'; grep -o 'zdxsv/[^ 	]*.*coverage: [0-9.]*%' test.txt | tr -s ' \t' ' '; go tool cover -func=cover.out | tail -1 | tr -s ' \t' ' '; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          { echo '### Go coverage'; echo '```'; tr -s ' \t' ' ' < cover-pkg.txt; tail -1 cover.txt | tr -s ' \t' ' '; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       # one build per image first: the 5 zdxsv services share one Dockerfile, so compose then hits the cache
       - name: build zdxsv image
         timeout-minutes: 15
