@@ -34,6 +34,8 @@ const (
 	ggpoMaxType      = 8 // AppData
 	relayIdleTimeout = 2 * time.Minute
 	relayMaxLifetime = 3 * time.Hour
+
+	relayMaintainInterval = 10 * time.Second
 )
 
 type relaySession struct {
@@ -110,13 +112,30 @@ func ServeRelay(addr, publicAddr, publicAddr6 string) error {
 	RelayPublicAddr, RelayPublicAddr6 = publicAddr, publicAddr6
 	LobbyRelay = r
 	glog.Infoln("Start relay", addr, "public", publicAddr, publicAddr6)
+	r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
+	return nil
+}
+
+// serveMaintained runs Serve on conn and maintain every interval until Serve returns.
+func (r *Relay) serveMaintained(conn *net.UDPConn, interval time.Duration, maintain func()) {
+	ticker := time.NewTicker(interval)
+	done := make(chan struct{})
+	stopped := make(chan struct{})
 	go func() {
-		for range time.Tick(10 * time.Second) {
-			r.RemoveStaleSessions()
+		defer close(stopped)
+		for {
+			select {
+			case <-ticker.C:
+				maintain()
+			case <-done:
+				return
+			}
 		}
 	}()
 	r.Serve(conn)
-	return nil
+	ticker.Stop()
+	close(done)
+	<-stopped
 }
 
 // SessionToken returns the token of session id, registering the session with a random
@@ -148,6 +167,15 @@ func ServeTestRelay(addr string, id uint32, token uint64) error {
 		return err
 	}
 	defer conn.Close()
+	r, maintain := newTestRelay(id, token)
+	glog.Infoln("Start test relay", addr)
+	r.serveMaintained(conn, relayMaintainInterval, maintain)
+	return nil
+}
+
+// newTestRelay returns a relay with session id registered with token, and its
+// maintenance: drop stale sessions, register id again if it was dropped.
+func newTestRelay(id uint32, token uint64) (*Relay, func()) {
 	r := NewRelay()
 	register := func() {
 		r.mtx.Lock()
@@ -159,20 +187,15 @@ func ServeTestRelay(addr string, id uint32, token uint64) error {
 		}
 	}
 	register()
-	glog.Infoln("Start test relay", addr)
-	go func() {
-		for range time.Tick(10 * time.Second) {
-			r.mtx.Lock()
-			if s, ok := r.sessions[id]; ok {
-				glog.Infoln("relay test session", id, "forwarded", s.forwarded)
-			}
-			r.mtx.Unlock()
-			r.RemoveStaleSessions()
-			register()
+	return r, func() {
+		r.mtx.Lock()
+		if s, ok := r.sessions[id]; ok {
+			glog.Infoln("relay test session", id, "forwarded", s.forwarded)
 		}
-	}()
-	r.Serve(conn)
-	return nil
+		r.mtx.Unlock()
+		r.RemoveStaleSessions()
+		register()
+	}
 }
 
 func (r *Relay) removeSessionLocked(s *relaySession) {
