@@ -90,18 +90,28 @@ type App struct {
 	users        map[string]*AppPeer
 	lobbys       map[string]map[uint16]*model.Lobby // platform -> lobby id -> lobby
 	battles      map[string]*model.Battle
+	peers        map[string]*AppPeer // conn address -> peer, owned by Serve
 	chEvent      chan interface{}
 	chQuit       chan interface{}
+
+	aliveCheckInterval time.Duration
 }
+
+const (
+	peerRecvTimeout = 2 * time.Minute
+	battleTimeout   = time.Hour
+)
 
 func NewApp() *App {
 	app := &App{
-		handlerHolder: defaultHandlers,
-		users:         make(map[string]*AppPeer),
-		lobbys:        make(map[string]map[uint16]*model.Lobby),
-		battles:       make(map[string]*model.Battle),
-		chEvent:       make(chan interface{}, 64),
-		chQuit:        make(chan interface{}),
+		handlerHolder:      defaultHandlers,
+		users:              make(map[string]*AppPeer),
+		lobbys:             make(map[string]map[uint16]*model.Lobby),
+		battles:            make(map[string]*model.Battle),
+		peers:              make(map[string]*AppPeer),
+		chEvent:            make(chan interface{}, 64),
+		chQuit:             make(chan interface{}),
+		aliveCheckInterval: 10 * time.Second,
 	}
 	app.getLobby(model.PlatformConsole, 0)
 	app.getLobby(model.PlatformEmuX8664, 0)
@@ -175,13 +185,13 @@ func stripHost(addr string) string {
 }
 
 func (a *App) Serve() {
-	aliveCheck := time.Tick(10 * time.Second)
+	aliveCheck := time.NewTicker(a.aliveCheckInterval)
+	defer aliveCheck.Stop()
 	err := newLobbyRPCServer(a, stripHost(config.Conf.Lobby.RPCAddr)).Start()
 	if err != nil {
 		glog.Errorln(err)
 	}
 	a.connectToBattleServer()
-	peers := map[string]*AppPeer{}
 
 	for {
 		select {
@@ -192,7 +202,7 @@ func (a *App) Serve() {
 			case eventPeerCome:
 				glog.Infoln("eventPeerCome")
 				args.peer.lastRecvTime = time.Now()
-				peers[args.peer.conn.Address()] = args.peer
+				a.peers[args.peer.conn.Address()] = args.peer
 				a.OnOpen(args.peer)
 			case eventPeerMessage:
 				args.peer.lastRecvTime = time.Now()
@@ -213,40 +223,47 @@ func (a *App) Serve() {
 			case eventPeerLeave:
 				glog.Infoln("eventPeerLeave")
 				a.OnClose(args.peer)
-				delete(peers, args.peer.conn.Address())
+				delete(a.peers, args.peer.conn.Address())
 			case eventFunc:
 				args.f(a)
 				args.c <- struct{}{}
 			}
-		case <-aliveCheck:
-			for _, p := range peers {
-				if time.Since(p.lastRecvTime).Minutes() >= 2.0 {
-					glog.Infoln("Recv Timeout", p)
-					p.conn.conn.Close()
-				} else {
-					RequestLineCheck(p)
-				}
-			}
+		case now := <-aliveCheck.C:
+			a.checkAlive(now)
+		}
+	}
+}
 
-			for sid, battle := range a.battles {
-				if time.Since(battle.StartTime).Hours() >= 1.0 {
-					delete(a.battles, sid)
-					glog.Infoln("Battle user timeout.", sid, battle)
-				}
-			}
+// checkAlive closes peers silent for peerRecvTimeout and line-checks the
+// others, drops battles older than battleTimeout and keeps the battle
+// server connection up.
+func (a *App) checkAlive(now time.Time) {
+	for _, p := range a.peers {
+		if now.Sub(p.lastRecvTime) >= peerRecvTimeout {
+			glog.Infoln("Recv Timeout", p)
+			p.conn.conn.Close()
+		} else {
+			RequestLineCheck(p)
+		}
+	}
 
-			if a.battleServer == nil {
-				a.connectToBattleServer()
-			} else {
-				var reply string
-				err := a.battleServer.Call("Logic.PingPong", "Ping", &reply)
-				if err != nil {
-					glog.Errorln("PingPong failed. ", err)
-					a.battleServer.Close()
-					a.battleServer = nil
-					a.connectToBattleServer()
-				}
-			}
+	for sid, battle := range a.battles {
+		if now.Sub(battle.StartTime) >= battleTimeout {
+			delete(a.battles, sid)
+			glog.Infoln("Battle user timeout.", sid, battle)
+		}
+	}
+
+	if a.battleServer == nil {
+		a.connectToBattleServer()
+	} else {
+		var reply string
+		err := a.battleServer.Call("Logic.PingPong", "Ping", &reply)
+		if err != nil {
+			glog.Errorln("PingPong failed. ", err)
+			a.battleServer.Close()
+			a.battleServer = nil
+			a.connectToBattleServer()
 		}
 	}
 }

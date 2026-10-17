@@ -40,6 +40,12 @@ func startLobby(t *testing.T, b *battlerpc.BattleRpc) string {
 // startLobbyApp is startLobby that also returns the App.
 func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (string, *App) {
 	t.Helper()
+	return startLobbyAppWith(t, b, func(*App) {})
+}
+
+// startLobbyAppWith is startLobbyApp with setup run on the App before it serves.
+func startLobbyAppWith(t *testing.T, b *battlerpc.BattleRpc, setup func(*App)) (string, *App) {
+	t.Helper()
 	rl := listenLocal(t)
 	rs := rpc.NewServer()
 	if err := rs.RegisterName("Logic", b); err != nil {
@@ -52,6 +58,7 @@ func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (string, *App) {
 	config.Conf.Lobby.RPCAddr = "127.0.0.1:0"
 
 	app := NewApp()
+	setup(app)
 	go app.Serve()
 	t.Cleanup(app.Quit)
 
