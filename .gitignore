@@ -8,3 +8,7 @@ docker-compose.prod.yml
 
 bin/
 dist/
+cover.out
+cover.txt
+cover.html
+test.txt
