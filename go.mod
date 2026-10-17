@@ -1,6 +1,6 @@
 module zdxsv
 
-go 1.16
+go 1.25.0
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
@@ -14,8 +14,20 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sync v0.1.0
-	golang.org/x/text v0.15.0
+	golang.org/x/sync v0.20.0
+	golang.org/x/text v0.37.0
 	google.golang.org/protobuf v1.33.0
+)
+
+require (
+	github.com/google/go-github/v30 v30.1.0 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf // indirect
+	github.com/tcnksm/go-gitconfig v0.1.2 // indirect
+	github.com/ulikunitz/xz v0.5.9 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/oauth2 v0.0.0-20181106182150-f42d05182288 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	google.golang.org/appengine v1.3.0 // indirect
 )
