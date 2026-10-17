@@ -27,7 +27,6 @@ require (
 	github.com/ulikunitz/xz v0.5.9 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20181106182150-f42d05182288 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	google.golang.org/appengine v1.3.0 // indirect
 )
