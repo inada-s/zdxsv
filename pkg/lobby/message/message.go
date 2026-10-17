@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"strings"
 	"sync/atomic"
 
@@ -249,7 +249,7 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		return ""
 	}
 
-	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
+	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
 		glog.Errorln(err)
 	}
@@ -274,63 +274,55 @@ func (m *MessageBodyWriter) BodyLen() int {
 
 func (m *MessageBodyWriter) Write(v []byte) (int, error) {
 	n, err := m.buf.Write(v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
+	m.sync()
 	return n, err
 }
 
-func (m *MessageBodyWriter) Write8(v byte) *MessageBodyWriter {
-	binary.Write(m.buf, binary.BigEndian, v)
+// sync points the message body at the buffer after each write.
+func (m *MessageBodyWriter) sync() *MessageBodyWriter {
 	m.msg.Body = m.buf.Bytes()
 	m.msg.BodySize = uint16(len(m.msg.Body))
 	return m
 }
 
+func (m *MessageBodyWriter) Write8(v byte) *MessageBodyWriter {
+	m.buf.WriteByte(v)
+	return m.sync()
+}
+
+// Write8LE is Write8: a byte has no byte order.
 func (m *MessageBodyWriter) Write8LE(v byte) *MessageBodyWriter {
-	binary.Write(m.buf, binary.LittleEndian, v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	return m.Write8(v)
 }
 
 func (m *MessageBodyWriter) Write16(v uint16) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	return m.sync()
 }
 
 func (m *MessageBodyWriter) Write16LE(v uint16) *MessageBodyWriter {
 	binary.Write(m.buf, binary.LittleEndian, v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	return m.sync()
 }
 
 func (m *MessageBodyWriter) Write32(v uint32) *MessageBodyWriter {
 	binary.Write(m.buf, binary.BigEndian, v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	return m.sync()
 }
 
 func (m *MessageBodyWriter) Write32LE(v uint32) *MessageBodyWriter {
 	binary.Write(m.buf, binary.LittleEndian, v)
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	return m.sync()
 }
 
 func (m *MessageBodyWriter) WriteString(v string) *MessageBodyWriter {
-	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(v), japanese.ShiftJIS.NewEncoder()))
+	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(v), japanese.ShiftJIS.NewEncoder()))
 	if err != nil {
 		glog.Errorln(err)
 	}
 	binary.Write(m.buf, binary.BigEndian, uint16(len(ret)))
-	m.buf.WriteString(string(ret))
-	m.msg.Body = m.buf.Bytes()
-	m.msg.BodySize = uint16(len(m.msg.Body))
-	return m
+	m.buf.Write(ret)
+	return m.sync()
 }
 
 func (m *MessageBodyWriter) Msg() *Message {
