@@ -126,18 +126,24 @@ func pollLobby() {
 	defer c.Stop()
 	for {
 		time.Sleep(10 * time.Second)
-		rawResp, err := c.CallTimeout(&StatusRequest{}, time.Second)
-		if err != nil {
-			glog.Errorln(err)
-			continue
-		}
+		updateStatus(c)
+	}
+}
 
-		if res, ok := rawResp.(*StatusResponse); ok {
-			s := makeStatus(res, time.Now())
-			current.Lock()
-			current.statusData = s
-			current.Unlock()
-		}
+// updateStatus asks the lobby for its status and publishes it. On failure
+// the last status stays.
+func updateStatus(c *gorpc.Client) {
+	rawResp, err := c.CallTimeout(&StatusRequest{}, time.Second)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+
+	if res, ok := rawResp.(*StatusResponse); ok {
+		s := makeStatus(res, time.Now())
+		current.Lock()
+		current.statusData = s
+		current.Unlock()
 	}
 }
 
