@@ -122,6 +122,53 @@ func TestRelayPlayingPathKept(t *testing.T) {
 	}
 }
 
+// A NAT rebinding moves a player, even one already playing; the old address is no longer theirs.
+func TestRelayRebind(t *testing.T) {
+	r := NewRelay()
+	token := r.SessionToken(100)
+	a := netip.MustParseAddrPort("1.2.3.4:5000")
+	a2 := netip.MustParseAddrPort("1.2.3.4:5001")
+	b := netip.MustParseAddrPort("5.6.7.8:6000")
+	r.handle(relayPing(0, 100, token, 1), a)
+	r.handle(relayPing(1, 100, token, 1), b)
+	r.handle(ggpoRelayPacket(0, 1, 3), a)
+
+	r.handle(relayPing(0, 100, token, 2), a2)
+	if dst, _ := r.handle(ggpoRelayPacket(1, 0, 3), b); dst != a2 {
+		t.Fatalf("to %v, want %v", dst, a2)
+	}
+	if dst, _ := r.handle(ggpoRelayPacket(0, 1, 3), a); dst.IsValid() {
+		t.Fatalf("old address still forwards, to %v", dst)
+	}
+	if dst, _ := r.handle(ggpoRelayPacket(0, 1, 3), a2); dst != b {
+		t.Fatalf("new address to %v, want %v", dst, b)
+	}
+}
+
+// An address another player pings from is taken from the player it was bound to.
+func TestRelayAddressTaken(t *testing.T) {
+	r := NewRelay()
+	token := r.SessionToken(100)
+	a := netip.MustParseAddrPort("1.2.3.4:5000")
+	b := netip.MustParseAddrPort("5.6.7.8:6000")
+	c := netip.MustParseAddrPort("9.9.9.9:7000")
+	r.handle(relayPing(0, 100, token, 1), a)
+	r.handle(relayPing(1, 100, token, 1), b)
+	r.handle(relayPing(2, 100, token, 1), c)
+	r.handle(ggpoRelayPacket(0, 1, 3), a)
+
+	r.handle(relayPing(2, 100, token, 2), a)
+	if dst, _ := r.handle(ggpoRelayPacket(1, 0, 3), b); dst.IsValid() {
+		t.Fatalf("forwarded to the player that lost its address: %v", dst)
+	}
+	if dst, _ := r.handle(ggpoRelayPacket(1, 2, 3), b); dst != a {
+		t.Fatalf("to %v, want %v", dst, a)
+	}
+	if dst, _ := r.handle(ggpoRelayPacket(2, 1, 3), a); dst != b {
+		t.Fatalf("from the taken address to %v, want %v", dst, b)
+	}
+}
+
 func TestRelayStaleSession(t *testing.T) {
 	r := NewRelay()
 	now := time.Now()
