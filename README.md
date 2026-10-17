@@ -16,7 +16,7 @@ A server is running at [zdxsv.net](https://zdxsv.net) in Japan.
 
 ## Build and Run
 
-Just call `make` to build the executable, which requires go1.13.
+Just call `make` to build the executable. `make test` runs the tests; `make cover` also writes a coverage report (`cover.txt`, `cover.html`).
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 

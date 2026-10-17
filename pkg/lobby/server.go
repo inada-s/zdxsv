@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -40,8 +41,16 @@ func (s *Server) ListenAndServe(addr string) error {
 	if err != nil {
 		return err
 	}
+	return s.Serve(listner)
+}
+
+// Serve accepts connections on l until l is closed.
+func (s *Server) Serve(l *net.TCPListener) error {
 	for {
-		tcpConn, err := listner.AcceptTCP()
+		tcpConn, err := l.AcceptTCP()
+		if errors.Is(err, net.ErrClosed) {
+			return err
+		}
 		if err != nil {
 			glog.Errorln(err)
 			continue

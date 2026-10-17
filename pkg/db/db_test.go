@@ -2,8 +2,8 @@ package db
 
 import (
 	"flag"
-	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"testing"
@@ -33,7 +33,7 @@ func assertEq(tb testing.TB, expected, actual interface{}) {
 	}
 }
 
-func Test001RegisterAccount(t *testing.T) {
+func test001RegisterAccount(t *testing.T) {
 	a, err := testDB.RegisterAccount("1.2.3.4")
 	must(t, err)
 	assertEq(t, "1.2.3.4", a.CreatedIP)
@@ -41,13 +41,13 @@ func Test001RegisterAccount(t *testing.T) {
 	testLoginKey = a.LoginKey
 }
 
-func Test002GetAccount(t *testing.T) {
+func test002GetAccount(t *testing.T) {
 	a, err := testDB.GetAccountByLoginKey(testLoginKey)
 	must(t, err)
 	assertEq(t, testLoginKey, a.LoginKey)
 }
 
-func Test002GetInvalidAccount(t *testing.T) {
+func test002GetInvalidAccount(t *testing.T) {
 	a, err := testDB.GetAccountByLoginKey("hogehoge01")
 	if err == nil {
 		t.FailNow()
@@ -57,7 +57,7 @@ func Test002GetInvalidAccount(t *testing.T) {
 	}
 }
 
-func Test101RegisterUser(t *testing.T) {
+func test101RegisterUser(t *testing.T) {
 	u, err := testDB.RegisterUser(testLoginKey)
 	must(t, err)
 	if u == nil {
@@ -74,7 +74,7 @@ func Test101RegisterUser(t *testing.T) {
 	testUserID = u.UserID
 }
 
-func Test102GetUser(t *testing.T) {
+func test102GetUser(t *testing.T) {
 	u, err := testDB.GetUser(testUserID)
 	must(t, err)
 	assertEq(t, testUserID, u.UserID)
@@ -86,14 +86,14 @@ func Test102GetUser(t *testing.T) {
 	assertEq(t, 0, u.DailyLoseCount)
 }
 
-func Test103GetInvalidUser(t *testing.T) {
+func test103GetInvalidUser(t *testing.T) {
 	_, err := testDB.GetUser("HOGE01")
 	if err == nil {
 		t.FailNow()
 	}
 }
 
-func Test104UpdateUser(t *testing.T) {
+func test104UpdateUser(t *testing.T) {
 	u, err := testDB.GetUser(testUserID)
 	must(t, err)
 	u.Name = "テストユーザ"
@@ -111,19 +111,19 @@ func Test104UpdateUser(t *testing.T) {
 	assertEq(t, u, v)
 }
 
-func Test105GetUserList(t *testing.T) {
+func test105GetUserList(t *testing.T) {
 	users, err := testDB.GetUserList(testLoginKey)
 	must(t, err)
 	assertEq(t, 1, len(users))
 }
 
-func Test106GetUserListNone(t *testing.T) {
+func test106GetUserListNone(t *testing.T) {
 	users, err := testDB.GetUserList("hogehoge01")
 	must(t, err)
 	assertEq(t, 0, len(users))
 }
 
-func Test200AddBattleRecord(t *testing.T) {
+func test200AddBattleRecord(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
 		UserID:     "123456",
@@ -144,7 +144,7 @@ func Test200AddBattleRecord(t *testing.T) {
 	assertEq(t, br, actual)
 }
 
-func Test201AddUpdateBattleRecord(t *testing.T) {
+func test201AddUpdateBattleRecord(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
 		UserID:     "23456",
@@ -174,7 +174,7 @@ func Test201AddUpdateBattleRecord(t *testing.T) {
 	assertEq(t, br, actual)
 }
 
-func Test202SetReplayURL(t *testing.T) {
+func test202SetReplayURL(t *testing.T) {
 	for _, u := range []string{"r1", "r2"} {
 		must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode", UserID: u, Players: 2}))
 	}
@@ -191,7 +191,7 @@ func Test202SetReplayURL(t *testing.T) {
 	assertEq(t, "", other.ReplayURL)
 }
 
-func Test204FindReplay(t *testing.T) {
+func test204FindReplay(t *testing.T) {
 	// after Test202: replaycode (r1, r2) has a replay, othercode none
 	time.Sleep(10 * time.Millisecond)
 	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r4", PilotName: "zaku", Players: 2, Pos: 2, Side: 2}))
@@ -236,7 +236,7 @@ func Test204FindReplay(t *testing.T) {
 	assertEq(t, "r4", found[0].Users[1].UserID)
 }
 
-func Test203CalculateUserBattleCount(t *testing.T) {
+func test203CalculateUserBattleCount(t *testing.T) {
 	br := &BattleRecord{
 		BattleCode: "battlecode",
 		UserID:     "11111",
@@ -279,7 +279,7 @@ func Test203CalculateUserBattleCount(t *testing.T) {
 	assertEq(t, br.Round, rec.Battle)
 }
 
-func Test300Ranking(t *testing.T) {
+func test300Ranking(t *testing.T) {
 	// ugly...
 	testDB.(SQLiteDB).Exec("DELETE FROM user")
 
@@ -415,22 +415,47 @@ func Test300Ranking(t *testing.T) {
 func TestMain(m *testing.M) {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
+	os.Exit(m.Run())
+}
 
-	os.Remove("./zdxsv_test.db")
-	conn, err := sqlx.Open("sqlite3", "./zdxsv_test.db")
-	if err != nil {
-		log.Fatalln("Cannot open test db. err:", err)
-		os.Exit(1)
-	}
-
-	testDB = SQLiteDB{
+func newTestDB(t *testing.T) DB {
+	conn, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "zdxsv_test.db"))
+	must(t, err)
+	t.Cleanup(func() { conn.Close() })
+	db := SQLiteDB{
 		DB:          conn,
 		SQLiteCache: NewSQLiteCache(),
 	}
-	err = testDB.Init()
-	if err != nil {
-		log.Fatalln("Faild to prepare DB. err:", err)
-		os.Exit(2)
+	must(t, db.Init())
+	return db
+}
+
+// The steps share one DB and run in order: later steps read what earlier ones wrote.
+func TestSQLiteDB(t *testing.T) {
+	testDB = newTestDB(t)
+	steps := []struct {
+		name string
+		fn   func(*testing.T)
+	}{
+		{"RegisterAccount", test001RegisterAccount},
+		{"GetAccount", test002GetAccount},
+		{"GetInvalidAccount", test002GetInvalidAccount},
+		{"RegisterUser", test101RegisterUser},
+		{"GetUser", test102GetUser},
+		{"GetInvalidUser", test103GetInvalidUser},
+		{"UpdateUser", test104UpdateUser},
+		{"GetUserList", test105GetUserList},
+		{"GetUserListNone", test106GetUserListNone},
+		{"AddBattleRecord", test200AddBattleRecord},
+		{"AddUpdateBattleRecord", test201AddUpdateBattleRecord},
+		{"SetReplayURL", test202SetReplayURL},
+		{"FindReplay", test204FindReplay},
+		{"CalculateUserBattleCount", test203CalculateUserBattleCount},
+		{"Ranking", test300Ranking},
 	}
-	os.Exit(m.Run())
+	for _, s := range steps {
+		if !t.Run(s.name, s.fn) {
+			t.FailNow()
+		}
+	}
 }

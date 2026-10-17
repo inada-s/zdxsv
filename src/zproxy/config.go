@@ -28,7 +28,7 @@ type config struct {
 	Verbose        bool
 }
 
-func init() {
+func loadConfig() {
 	flag.Parse()
 
 	conf = config{

@@ -70,11 +70,10 @@ func (b *Battle) GetPosition(userID string) byte {
 }
 
 func (b *Battle) GetUserByPos(pos byte) *User {
-	pos -= 1
-	if pos < 0 || len(b.Users) < int(pos) {
+	if pos == 0 || len(b.Users) < int(pos) {
 		return nil
 	}
-	return &b.Users[pos]
+	return &b.Users[pos-1]
 }
 
 type BattleResult struct {
