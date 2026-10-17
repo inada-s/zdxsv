@@ -101,10 +101,27 @@ type Zproxy struct {
 	svAddr     *net.UDPAddr
 	p2pAddr    map[string]*net.UDPAddr // userID -> addr
 	otherIDs   []string
+
+	localIPProbeAddr string // TCP address dialed to learn the LAN IP
 }
 
 func NewZproxy() *Zproxy {
-	return &Zproxy{}
+	return &Zproxy{localIPProbeAddr: "google.com:80"}
+}
+
+// localIP returns the local address of a TCP connection to probeAddr: the IP
+// of the interface that routes out.
+func localIP(probeAddr string) (net.IP, error) {
+	conn, err := net.DialTimeout("tcp4", probeAddr, time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	tcpAddr, ok := conn.LocalAddr().(*net.TCPAddr)
+	if !ok {
+		return nil, fmt.Errorf("local address %v", conn.LocalAddr())
+	}
+	return tcpAddr.IP, nil
 }
 
 func (z *Zproxy) Reset() {
@@ -128,18 +145,12 @@ func (z *Zproxy) Setup() bool {
 		}
 	}()
 
-	tmpConn, err := net.DialTimeout("tcp4", "google.com:80", time.Second)
+	ip, err := localIP(z.localIPProbeAddr)
 	if err != nil {
-		log.Println("ローカルIPアドレスの取得に失敗しました")
+		log.Println("ローカルIPアドレスの取得に失敗しました", err)
 		return false
 	}
-	tcpAddr, ok := tmpConn.LocalAddr().(*net.TCPAddr)
-	tmpConn.Close()
-	if !ok {
-		log.Println("ローカルIPアドレスの取得に失敗しました")
-		return false
-	}
-	z.selfLocalIP = tcpAddr.IP
+	z.selfLocalIP = ip
 	log.Println("ローカルIP:", z.selfLocalIP.String())
 
 	tmpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", conf.UDPListenPort))
