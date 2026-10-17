@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/rpc"
-	"strconv"
 	"sync"
 
 	"github.com/golang/glog"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
+	"zdxsv/pkg/sessionid"
 )
 
 type BasePeer struct {
@@ -129,16 +129,12 @@ func (m *Logic) Join(p Peer, sessionID string) *Room {
 	return room
 }
 
+// ParseSessionID decodes the session id field of a battle join: always 10 digits.
 func ParseSessionID(value string) (string, error) {
 	if len(value) != 10 {
 		return "", fmt.Errorf("Invalid value length")
 	}
-	var1, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return "", err
-	}
-	var2 := fmt.Sprintf("%010d", var1-100001)
-	return var2[1:5] + var2[6:], nil
+	return sessionid.Decode(value)
 }
 
 func IsFinData(buf []byte) bool {

@@ -2,10 +2,10 @@ package lobby
 
 import (
 	"fmt"
-	"strconv"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/sessionid"
 
 	"github.com/golang/glog"
 )
@@ -74,12 +74,11 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
 	glog.Infoln(key1)
-	var1, err := strconv.ParseUint(key1, 10, 64)
+	sessionID, err := sessionid.Decode(key1)
 	if err != nil {
 		glog.Errorln(err)
+		return
 	}
-	var2 := fmt.Sprintf("%010d", var1-100001)
-	sessionID := var2[1:5] + var2[6:]
 	p.app.OnKeePair(p, loginKey, sessionID)
 })
 
