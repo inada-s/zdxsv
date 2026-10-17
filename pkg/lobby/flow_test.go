@@ -33,6 +33,13 @@ func listenLocal(t *testing.T) *net.TCPListener {
 // It returns the lobby address.
 func startLobby(t *testing.T, b *battlerpc.BattleRpc) string {
 	t.Helper()
+	addr, _ := startLobbyApp(t, b)
+	return addr
+}
+
+// startLobbyApp is startLobby that also returns the App.
+func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (string, *App) {
+	t.Helper()
 	rl := listenLocal(t)
 	rs := rpc.NewServer()
 	if err := rs.RegisterName("Logic", b); err != nil {
@@ -50,7 +57,7 @@ func startLobby(t *testing.T, b *battlerpc.BattleRpc) string {
 
 	ll := listenLocal(t)
 	go NewServer(app).Serve(ll)
-	return ll.Addr().String()
+	return ll.Addr().String(), app
 }
 
 // encryptString is the client side of MessageBodyReader.ReadEncryptedString.
