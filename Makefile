@@ -13,6 +13,14 @@ build:
 test:
 	go test -v zdxsv/...
 
+# test with coverage; per-function report in cover.txt, html in cover.html.
+.PHONY: cover
+cover:
+	go test -coverprofile=cover.out ./...
+	go tool cover -func=cover.out > cover.txt
+	go tool cover -html=cover.out -o cover.html
+	tail -1 cover.txt
+
 # build router image (built from source inside docker).
 .PHONY: router
 router:
