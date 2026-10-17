@@ -815,6 +815,9 @@ func (a *App) OnGetRulePermission(_ *AppPeer, _ uint16, _ byte) byte {
 }
 
 func (a *App) OnGetRuleDefaultIndex(p *AppPeer, roomID uint16, ruleID byte) byte {
+	if p.Lobby == nil {
+		return 0
+	}
 	room, ok := p.Lobby.Rooms[roomID]
 	if !ok {
 		glog.Errorln("room not found")
@@ -837,19 +840,31 @@ func (a *App) OnGetRuleElementCount(_ *AppPeer, _ uint16, ruleID byte) byte {
 }
 
 func (a *App) OnDecideRoomName(p *AppPeer, name string) {
+	if p.Room == nil {
+		return
+	}
 	p.Room.Name = name
 }
 
 func (a *App) OnDecideRoomPassword(p *AppPeer, pass string) {
+	if p.Room == nil {
+		return
+	}
 	p.Room.Password = pass
 }
 
 func (a *App) OnDecideRule(p *AppPeer, ruleID, elemID byte) (nazo byte) {
+	if p.Room == nil {
+		return
+	}
 	p.Room.Rule.Set(ruleID, elemID)
 	nazo = 1
 	return
 }
 func (a *App) OnDecideRuleFinish(p *AppPeer) {
+	if p.Room == nil || p.Lobby == nil {
+		return
+	}
 	r := p.Room
 	r.Enter(&p.User)
 	for id := range p.Lobby.Users {
@@ -915,6 +930,9 @@ func (a *App) OnGetRoomEntryList(p *AppPeer, roomID uint16) (count uint8, ids []
 }
 
 func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
+	if p.Room == nil || p.Lobby == nil {
+		return
+	}
 	p.Room.Entry(&p.User, side)
 	aeug, titans := p.Room.GetEntryUserCount()
 
@@ -929,6 +947,9 @@ func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
 }
 
 func (a *App) OnEnterRoom(p *AppPeer, roomID, _, _ uint16) bool {
+	if p.Lobby == nil {
+		return false
+	}
 	r, ok := p.Lobby.Rooms[roomID]
 	if !ok {
 		glog.Errorln("Not found")

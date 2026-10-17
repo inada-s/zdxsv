@@ -93,7 +93,19 @@ func (r *Rule) Serialize() []byte {
 	return b.Bytes()
 }
 
+func validRule(ruleID byte) bool {
+	return int(ruleID) < len(ruleList)
+}
+
+func validElement(ruleID, elemID byte) bool {
+	return validRule(ruleID) && int(elemID) < len(ruleList[ruleID].List)
+}
+
+// Set selects the element of the rule; an unknown rule or element is ignored.
 func (r *Rule) Set(ruleID, elemID byte) {
+	if !validElement(ruleID, elemID) {
+		return
+	}
 	r.selected[ruleID] = byte(elemID)
 	value := ruleList[ruleID].List[elemID].Value
 	switch ruleID {
@@ -125,6 +137,9 @@ func (r *Rule) Get(ruleID byte) byte {
 	if ok {
 		return v
 	}
+	if !validRule(ruleID) {
+		return 0
+	}
 	return ruleList[ruleID].Default
 }
 
@@ -133,18 +148,30 @@ func RuleCount() byte {
 }
 
 func RuleTitle(ruleID byte) string {
+	if !validRule(ruleID) {
+		return ""
+	}
 	return ruleList[ruleID].Title
 }
 
 func RuleElementCount(ruleID byte) byte {
+	if !validRule(ruleID) {
+		return 0
+	}
 	return byte(len(ruleList[ruleID].List))
 }
 
 func RuleElementName(ruleID, elemID byte) string {
+	if !validElement(ruleID, elemID) {
+		return ""
+	}
 	return ruleList[ruleID].List[elemID].Name
 }
 
 func RuleElementDefault(ruleID byte) byte {
+	if !validRule(ruleID) {
+		return 0
+	}
 	return ruleList[ruleID].Default
 }
 

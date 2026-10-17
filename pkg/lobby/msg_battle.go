@@ -102,7 +102,11 @@ var _ = register(0x6914, "GetBattleRule", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	rule := p.app.OnGetBattleRule(p)
-	w.Write(rule.Serialize())
+	if rule == nil {
+		a.Status = StatusError
+	} else {
+		w.Write(rule.Serialize())
+	}
 	p.SendMessage(a)
 })
 
