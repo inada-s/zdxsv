@@ -75,6 +75,12 @@ var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message)
 	w := a.Writer()
 	user := p.app.OnGetBattleOpponentUser(p, pos)
 	w.Write8(pos)
+	if user == nil {
+		glog.Infoln("UserPos not found", pos)
+		a.Status = StatusError
+		p.SendMessage(a)
+		return
+	}
 
 	// TODO: Consider a reasonable calculation method.
 	// class 14 ~ 0 : [大将][中将][少将][大佐][中佐][少佐][大尉][中尉][少尉][曹長][軍曹][伍長][上等兵][一等兵][二等兵]

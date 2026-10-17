@@ -80,7 +80,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 			}
 			return
 		}
-		if IsFinData(buf) {
+		if IsFinData(buf[:n]) {
 			return
 		}
 		inbuf = append(inbuf, buf[:n]...)
@@ -105,6 +105,11 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 			var tmp []byte
 			for 0 < len(inbuf) {
 				size := int(inbuf[0])
+				if size == 0 {
+					// a zero size frame never advances; the stream cannot be resynced
+					glog.Errorln("[TCP] zero size frame", u.Address())
+					return
+				}
 				if size <= len(inbuf) {
 					tmp = append(tmp, inbuf[:size]...)
 					inbuf = inbuf[size:]
