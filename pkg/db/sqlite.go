@@ -140,7 +140,7 @@ func (db SQLiteDB) Migrate() error {
 	}
 
 	// create new table
-	_, err = tx.Exec(schema + indexes)
+	_, err = tx.Exec(schema)
 	if err != nil {
 		tx.Rollback()
 		return errors.Wrap(err, "failed to create new tables")
@@ -174,6 +174,13 @@ func (db SQLiteDB) Migrate() error {
 			tx.Rollback()
 			return errors.Wrap(err, "DROP TABLE failed")
 		}
+	}
+
+	// the renamed tables kept the index names until they were dropped
+	_, err = tx.Exec(indexes)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "failed to create indexes")
 	}
 
 	return tx.Commit()
