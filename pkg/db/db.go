@@ -1,21 +1,26 @@
 package db
 
 import (
-	"bytes"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 )
 
 var DefaultDB DB
 
+// randomString draws from crypto/rand: login keys and session ids are credentials.
 func randomString(length int, source string) string {
-	var result bytes.Buffer
-	for i := 0; i < length; i++ {
-		index := rand.Intn(len(source))
-		result.WriteByte(source[index])
+	b := make([]byte, length)
+	n := big.NewInt(int64(len(source)))
+	for i := range b {
+		index, err := rand.Int(rand.Reader, n)
+		if err != nil {
+			panic(err)
+		}
+		b[i] = source[index.Int64()]
 	}
-	return result.String()
+	return string(b)
 }
 
 func genLoginKey() string {
@@ -32,11 +37,6 @@ func genSessionID() string {
 
 func GenBattleCode() string {
 	return fmt.Sprintf("%013d", time.Now().UnixNano()/1000000)
-}
-
-func randInt(min int, max int) int {
-	rand.Seed(time.Now().UTC().UnixNano())
-	return min + rand.Intn(max-min)
 }
 
 type Account struct {
