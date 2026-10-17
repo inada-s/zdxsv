@@ -435,12 +435,9 @@ func (z *Zproxy) ServeBattle() error {
 	if z.testBattle {
 		log.Println("テスト対戦を開始します")
 		z.ps2cl.Write(firstData)
+		var fin proto.FinScanner
 		z.ps2cl.Serve(ctx, func(data []byte) {
-			if len(data) == 4 &&
-				data[0] == 0x04 &&
-				data[1] == 0xF0 &&
-				data[2] == 0x00 &&
-				data[3] == 0x00 {
+			if fin.Scan(data) {
 				log.Println("対戦の終了を検出しました")
 				z.ps2cl.Close()
 			}
@@ -476,6 +473,7 @@ func (z *Zproxy) ServeBattle() error {
 	z.ps2cl.Write(firstData)
 
 	go func() {
+		var fin proto.FinScanner
 		z.ps2cl.Serve(ctx, func(data []byte) {
 			msg := msgFilter.GenerateMessage(z.userID, data)
 			svRudp.PushBattleMessage(msg)
@@ -488,7 +486,7 @@ func (z *Zproxy) ServeBattle() error {
 			case chFlush <- struct{}{}:
 			default:
 			}
-			if len(data) == 4 && data[0] == 0x04 && data[1] == 0xF0 && data[2] == 0x00 && data[3] == 0x00 {
+			if fin.Scan(data) {
 				log.Println("対戦の終了を検出しました")
 				z.ps2cl.Close()
 			}
