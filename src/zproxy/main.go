@@ -30,6 +30,7 @@ func isPS2FirstData(data []byte) bool {
 }
 
 func main() {
+	loadConfig()
 	log.Println("===========================================================")
 	log.Printf("zproxy - ガンダムvs.Zガンダム RUDP-Proxy (v%v, ver.%v)\n", releaseVersion, protocolVersion)
 	log.Println("===========================================================")
