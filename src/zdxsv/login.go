@@ -39,7 +39,7 @@ func handleAssets(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", m)
 	}
 
-	w.Header().Set("Cache-Control", "max-age:60, public")
+	w.Header().Set("Cache-Control", "max-age=60, public")
 	w.Header().Set("Expires", time.Now().Add(60*time.Second).Format(http.TimeFormat))
 	w.Header().Set("Last-Modified", since.UTC().Format(http.TimeFormat))
 

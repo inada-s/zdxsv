@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 
 	"zdxsv/pkg/config"
@@ -41,20 +42,34 @@ func newDNSMux(loginIP, dnasIP, gdxsvIP string) *dns.ServeMux {
 	return mux
 }
 
+// dnsServerIPs returns the addresses the DNS server answers with: a flag if
+// set, else the config. An empty one is an error: its answers would be broken.
+func dnsServerIPs() (loginIP, dnasIP, gdxsvIP string, err error) {
+	pick := func(flagValue, conf string) string {
+		if flagValue != "" {
+			return flagValue
+		}
+		return conf
+	}
+	loginIP = pick(*loginsvip, config.Conf.Login.PublicAddr)
+	dnasIP = pick(*dnasip, config.Conf.DNAS.PublicAddr)
+	gdxsvIP = pick(*gdxsvip, config.Conf.Login.PublicAddr)
+	for _, c := range []struct{ name, ip string }{
+		{"login (-loginsvip, ZDXSV_LOGIN_PUBLIC_ADDR)", loginIP},
+		{"DNAS (-dnasip, ZDXSV_DNAS_PUBLIC_ADDR)", dnasIP},
+		{"gdx (-gdxsvip, ZDXSV_LOGIN_PUBLIC_ADDR)", gdxsvIP},
+	} {
+		if c.ip == "" {
+			return "", "", "", fmt.Errorf("no public IP for the %s server", c.name)
+		}
+	}
+	return loginIP, dnasIP, gdxsvIP, nil
+}
+
 func mainDNS() {
-	dnassvIP := *dnasip
-	if *dnasip == "" {
-		dnassvIP = config.Conf.DNAS.PublicAddr
-	}
-
-	loginPublicIP := *loginsvip
-	if *loginsvip == "" {
-		loginPublicIP = config.Conf.Login.PublicAddr
-	}
-
-	gdxsvPublicIP := *gdxsvip
-	if *gdxsvip == "" {
-		gdxsvPublicIP = config.Conf.Login.PublicAddr
+	loginPublicIP, dnassvIP, gdxsvPublicIP, err := dnsServerIPs()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	log.Println("DNAS server ", dnassvIP)
@@ -62,6 +77,6 @@ func mainDNS() {
 	log.Println("gdx server", gdxsvPublicIP)
 
 	server := &dns.Server{Addr: ":53", Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	log.Fatal(err)
 }

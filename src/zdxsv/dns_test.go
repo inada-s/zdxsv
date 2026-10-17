@@ -2,7 +2,10 @@ package main
 
 import (
 	"net"
+	"strings"
 	"testing"
+
+	"zdxsv/pkg/config"
 
 	"github.com/miekg/dns"
 )
@@ -51,5 +54,35 @@ func TestDNSAnswers(t *testing.T) {
 	}
 	if r := query("example.com."); r.Rcode != dns.RcodeRefused || len(r.Answer) != 0 {
 		t.Errorf("example.com.: rcode %d answers %v", r.Rcode, r.Answer)
+	}
+}
+
+func TestDNSServerIPs(t *testing.T) {
+	saved := config.Conf
+	t.Cleanup(func() { config.Conf = saved; *loginsvip, *dnasip, *gdxsvip = "", "", "" })
+
+	config.Conf.Login.PublicAddr = "10.0.0.1"
+	config.Conf.DNAS.PublicAddr = "10.0.0.2"
+	if l, d, g, err := dnsServerIPs(); err != nil || l != "10.0.0.1" || d != "10.0.0.2" || g != "10.0.0.1" {
+		t.Errorf("from config: %q %q %q %v", l, d, g, err)
+	}
+	*gdxsvip = "10.0.0.3"
+	if l, d, g, err := dnsServerIPs(); err != nil || l != "10.0.0.1" || d != "10.0.0.2" || g != "10.0.0.3" {
+		t.Errorf("-gdxsvip: %q %q %q %v", l, d, g, err)
+	}
+
+	config.Conf.DNAS.PublicAddr = ""
+	if _, _, _, err := dnsServerIPs(); err == nil || !strings.Contains(err.Error(), "DNAS") {
+		t.Errorf("no DNAS IP: %v", err)
+	}
+	*dnasip = "10.0.0.2"
+	config.Conf.Login.PublicAddr = ""
+	if _, _, _, err := dnsServerIPs(); err == nil || !strings.Contains(err.Error(), "login") {
+		t.Errorf("no login IP: %v", err)
+	}
+	*loginsvip = "10.0.0.1"
+	*gdxsvip = ""
+	if _, _, _, err := dnsServerIPs(); err == nil || !strings.Contains(err.Error(), "gdx") {
+		t.Errorf("no gdx IP: %v", err)
 	}
 }
