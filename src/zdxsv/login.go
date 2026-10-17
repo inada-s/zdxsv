@@ -89,11 +89,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 	}
 }
 
-func mainLogin() {
-	if _, err := assets.Asset("assets/checkfile"); err != nil {
-		glog.Fatalln(err)
-	}
-	login.Prepare()
+func newLoginHandler() http.Handler {
 	router := http.NewServeMux()
 	router.HandleFunc("/health", handleHealth)
 	router.HandleFunc("/assets/", handleAssets)
@@ -101,7 +97,15 @@ func mainLogin() {
 	// router.HandleFunc("/CRS-top.jsp", login.HandleTestPage)
 	router.HandleFunc("/login", login.HandleLoginPage)
 	router.HandleFunc("/register", login.HandleRegisterPage)
-	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), wrapHandler(router))
+	return wrapHandler(router)
+}
+
+func mainLogin() {
+	if _, err := assets.Asset("assets/checkfile"); err != nil {
+		glog.Fatalln(err)
+	}
+	login.Prepare()
+	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), newLoginHandler())
 	if err != nil {
 		glog.Fatalln(err)
 	}
