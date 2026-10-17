@@ -687,7 +687,7 @@ func (a *App) OnSendChatMessage(p *AppPeer, msg string) {
 		} else {
 			for _, u := range p.Battle.Users {
 				peer, ok := a.users[u.UserID]
-				if ok && p.inBattleAfterRoom && peer.Battle == p.Battle {
+				if ok && peer.inBattleAfterRoom && peer.Battle == p.Battle {
 					NoticeChatMessage(peer, p.UserID, p.Name, msg)
 				}
 			}

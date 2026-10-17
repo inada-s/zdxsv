@@ -57,6 +57,9 @@ func TestLoginHandlerAssetsAndHealth(t *testing.T) {
 		if c.contentType != "" && res.Header.Get("Content-Type") != c.contentType {
 			t.Errorf("%s: Content-Type %q", c.name, res.Header.Get("Content-Type"))
 		}
+		if cc := res.Header.Get("Cache-Control"); cc != "max-age=60, public" {
+			t.Errorf("%s: Cache-Control %q", c.name, cc)
+		}
 		modified, err := time.Parse(http.TimeFormat, res.Header.Get("Last-Modified"))
 		if err != nil || modified.After(time.Now()) {
 			t.Errorf("%s: Last-Modified %q", c.name, res.Header.Get("Last-Modified"))
