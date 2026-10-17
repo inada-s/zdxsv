@@ -73,7 +73,7 @@ func addUDPPortMapping(localIP string, port uint16) {
 	log.Printf("%v Router(s) found.", len(clients))
 
 	for _, c := range clients {
-		err = c.AddPortMapping( "", port, "UDP", port, localIP, true, "zdxsv udp proxy port mapping.", 3600*24)
+		err = c.AddPortMapping("", port, "UDP", port, localIP, true, "zdxsv udp proxy port mapping.", 3600*24)
 		if err != nil {
 			log.Println("addUDPPortMapping error: ", err)
 		} else {

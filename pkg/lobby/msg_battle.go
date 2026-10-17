@@ -427,10 +427,13 @@ func parseBattleResult(m *Message) *model.BattleResult {
 	v26 := r.Read16()
 	v27 := r.Read16()
 	return &model.BattleResult{
-		v01, v02, v03, v04, v05, v06, v07, v08,
-		v09, v10, v11, v12, v13, v14, v15, v16,
-		v17, v18, v19, v20, v21, v22, v23, v24,
-		v25, v26, v27,
+		Unk01: v01, BattleCode: v02, Unk03: v03, Unk04: v04,
+		Unk05: v05, Unk06: v06, BattleCount: v07, WinCount: v08,
+		LoseCount: v09, KillCount: v10, DeathCount: v11, TotalFrame: v12,
+		Unk13: v13, Unk14: v14, Side: v15, Unk16: v16,
+		Unk17: v17, Unk18: v18, Unk19: v19, Unk20: v20,
+		Unk21: v21, Unk22: v22, Unk23: v23, Unk24: v24,
+		Unk25: v25, Unk26: v26, Unk27: v27,
 	}
 }
 
