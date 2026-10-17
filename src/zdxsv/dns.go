@@ -31,6 +31,16 @@ func makeDNSHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
 	}
 }
 
+// newDNSMux answers the names the game resolves with the public server addresses.
+func newDNSMux(loginIP, dnasIP, gdxsvIP string) *dns.ServeMux {
+	mux := dns.NewServeMux()
+	mux.HandleFunc("kddi-mmbb.jp", makeDNSHandler("www01.kddi-mmbb.jp. 3600 IN A "+loginIP))
+	mux.HandleFunc("playstation.org", makeDNSHandler("gate1.jp.dnas.playstation.org. 3600 IN A "+dnasIP))
+	mux.HandleFunc("ca1203.mmcp6", makeDNSHandler("ca1203.mmcp6. 3600 IN A "+gdxsvIP))
+	mux.HandleFunc("ca1202.mmcp6", makeDNSHandler("ca1202.mmcp6. 3600 IN A "+gdxsvIP))
+	return mux
+}
+
 func mainDNS() {
 	dnassvIP := *dnasip
 	if *dnasip == "" {
@@ -50,12 +60,8 @@ func mainDNS() {
 	log.Println("DNAS server ", dnassvIP)
 	log.Println("Login server ", loginPublicIP)
 	log.Println("gdx server", gdxsvPublicIP)
-	dns.HandleFunc("kddi-mmbb.jp", makeDNSHandler("www01.kddi-mmbb.jp. 3600 IN A "+loginPublicIP))
-	dns.HandleFunc("playstation.org", makeDNSHandler("gate1.jp.dnas.playstation.org. 3600 IN A "+dnassvIP))
-	dns.HandleFunc("ca1203.mmcp6", makeDNSHandler("ca1203.mmcp6. 3600 IN A "+gdxsvPublicIP))
-	dns.HandleFunc("ca1202.mmcp6", makeDNSHandler("ca1202.mmcp6. 3600 IN A "+gdxsvPublicIP))
 
-	server := &dns.Server{Addr: ":53", Net: "udp"}
+	server := &dns.Server{Addr: ":53", Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}
 	err := server.ListenAndServe()
 	log.Fatal(err)
 }
