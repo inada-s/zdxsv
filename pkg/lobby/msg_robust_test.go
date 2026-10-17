@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"path/filepath"
 	"sort"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
-
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 )
@@ -35,29 +33,10 @@ func newRobustPeer(t *testing.T) *AppPeer {
 	return p
 }
 
-// useRobustDB points db.DefaultDB at a new temp SQLite DB for the test.
-func useRobustDB(t *testing.T) {
-	t.Helper()
-	conn, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "robust_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sdb := db.SQLiteDB{DB: conn, SQLiteCache: db.NewSQLiteCache()}
-	if err := sdb.Init(); err != nil {
-		t.Fatal(err)
-	}
-	old := db.DefaultDB
-	db.DefaultDB = sdb
-	t.Cleanup(func() {
-		db.DefaultDB = old
-		conn.Close()
-	})
-}
-
 // Every client message handler must survive any body in any peer state: a
 // panic in a handler stops the whole lobby.
 func TestHandlersSurviveBadInput(t *testing.T) {
-	useRobustDB(t)
+	dbtest.Use(t)
 	states := []struct {
 		name  string
 		setup func(*AppPeer)

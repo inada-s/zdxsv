@@ -7,37 +7,17 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 )
-
-func useTestDB(t *testing.T) {
-	t.Helper()
-	conn, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "lobby_test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sdb := db.SQLiteDB{DB: conn, SQLiteCache: db.NewSQLiteCache()}
-	if err := sdb.Init(); err != nil {
-		t.Fatal(err)
-	}
-	old := db.DefaultDB
-	db.DefaultDB = sdb
-	t.Cleanup(func() {
-		db.DefaultDB = old
-		conn.Close()
-	})
-}
 
 func listenLocal(t *testing.T) *net.TCPListener {
 	t.Helper()
@@ -243,7 +223,7 @@ func TestLobbyBattleRoundTrip(t *testing.T) {
 }
 
 func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool) {
-	useTestDB(t)
+	dbtest.Use(t)
 	brpc := battlerpc.NewBattleRpc()
 	addr := startLobby(t, brpc)
 
@@ -378,7 +358,7 @@ func roomStatus(c *testClient, roomID uint16) byte {
 // One client creates a room with a rule, another joins, both entry and the
 // owner starts: the battle carries the room's rule.
 func TestLobbyRoomBattle(t *testing.T) {
-	useTestDB(t)
+	dbtest.Use(t)
 	brpc := battlerpc.NewBattleRpc()
 	addr := startLobby(t, brpc)
 
