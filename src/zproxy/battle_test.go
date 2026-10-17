@@ -22,15 +22,13 @@ func startBattleServer(t *testing.T) *net.UDPAddr {
 	logic.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
 	}}, &reply)
-	// Reserve a free port: ListenAndServe takes an address.
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	addr := c.LocalAddr().(*net.UDPAddr)
-	c.Close()
-	go battle.NewUDPServer(logic).ListenAndServe(addr.String())
-	return addr
+	t.Cleanup(func() { c.Close() })
+	go battle.NewUDPServer(logic).Serve(c)
+	return c.LocalAddr().(*net.UDPAddr)
 }
 
 // battleProxy is one zproxy in ServeBattle with a fake PS2 on its TCP side.
