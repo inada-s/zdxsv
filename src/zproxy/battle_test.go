@@ -125,6 +125,11 @@ func ps2Join(encoded string) []byte {
 
 var finData = []byte{0x04, 0xF0, 0x00, 0x00}
 
+// frame is s as one PS2 frame: its first byte is the frame size.
+func frame(s string) []byte {
+	return append([]byte{byte(len(s) + 1)}, s...)
+}
+
 func startPair(t *testing.T, p2p bool) (*battleProxy, *battleProxy) {
 	t.Helper()
 	sv := startBattleServer(t)
@@ -155,25 +160,25 @@ func TestServeBattleRelay(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, b := startPair(t, tc.p2p)
 
-			a.ps2.Write([]byte("from-a-1"))
-			if got := b.read(t, 8); string(got) != "from-a-1" {
+			a.ps2.Write(frame("from-a-1"))
+			if got := b.read(t, 9); !bytes.Equal(got, frame("from-a-1")) {
 				t.Errorf("b got %q", got)
 			}
-			b.ps2.Write([]byte("from-b"))
-			if got := a.read(t, 6); string(got) != "from-b" {
+			b.ps2.Write(frame("from-b"))
+			if got := a.read(t, 7); !bytes.Equal(got, frame("from-b")) {
 				t.Errorf("a got %q", got)
 			}
 			time.Sleep(50 * time.Millisecond)
-			a.ps2.Write([]byte("from-a-2"))
-			if got := b.read(t, 8); string(got) != "from-a-2" {
+			a.ps2.Write(frame("from-a-2"))
+			if got := b.read(t, 9); !bytes.Equal(got, frame("from-a-2")) {
 				t.Errorf("b got %q", got)
 			}
 			// Each message reaches the PS2 once, whichever path it took.
 			a.noMore(t)
 			b.noMore(t)
 
-			// Fin data ends the sender's battle.
-			a.ps2.Write(finData)
+			// Fin data ends the sender's battle, also in one read with a frame.
+			a.ps2.Write(append(frame("last"), finData...))
 			if err := a.wait(t); err != nil {
 				t.Errorf("a ServeBattle = %v", err)
 			}
@@ -197,9 +202,9 @@ func TestServeTestBattle(t *testing.T) {
 	if got := p.read(t, len(ps2Greeting)); !bytes.Equal(got, ps2Greeting) {
 		t.Fatalf("greeting = % x", got)
 	}
-	p.ps2.Write([]byte("anything"))
-	time.Sleep(50 * time.Millisecond) // fin is detected only as a read of its own
-	p.ps2.Write(finData)
+	p.ps2.Write(ps2Join("0123505679"))
+	time.Sleep(50 * time.Millisecond) // the join is a read of its own
+	p.ps2.Write(append(frame("anything"), finData...))
 	if err := p.wait(t); err != nil {
 		t.Errorf("ServeBattle = %v", err)
 	}
