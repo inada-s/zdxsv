@@ -1,5 +1,5 @@
-# Publishes website/ to GitHub Pages (www.zdxsv.net, see website/CNAME).
-# Repository settings > Pages > Source must be "GitHub Actions".
+# Publishes website/ to GitHub Pages. Repository settings > Pages: Source = "GitHub Actions",
+# Custom domain = www.zdxsv.net (a CNAME file is ignored when publishing from Actions).
 name: pages
 on:
   push:

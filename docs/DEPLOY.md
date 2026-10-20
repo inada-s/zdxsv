@@ -84,7 +84,7 @@ Unlike the game ports, the API binds the host part of its address: `ZDXSV_LOBBY_
 
 ## zdxsv.net: website and HTTPS API
 
-The website (`website/`) is not served by the stack. `.github/workflows/pages.yml` publishes it to GitHub Pages at `www.zdxsv.net` (`website/CNAME`) on every push to master.
+The website (`website/`) is not served by the stack. `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to master; the custom domain (`www.zdxsv.net`) is set in the repository's Pages settings, not by a CNAME file.
 
 The page reads `https://lbs.zdxsv.net:8443/lbs/status`. That is caddy, installed on the host as a systemd service with `/etc/caddy/Caddyfile` = `import sites/*.caddy`; the lobby runs with `network_mode: host` and `ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203`. To update the site config:
 

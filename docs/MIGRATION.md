@@ -205,7 +205,7 @@ VM 共通（要 sudo）
    README の「Run as local mode」は、Web サイトは配らず状態確認は `curl http://<host>:8203/lbs/status` と書き換える
    （website/ は zdxsv.net 固有の内容で、セルフホストでは配らない。決定 2026-10-18）。
 9. `src/router/main.go` の転送先を `https-portal:443` から `172.17.0.1:8444` へ。
-10. `.github/workflows/pages.yml`（`website/` を Pages に公開、Pages の Source は GitHub Actions）、`website/CNAME` = www.zdxsv.net。
+10. `.github/workflows/pages.yml`（`website/` を Pages に公開）。Pages の Source = GitHub Actions、Custom domain = www.zdxsv.net はリポジトリ設定で行う（Actions 公開では CNAME ファイルは無視される）。
 11. `website/index.html`: `/api/stat` を `https://lbs.zdxsv.net:8443/lbs/status` に、`<link rel="canonical" href="https://www.zdxsv.net/">` を追加（フェーズ 5 で apex に変更）。
 12. `src/zproxy/config.go` の `-lobbyrpcaddr` デフォルトを `lbs.zdxsv.net:8201` に。
 
@@ -273,7 +273,7 @@ VM 共通（要 sudo）
 
 DNS（要 DNS）
 1. `zdxsv.net` の A を GitHub Pages の 4 つの IP に、AAAA も Pages の 4 つに（任意）。VM 向きの A を削除。
-2. GitHub Pages のカスタムドメインを `www.zdxsv.net` から `zdxsv.net` に変更（`website/CNAME` と `index.html` の canonical も `zdxsv.net` に）。
+2. GitHub Pages の Custom domain を `www.zdxsv.net` から `zdxsv.net` に変更（`index.html` の canonical も `zdxsv.net` に）。
    GitHub が `www.zdxsv.net` → `zdxsv.net` の 301 を自動で返す。
 3. 任意: `gdxsv.net` の A/AAAA も Pages に向ける。`www.gdxsv.net` がカスタムドメインのままなら apex → www に 301 される。
 
