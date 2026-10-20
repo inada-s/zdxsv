@@ -23,7 +23,7 @@ ZDXSV_LOBBY_PUBLIC_ADDR=$IP:8200
 ZDXSV_BATTLE_ADDR=battle:8210
 ZDXSV_BATTLE_RPC_ADDR=battle:3080
 ZDXSV_BATTLE_PUBLIC_ADDR=$IP:8210
-ZDXSV_STATUS_ADDR=status:8080
+ZDXSV_LOBBY_API_ADDR=lobby:8203
 ZDXSV_DB_NAME=zdxsv.db
 EOS
 fi
@@ -39,7 +39,7 @@ if [ ! -s zdxsv.db ]; then
 fi
 $DC up -d || exit 1
 
-for s in dns login lobby battle status router dnas web; do
+for s in dns login lobby battle router dnas; do
 	for i in $(seq 1 30); do
 		$DC ps --status running --services | grep -qx $s && break
 		sleep 2
@@ -50,17 +50,15 @@ done
 for h in gate1.jp.dnas.playstation.org www01.kddi-mmbb.jp ca1202.mmcp6 ca1203.mmcp6; do
 	check "dns $h -> $IP" sh -c "[ \"\$(dig +short +time=2 +tries=3 @127.0.0.1 $h)\" = $IP ]"
 done
-for p in 443 8200 8201 8210; do
+for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
-check "login health (web -> login)" $DC exec -T web curl -sf http://login/health
+check "login health" $DC exec -T login wget -qO- http://127.0.0.1/health
 check "dnas via router (DNAS answers, login proxy)" $DC run --rm --no-deps dns dnascheck router:443
 
-sleep 12 # status polls the lobby every 10 s
-stat=$($DC exec -T web curl -sf http://localhost/api/stat)
-echo "api/stat: $stat"
-check "status api via nginx" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu-x86/64\"'"
-check "status polled the lobby" sh -c "! $DC logs status 2>&1 | grep -q '^status.*E[0-9]\{4\} '"
+stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
+echo "lbs/status: $stat"
+check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu-x86/64\"'"
 
 if [ $fails -ne 0 ]; then
 	$DC ps -a

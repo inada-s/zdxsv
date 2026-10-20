@@ -52,7 +52,6 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_BATTLE_ADDR":              ":8210",
 		"ZDXSV_BATTLE_RPC_ADDR":          ":8211",
 		"ZDXSV_BATTLE_PUBLIC_ADDR":       "1.2.3.4:8210",
-		"ZDXSV_STATUS_ADDR":              ":9100",
 		"ZDXSV_DB_NAME":                  "/tmp/zdxsv.db",
 	}
 	for k, v := range env {
@@ -76,7 +75,6 @@ func TestLoadConfigFromEnv(t *testing.T) {
 			APIAddr:          ":8204",
 		},
 		Battle: BattleConfig{Addr: ":8210", RPCAddr: ":8211", PublicAddr: "1.2.3.4:8210"},
-		Status: StatusConfig{Addr: ":9100"},
 		DB:     DBConfig{Name: "/tmp/zdxsv.db"},
 	}
 	if Conf != want {

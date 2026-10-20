@@ -33,10 +33,12 @@ func mainLobby() {
 			}
 		}()
 	}
+	// The HTTP APIs bind the host given in their address (127.0.0.1:8203 stays on loopback),
+	// unlike the game ports, whose host part is only advertised.
 	if c := config.Conf.Lobby; c.OpsAddr != "" {
 		go func() {
 			glog.Infoln("Start ops api", c.OpsAddr)
-			if err := http.ListenAndServe(stripHost(c.OpsAddr), &lobby.OpsHandler{ReplayURLPrefix: c.ReplayURLPrefix}); err != nil {
+			if err := http.ListenAndServe(c.OpsAddr, &lobby.OpsHandler{ReplayURLPrefix: c.ReplayURLPrefix}); err != nil {
 				glog.Errorln("ops api:", err)
 			}
 		}()
@@ -44,7 +46,8 @@ func mainLobby() {
 	if c := config.Conf.Lobby; c.APIAddr != "" {
 		go func() {
 			glog.Infoln("Start public api", c.APIAddr)
-			if err := http.ListenAndServe(stripHost(c.APIAddr), &lobby.APIHandler{}); err != nil {
+			api := &lobby.APIHandler{Status: app.Status}
+			if err := http.ListenAndServe(c.APIAddr, api); err != nil {
 				glog.Errorln("public api:", err)
 			}
 		}()

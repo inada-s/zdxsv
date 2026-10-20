@@ -25,9 +25,6 @@ func LoadConfig() {
 	if err := env.Parse(&c.Battle); err != nil {
 		log.Fatal(err)
 	}
-	if err := env.Parse(&c.Status); err != nil {
-		log.Fatal(err)
-	}
 	if err := env.Parse(&c.DB); err != nil {
 		log.Fatal(err)
 	}
@@ -41,7 +38,6 @@ type Config struct {
 	Login  LoginConfig
 	Lobby  LobbyConfig
 	Battle BattleConfig
-	Status StatusConfig
 	DB     DBConfig
 }
 
@@ -72,7 +68,8 @@ type LobbyConfig struct {
 	// Uploaded replay urls must start with ReplayURLPrefix.
 	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
 	ReplayURLPrefix string `env:"ZDXSV_LOBBY_REPLAY_URL_PREFIX" envDefault:"https://storage.googleapis.com/zdxsv/"`
-	// Public HTTP API (lobby.APIHandler, /lbs/replay: uploaded replays), off when empty.
+	// Public HTTP API (lobby.APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
+	// Unlike the game ports, the host part is bound (127.0.0.1:8203 stays on loopback).
 	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
 }
 
@@ -81,11 +78,6 @@ type BattleConfig struct {
 	Addr       string `env:"ZDXSV_BATTLE_ADDR"`
 	RPCAddr    string `env:"ZDXSV_BATTLE_RPC_ADDR"`
 	PublicAddr string `env:"ZDXSV_BATTLE_PUBLIC_ADDR"`
-}
-
-// StatusConfig stores settings for status server.
-type StatusConfig struct {
-	Addr string `env:"ZDXSV_STATUS_ADDR"`
 }
 
 // DBConfig stores database settings.

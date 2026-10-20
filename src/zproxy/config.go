@@ -8,7 +8,7 @@ var (
 	updatecheck = flag.Bool("updatecheck", true, "Check latest version and download it")
 	// updatecheck = flag.Bool("updatecheck", false, "Check latest version and download it")
 	userid       = flag.String("userid", "_AUTO_", "The game UserID to request register this proxy")
-	lobbyrpcaddr = flag.String("lobbyrpcaddr", "zdxsv.net:8201", "Lobby RPC server address")
+	lobbyrpcaddr = flag.String("lobbyrpcaddr", "lbs.zdxsv.net:8201", "Lobby RPC server address")
 	// lobbyrpcaddr = flag.String("lobbyrpcaddr", "35.187.206.118:8201", "Lobby RPC server address")
 	tcpport    = flag.Int("tcpport", 8250, "The TCP port for Listen and Serve PS2 connection")
 	udpport    = flag.Int("udpport", 8250, "The UDP port for communicate with the battle server and other peers")

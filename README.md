@@ -48,7 +48,7 @@ ZDXSV_DB_NAME=zdxsv.db ./bin/zdxsv initdb
 make router
 ```
 
-That bahaves proxy server, which detects incomming connection is GameConsole or not, and proxy it to upstream web or dnas server.
+That behaves as a proxy server on 443, which detects whether an incoming connection is a game console and proxies it to the dnas server (anything else goes to the host's caddy, see [docs/DEPLOY.md](docs/DEPLOY.md)).
 
 
 ### Prepare .env file
@@ -66,6 +66,8 @@ Run as local mode.
 ```
 docker-compose up --build
 ```
+The server does not serve a website (`website/` is the zdxsv.net site, published to GitHub Pages).
+To see who is online, read the lobby's HTTP API: `curl http://<host>:8203/lbs/status`.
 
 Run as dev-server mode.
 ```

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
+	"time"
 
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/lobby/lobbyrpc"
 
 	"github.com/golang/glog"
 )
@@ -13,6 +16,8 @@ import (
 const (
 	maxReplayFilterBytes   = 64
 	maxReplayPlayerFilters = 8
+	// statusMaxAge: /lbs/status asks the lobby at most this often; the website polls every 30 s.
+	statusMaxAge = time.Second
 )
 
 // APIHandler serves the lobby's public API (as gdxsv lbs /lbs/*).
@@ -22,16 +27,27 @@ const (
 //	  204 when none. user_id, user_name and pilot_name may repeat; names are LIKE patterns.
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
+//	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
 	// LiveList lists the live battles (Spectators.List when nil).
 	LiveList func() []*LiveBattle
+	// Status reports the lobby's users and battles (an empty lobby when nil).
+	Status func() *lobbyrpc.StatusResponse
+
+	statusMu   sync.Mutex
+	statusAt   time.Time
+	statusBody []byte
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/lbs/live" {
 		h.serveLive(w)
+		return
+	}
+	if r.URL.Path == "/lbs/status" {
+		h.serveStatus(w)
 		return
 	}
 	if r.URL.Path != "/lbs/replay" {
@@ -100,6 +116,28 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(replays); err != nil {
 		glog.Warningln("lbs/replay: JSON encode failure", err)
 	}
+}
+
+// serveStatus answers from the lobby's state, reused for statusMaxAge.
+func (h *APIHandler) serveStatus(w http.ResponseWriter) {
+	h.statusMu.Lock()
+	defer h.statusMu.Unlock()
+	now := time.Now()
+	if h.statusBody == nil || now.Sub(h.statusAt) >= statusMaxAge {
+		res := &lobbyrpc.StatusResponse{}
+		if h.Status != nil {
+			res = h.Status()
+		}
+		body, err := json.Marshal(MakeStatus(res, now))
+		if err != nil {
+			glog.Warningln("lbs/status: JSON encode failure", err)
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		h.statusBody, h.statusAt = body, now
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(h.statusBody)
 }
 
 func (h *APIHandler) serveLive(w http.ResponseWriter) {
