@@ -10,7 +10,7 @@ x-zdxsv-environment: &zdxsv-environment
   - ZDXSV_BATTLE_ADDR=${ZDXSV_BATTLE_ADDR}
   - ZDXSV_BATTLE_RPC_ADDR=${ZDXSV_BATTLE_RPC_ADDR}
   - ZDXSV_BATTLE_PUBLIC_ADDR=${ZDXSV_BATTLE_PUBLIC_ADDR}
-  - ZDXSV_STATUS_ADDR=${ZDXSV_STATUS_ADDR}
+  - ZDXSV_LOBBY_API_ADDR=${ZDXSV_LOBBY_API_ADDR}
   - ZDXSV_DB_NAME=${ZDXSV_DB_NAME}
 
 services:
@@ -21,15 +21,6 @@ services:
       dockerfile: "./docker/router/Dockerfile"
     ports:
       - "443:443"
-  https-portal:
-    image: hello-world
-
-  web:
-    restart: always
-    build: "./docker/web"
-    volumes:
-      - ./website:/var/www/html
-
   dnas:
     build:
       context: .
@@ -69,6 +60,7 @@ services:
       - "8201:8201"     # for UDP proxy
       - "8201:8201/udp" # for UDP proxy
       - "8202:8202/udp" # STUN test socket (emulator connectivity test)
+      - "8203:8203"     # HTTP API (/lbs/status, /lbs/replay, /lbs/live)
     volumes:
       - ./zdxsv.db:/zdxsv.db
     environment: *zdxsv-environment
@@ -82,12 +74,4 @@ services:
     ports:
       - "8210:8210"
       - "8210:8210/udp"
-    environment: *zdxsv-environment
-
-  status:
-    build:
-      context: .
-      dockerfile: "./docker/zdxsv/Dockerfile"
-    restart: always
-    command: status
     environment: *zdxsv-environment

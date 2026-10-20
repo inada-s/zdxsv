@@ -3,6 +3,7 @@
 <meta charset="UTF-8">
 <meta name="description" content="Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対サーバです。">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://www.zdxsv.net/">
 
 <link href="/static/css/bootstrap.min.css" rel="stylesheet">
 <link href="/static/css/style.css" rel="stylesheet">
@@ -214,7 +215,7 @@ function updateOnlineUser(t, u) {
   }
 }
 function pollStat(){
-  $.ajax({url: '/api/stat', type: 'GET', dataType: 'json'}).done(function(res) {
+  $.ajax({url: 'https://lbs.zdxsv.net:8443/lbs/status', type: 'GET', dataType: 'json'}).done(function(res) {
     document.getElementById("stat-updated").innerHTML = res.NowDate + "現在"
     var ps2 = (res.Platforms || {})["console"] || {LobbyUserCount: 0, BattleUserCount: 0}
     var emu = (res.Platforms || {})["emu-x86/64"] || {LobbyUserCount: 0, BattleUserCount: 0}

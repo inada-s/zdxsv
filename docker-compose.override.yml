@@ -1,9 +1,5 @@
 version: '3.7'
 services:
-  web:
-    ports:
-      - "1080:80"
-
   dns:
     build:
       target: builder
@@ -29,14 +25,6 @@ services:
       - ./pkg:/work/pkg:ro
 
   battle:
-    build:
-      target: builder
-    entrypoint: /build_and_run.sh
-    volumes:
-      - ./src:/work/src:ro
-      - ./pkg:/work/pkg:ro
-
-  status:
     build:
       target: builder
     entrypoint: /build_and_run.sh

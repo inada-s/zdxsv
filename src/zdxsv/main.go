@@ -34,8 +34,6 @@ func pprofPort(mode string) int {
 		return 16063
 	case "login":
 		return 16064
-	case "status":
-		return 16065
 	case "dnas":
 		return 16066
 	default:
@@ -112,8 +110,6 @@ func main() {
 	case "login":
 		prepareDB()
 		mainLogin()
-	case "status":
-		mainStatus()
 	case "relay":
 		mainRelayTest(args[1:])
 	case "dnas":

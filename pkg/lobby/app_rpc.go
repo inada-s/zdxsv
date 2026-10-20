@@ -168,8 +168,13 @@ func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *Bat
 }
 
 func (m *lobbyRPC) getStatus(remoteAddr string, _ *StatusRequest) *StatusResponse {
+	return m.app.Status()
+}
+
+// Status lists the lobby users and battles, from the app's goroutine.
+func (a *App) Status() *StatusResponse {
 	var res *StatusResponse
-	m.app.Locked(func(app *App) {
+	a.Locked(func(app *App) {
 		res = app.status()
 	})
 	return res

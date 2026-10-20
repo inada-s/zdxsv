@@ -12,10 +12,11 @@ import (
 	"time"
 )
 
-// Backends: game consoles go to dnas, anything else (with a PROXY header) to https-portal.
+// Backends: game consoles go to dnas, anything else (with a PROXY header) to the host's
+// caddy on docker0 (infra/caddy/zdxsv.caddy), which redirects browsers to the website.
 var (
 	dnasBackend  = "dnas:443"
-	httpsBackend = "https-portal:443"
+	httpsBackend = "172.17.0.1:8444"
 )
 
 func main() {

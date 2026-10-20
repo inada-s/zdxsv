@@ -1,0 +1,10 @@
+# 移行期間のみ。zdxsv の router が 443 のブラウザ接続をここへ流す。フェーズ 5 で削除
+zdxsv.net:8444 {
+	bind 172.17.0.1
+	redir https://www.zdxsv.net{uri} permanent
+}
+
+lbs.zdxsv.net:8443 {
+	header Access-Control-Allow-Origin *
+	reverse_proxy /lbs/* 127.0.0.1:8203
+}

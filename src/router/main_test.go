@@ -87,7 +87,7 @@ func readFull(t *testing.T, r io.Reader, n int) []byte {
 	return b
 }
 
-// proxyHeader is the PROXY v1 line https-portal gets for client c.
+// proxyHeader is the PROXY v1 line the https backend (caddy) gets for client c.
 func proxyHeader(c net.Conn) string {
 	cl, sv := c.LocalAddr().(*net.TCPAddr), c.RemoteAddr().(*net.TCPAddr)
 	return fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", cl.IP, sv.IP, cl.Port, sv.Port)
