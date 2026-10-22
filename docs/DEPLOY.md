@@ -92,7 +92,7 @@ The page reads `https://lbs.zdxsv.net:8443/lbs/status`. That is caddy, installed
 sudo cp infra/caddy/zdxsv.caddy /etc/caddy/sites/ && sudo systemctl reload caddy
 ```
 
-`router` sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to caddy's `zdxsv.net:8444` block on docker0 with a PROXY header, which redirects to the website. The host must allow that path (`ufw allow from 172.16.0.0/12 to 172.17.0.1 port 8444 proto tcp`) and caddy needs `listener_wrappers { proxy_protocol; tls }` for `:8444` in the global options. See `docs/MIGRATION.md`.
+`router` sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to caddy's `zdxsv.net:8444` block on docker0 with a PROXY header, which redirects to the website. caddy needs `listener_wrappers { proxy_protocol; tls }` for that listener in the global options (`servers 172.17.0.1:8444 { ... }`, the full bound address).
 
 ## Update
 
