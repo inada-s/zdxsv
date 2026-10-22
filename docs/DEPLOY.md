@@ -142,7 +142,7 @@ Old releases stay under `releases/`; to roll back, `bash releases/*/zdxsv-releas
 zdxsv used to run as docker-compose containers (6 services, then 1). The database file and `.env` stay
 where they are; only the process changes.
 
-1. In the checkout (`~/zdxsv`, which is also the service home): `curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh && bash zdxsv-release.sh` (no Go needed on the host; `bin/` is git-ignored).
+1. In the checkout (`~/zdxsv`, which is also the service home): `curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh && bash zdxsv-release.sh` (no Go needed on the host; `bin/` is git-ignored). Until a release with the server tarball is the latest one, name the tag: `bash zdxsv-release.sh v1.2.0-rc1` works for a prerelease too.
 2. `.env`: `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (was `172.17.0.1:8444`, the docker bridge); `ZDXSV_LOGIN_ADDR` and `ZDXSV_BATTLE_RPC_ADDR` are unused; `ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203` as before.
 3. caddy: in `/etc/caddy/Caddyfile` change `servers 172.17.0.1:8444` to `servers 127.0.0.1:8444`, copy `infra/caddy/zdxsv.caddy` (binds 127.0.0.1 now), `sudo systemctl reload caddy`.
 4. Stop the old service and the containers: `sudo systemctl stop zdxsv` (the unit that ran docker-compose), `docker compose -f docker-compose.yml -f docker-compose.prod.yml down` from the old checkout if anything is still up (`docker ps`).
