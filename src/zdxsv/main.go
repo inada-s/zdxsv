@@ -50,7 +50,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[login, lobby, battle, relay <session id> <hex token>]")
+	log.Println("Usage: ", os.Args[0], "[all, dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port]")
 }
 
 func prepareDB() {
@@ -100,6 +100,8 @@ func main() {
 	prepareOption(command)
 
 	switch command {
+	case "all":
+		mainAll()
 	case "dns":
 		mainDNS()
 	case "battle":

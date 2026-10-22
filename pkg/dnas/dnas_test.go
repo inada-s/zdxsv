@@ -75,7 +75,11 @@ func TestAnswerGolden(t *testing.T) {
 }
 
 func startServer(t *testing.T, loginAddr string) string {
-	s, err := NewServer("jp", loginAddr)
+	login, err := LoginProxy(loginAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewServer("jp", login)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -90,6 +90,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 }
 
 func newLoginHandler() http.Handler {
+	login.Prepare()
 	router := http.NewServeMux()
 	router.HandleFunc("/health", handleHealth)
 	router.HandleFunc("/assets/", handleAssets)
@@ -100,12 +101,14 @@ func newLoginHandler() http.Handler {
 	return wrapHandler(router)
 }
 
+// assetsCheck fails when the embedded assets are missing (pkg/assets not generated).
+func assetsCheck() ([]byte, error) {
+	return assets.Asset("assets/checkfile")
+}
+
 func mainLogin() {
-	if _, err := assets.Asset("assets/checkfile"); err != nil {
-		glog.Fatalln(err)
-	}
-	login.Prepare()
-	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), newLoginHandler())
+	h := prepareLogin()
+	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), h)
 	if err != nil {
 		glog.Fatalln(err)
 	}

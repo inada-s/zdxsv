@@ -1,7 +1,4 @@
 version: '3.7'
 services:
-  lobby:
-    network_mode: "host"
-
-  battle:
+  zdxsv:
     network_mode: "host"

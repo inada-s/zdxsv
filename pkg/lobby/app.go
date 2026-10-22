@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"time"
 
+	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
@@ -84,9 +85,33 @@ func (p *AppPeer) SendMessage(msg *message.Message) {
 	p.conn.SendMessage(msg)
 }
 
+// BattleServer is the lobby's link to the battle server: the net/rpc client of a
+// separate `zdxsv battle` process, or the battle logic itself in `zdxsv all`.
+type BattleServer interface {
+	PingPong(args *string, reply *string) error
+	NotifyBattleUsers(args *battlerpc.BattleInfoArgs, reply *int) error
+	Close() error
+}
+
+// rpcBattleServer calls a `zdxsv battle` process over net/rpc (battle.Logic.ServeRpc).
+type rpcBattleServer struct{ *rpc.Client }
+
+func (c rpcBattleServer) PingPong(args *string, reply *string) error {
+	return c.Call("Logic.PingPong", args, reply)
+}
+
+func (c rpcBattleServer) NotifyBattleUsers(args *battlerpc.BattleInfoArgs, reply *int) error {
+	return c.Call("Logic.NotifyBattleUsers", args, reply)
+}
+
+// localBattleServer is the battle logic in this process.
+type localBattleServer struct{ *battlerpc.BattleRpc }
+
+func (localBattleServer) Close() error { return nil }
+
 type App struct {
 	*handlerHolder
-	battleServer *rpc.Client
+	battleServer BattleServer
 	users        map[string]*AppPeer
 	lobbys       map[string]map[uint16]*model.Lobby // platform -> lobby id -> lobby
 	battles      map[string]*model.Battle
@@ -166,13 +191,19 @@ func (a *App) AddHandler(id uint16, name string, f MessageHandler) {
 	a.handlerNames[id] = name
 }
 
+// SetBattleServer makes the lobby drive the battle logic b in this process instead of
+// a `zdxsv battle` process at config.Conf.Battle.RPCAddr. Call it before Serve.
+func (a *App) SetBattleServer(b *battlerpc.BattleRpc) {
+	a.battleServer = localBattleServer{b}
+}
+
 func (a *App) connectToBattleServer() {
 	client, err := rpc.DialHTTP("tcp", config.Conf.Battle.RPCAddr)
 	if err != nil {
 		glog.Errorln("Faild to connect BattleServer. ", err)
 	} else {
 		glog.Infoln("Succeeded to connect BattleServer")
-		a.battleServer = client
+		a.battleServer = rpcBattleServer{client}
 	}
 }
 
@@ -191,7 +222,9 @@ func (a *App) Serve() {
 	if err != nil {
 		glog.Errorln(err)
 	}
-	a.connectToBattleServer()
+	if a.battleServer == nil {
+		a.connectToBattleServer()
+	}
 
 	for {
 		select {
@@ -257,8 +290,8 @@ func (a *App) checkAlive(now time.Time) {
 	if a.battleServer == nil {
 		a.connectToBattleServer()
 	} else {
-		var reply string
-		err := a.battleServer.Call("Logic.PingPong", "Ping", &reply)
+		ping, reply := "Ping", ""
+		err := a.battleServer.PingPong(&ping, &reply)
 		if err != nil {
 			glog.Errorln("PingPong failed. ", err)
 			a.battleServer.Close()

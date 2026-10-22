@@ -399,7 +399,7 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		})
 	}
 
-	err := a.battleServer.Call("Logic.NotifyBattleUsers", args, &reply)
+	err := a.battleServer.NotifyBattleUsers(args, &reply)
 	if err != nil {
 		glog.Errorln("Logic.NotifyBattleUsers failed. ", err)
 		return false

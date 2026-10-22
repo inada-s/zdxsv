@@ -66,18 +66,25 @@ func dnsServerIPs() (loginIP, dnasIP, gdxsvIP string, err error) {
 	return loginIP, dnasIP, gdxsvIP, nil
 }
 
-func mainDNS() {
+// newDNSServer is the game's DNS server on config.Conf.DNS.Addr.
+func newDNSServer() (*dns.Server, error) {
 	loginPublicIP, dnassvIP, gdxsvPublicIP, err := dnsServerIPs()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	log.Println("DNAS server ", dnassvIP)
 	log.Println("Login server ", loginPublicIP)
 	log.Println("gdx server", gdxsvPublicIP)
 
+	return &dns.Server{Addr: config.Conf.DNS.Addr, Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}, nil
+}
+
+func mainDNS() {
+	server, err := newDNSServer()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("DNS listen", config.Conf.DNS.Addr)
-	server := &dns.Server{Addr: config.Conf.DNS.Addr, Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}
-	err = server.ListenAndServe()
-	log.Fatal(err)
+	log.Fatal(server.ListenAndServe())
 }

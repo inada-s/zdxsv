@@ -57,6 +57,9 @@ type DNASConfig struct {
 	PublicAddr string `env:"ZDXSV_DNAS_PUBLIC_ADDR"`
 	Addr       string `env:"ZDXSV_DNAS_ADDR" envDefault:":443"`
 	Region     string `env:"ZDXSV_DNAS_REGION" envDefault:"jp"` // certificate: jp, us, eu
+	// Where the non-console TLS connections on Addr go (browsers opening https://<host>),
+	// with a PROXY protocol v1 header, e.g. the host's caddy. Empty: they get a TLS alert.
+	HTTPSBackend string `env:"ZDXSV_DNAS_HTTPS_BACKEND"`
 }
 
 // LoginConfig stores settings for login server.

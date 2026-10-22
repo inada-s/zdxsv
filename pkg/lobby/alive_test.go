@@ -93,8 +93,8 @@ func TestAliveCheckBattleTimeout(t *testing.T) {
 func TestAliveCheckBattleServerReconnect(t *testing.T) {
 	_, app := startLobbyApp(t, battlerpc.NewBattleRpc())
 	ping := func(a *App) error {
-		var reply string
-		return a.battleServer.Call("Logic.PingPong", "Ping", &reply)
+		ping, reply := "Ping", ""
+		return a.battleServer.PingPong(&ping, &reply)
 	}
 	app.Locked(func(a *App) {
 		if a.battleServer == nil {

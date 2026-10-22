@@ -26,11 +26,6 @@ cover:
 	cat cover-pkg.txt
 	tail -1 cover.txt
 
-# build router image (built from source inside docker).
-.PHONY: router
-router:
-	docker compose build router
-
 # run go-bindata to pack all assets into a go package.
 .PHONY: assets
 assets:
