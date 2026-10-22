@@ -20,11 +20,11 @@ Just call `make` to build the executable. `make test` runs the tests; `make cove
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 
-To run a server with docker, see [docs/DEPLOY.md](docs/DEPLOY.md).
+To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md) (one binary as a systemd service).
 
 ### Commands
 - `./bin/zdxsv initdb` initializes database file.
-- `./bin/zdxsv` (no command, or `all`) serves everything below in one process (what docker-compose runs).
+- `./bin/zdxsv` (no command, or `all`) serves everything below in one process (what the systemd service runs).
 - `./bin/zdxsv dns` serves dns server, which is used to direct the game console to your server.
 - `./bin/zdxsv dnas` serves the DNAS front end on 443 (the SSLv2/TLS 1.0 the PS2 speaks), with the login webpage behind it.
 - `./bin/zdxsv login` serves login webpage over plain HTTP (for a separate `dnas` process).
@@ -32,12 +32,7 @@ To run a server with docker, see [docs/DEPLOY.md](docs/DEPLOY.md).
 - `./bin/zdxsv battle` serves battle.
 
 
-## Run with docker-compose
-
-The `docker-compose` file runs one container with `zdxsv all`.
-
-Before running docker-compose, you must prepare some file with following way.
-
+## Run a server
 
 ### Initialize database
 ```
@@ -50,20 +45,12 @@ You must configure these environment variables to fit your environment.
 
 The `auto-env-local` and `auto-env-dev` scripts might help you.
 
-
 ### Run
-In default, `docker-compose.yml` and `docker-compose.override.yml` are used and it runs as local mode which aims to serve on LAN.
-When you want to server on WAN, you should use dev-server mode.
-
-Run as local mode.
 ```
-docker-compose up --build
+set -a; . ./.env; set +a
+./bin/zdxsv           # every server in one process; ports 53 and 443 need root or cap_net_bind_service
 ```
 The server does not serve a website (`website/` is the zdxsv.net site, published to GitHub Pages).
 To see who is online, read the lobby's HTTP API: `curl http://<host>:8203/lbs/status`.
-
-Run as dev-server mode.
-```
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-```
+`make smoke` runs the whole thing on a throwaway database and checks each server.
 

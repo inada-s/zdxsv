@@ -22,7 +22,7 @@ import (
 )
 
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
-var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof, 2: enable blocking profile")
+var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof on 127.0.0.1 (port: 16060, or per command), 2: enable blocking profile")
 
 func pprofPort(mode string) int {
 	switch mode {
@@ -69,7 +69,7 @@ func prepareOption(command string) {
 	if *profile >= 1 {
 		go func() {
 			port := pprofPort(command)
-			addr := fmt.Sprintf(":%v", port)
+			addr := fmt.Sprintf("127.0.0.1:%v", port)
 			log.Println(http.ListenAndServe(addr, nil))
 		}()
 	}

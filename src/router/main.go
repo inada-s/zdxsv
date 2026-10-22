@@ -1,7 +1,7 @@
 // Command router is the stand-alone 443 splitter: game consoles to a `zdxsv dnas`
 // process, other TLS to an https server. `zdxsv dnas` and `zdxsv all` do this
 // themselves (pkg/router with the DNAS server in process); this command is for
-// running dnas in a separate container, as docker-compose did.
+// running dnas as a separate process.
 package main
 
 import (

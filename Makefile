@@ -8,6 +8,11 @@ build:
 	go build -o ./bin/bench ./src/bench
 	go build -o ./bin/zproxy ./src/zproxy
 
+# smoke test of the server binary (scripts/smoke.sh; ports 53 and 443 need cap_net_bind_service).
+.PHONY: smoke
+smoke:
+	scripts/smoke.sh
+
 # execute all tests.
 .PHONY: test
 test:
