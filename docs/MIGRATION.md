@@ -255,7 +255,7 @@ VM 共通（要 sudo）
    - 実機 PS2 または PCSX2 で DNAS → login → ロビー → 対戦まで通す。
 8. GitHub: zdxsv リポジトリの Pages を有効化（Source: GitHub Actions、Custom domain: www.zdxsv.net）。完了 2026-10-20: PR #116 マージ後に https://www.zdxsv.net/ が公開済み。Enforce HTTPS は証明書発行後にオン。
    カスタムドメインの DNS チェックと HTTPS 証明書発行を待つ（数分〜1 時間）。
-9. Search Console に `www.zdxsv.net` をプロパティ追加。（未実施）
+9. 任意: Search Console。既存のプロパティが「ドメイン」タイプ（`zdxsv.net`）なら www も含まれるので不要。URL プレフィックスタイプだけなら、ドメインタイプの `zdxsv.net` を追加（確認はムームードメインに TXT を 1 つ）。
 
 完了時の確認結果（外部から）: `https://zdxsv.net/` と `http://zdxsv.net/` は 301 → `https://www.zdxsv.net/`、`lbs.zdxsv.net:8443` / `lbs.gdxsv.net:8443` の `/lbs/status` は 200 で CORS ヘッダー付き、`dnascheck 153.121.44.150:443` OK、16061 と 8203 は外から閉、9880 は予定通り開いたまま。
 つまずき: compose から消えたサービスのコンテナ（https-portal、legacyweb、web、status）は unit の `down -v` では消えないので `docker rm -f` が必要。`servers :8444` では bind 付きリスナーにラッパーが付かない。
