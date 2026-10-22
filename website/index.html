@@ -158,10 +158,19 @@
   <div class="panel-heading">接続情報</div>
   <div class="panel-body">
     <p id="stat-updated">取得中</p>
-    <p id="lobby-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="lobby-users-table"></table>
-    <p id="battle-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="battle-users-table"></table>
+    <h5>PS2</h5>
+    <p id="ps2-lobby-user-count"></p>
+    <table class="table mini-font mini-table table-inverse" id="ps2-lobby-users-table"></table>
+    <p id="ps2-battle-user-count"></p>
+    <table class="table mini-font mini-table table-inverse" id="ps2-battle-users-table"></table>
+    <!-- エミュレーター版リリース時に hidden を外す -->
+    <div id="emu-section" hidden>
+    <h5>エミュレーター</h5>
+    <p id="emu-lobby-user-count"></p>
+    <table class="table mini-font mini-table table-inverse" id="emu-lobby-users-table"></table>
+    <p id="emu-battle-user-count"></p>
+    <table class="table mini-font mini-table table-inverse" id="emu-battle-users-table"></table>
+    </div>
   </div>
 </div>  <!-- end of panel -->
 
@@ -211,18 +220,24 @@ function updateOnlineUser(t, u) {
     uname.innerHTML = u[i].Name
     uname.className = "z-user-name"
     r.insertCell(2).innerHTML = u[i].UDP ? '<span class="label label-primary">UDP</span>' : ""
-    r.insertCell(3).innerHTML = u[i].Platform && u[i].Platform != "console" ? '<span class="label label-default">エミュ</span>' : '<span class="label label-default">PS2</span>'
   }
+}
+function isConsole(u) {
+  return !u.Platform || u.Platform == "console"
+}
+function updatePlatform(prefix, lobbyUsers, battleUsers) {
+  document.getElementById(prefix + "-lobby-user-count").innerHTML = "ロビー " + lobbyUsers.length + " 人"
+  document.getElementById(prefix + "-battle-user-count").innerHTML = "対戦中 " + battleUsers.length + " 人"
+  updateOnlineUser(document.getElementById(prefix + "-lobby-users-table"), lobbyUsers)
+  updateOnlineUser(document.getElementById(prefix + "-battle-users-table"), battleUsers)
 }
 function pollStat(){
   $.ajax({url: 'https://lbs.zdxsv.net:8443/lbs/status', type: 'GET', dataType: 'json'}).done(function(res) {
     document.getElementById("stat-updated").innerHTML = res.NowDate + "現在"
-    var ps2 = (res.Platforms || {})["console"] || {LobbyUserCount: 0, BattleUserCount: 0}
-    var emu = (res.Platforms || {})["emu-x86/64"] || {LobbyUserCount: 0, BattleUserCount: 0}
-    document.getElementById("lobby-user-count").innerHTML = "ロビー " + res.LobbyUsers.length + " 人 (PS2 " + ps2.LobbyUserCount + " / エミュ " + emu.LobbyUserCount + ")"
-    document.getElementById("battle-user-count").innerHTML = "対戦中 " + res.BattleUsers.length + " 人 (PS2 " + ps2.BattleUserCount + " / エミュ " + emu.BattleUserCount + ")"
-    updateOnlineUser(document.getElementById("lobby-users-table"), res.LobbyUsers)
-    updateOnlineUser(document.getElementById("battle-users-table"), res.BattleUsers)
+    var lobbyUsers = res.LobbyUsers || []
+    var battleUsers = res.BattleUsers || []
+    updatePlatform("ps2", lobbyUsers.filter(isConsole), battleUsers.filter(isConsole))
+    updatePlatform("emu", lobbyUsers.filter(function(u) { return !isConsole(u) }), battleUsers.filter(function(u) { return !isConsole(u) }))
   });
 }
 pollStat();
