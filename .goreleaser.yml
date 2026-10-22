@@ -4,7 +4,10 @@
 # - zproxy (the PS2 UDP proxy players download) as zdxsv_<ver>_<os>_<arch>.zip for every
 #   platform. zproxy's self-update (go-github-selfupdate, src/zproxy/update.go) finds its
 #   update by that default archive name (suffix <os>_<arch>.zip) and the `zproxy` binary
-#   inside, so the zproxy build and archive keep goreleaser's defaults.
+#   inside, so the zproxy build and archive keep goreleaser's defaults. It is only built
+#   when its code changed since the last release that shipped it (ZDXSV_SKIP_ZPROXY, set by
+#   scripts/zproxy-release-needed.sh in the workflow); otherwise every player's zproxy would
+#   self-update to an identical build. Releases without it are ignored by the self-update.
 # - the server, zdxsv-server_<ver>_linux-x86_64.tar.gz, linux/amd64 only (cgo for sqlite,
 #   static so it runs on an older glibc). Its name MUST NOT end in <os>_<arch> or
 #   <os>-<arch> (plus .zip/.tar.gz/...), or every zproxy out there (old versions filter
@@ -14,6 +17,7 @@ project_name: zdxsv
 
 builds:
   - id: zproxy
+    skip: '{{ envOrDefault "ZDXSV_SKIP_ZPROXY" "false" }}'
     main: ./src/zproxy
     binary: zproxy
     env:
@@ -70,6 +74,10 @@ release:
   # A tag like v1.2.0-rc1 becomes a prerelease: zproxy's self-update and zdxsv-release.sh
   # (releases/latest) both ignore those, so it is a safe end-to-end test of this pipeline.
   prerelease: auto
+  footer: |
+    {{- if eq (envOrDefault "ZDXSV_SKIP_ZPROXY" "false") "true" }}
+    zproxy is unchanged since {{ envOrDefault "ZDXSV_ZPROXY_PREV" "the previous release" }} and not part of this release.
+    {{- end }}
 
 changelog:
   sort: asc

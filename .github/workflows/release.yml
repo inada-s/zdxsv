@@ -1,5 +1,7 @@
-# Release on a v* tag: zproxy archives for every platform and the server tarball
-# (see .goreleaser.yml). The server binary passes scripts/smoke.sh before anything is published.
+# Release on a v* tag: the server tarball and, when its code changed since the last release
+# that shipped it, the zproxy archives for every platform (see .goreleaser.yml and
+# scripts/zproxy-release-needed.sh). The server binary passes scripts/smoke.sh before
+# anything is published.
 #
 #   git tag v1.2.0 && git push origin v1.2.0
 name: release
@@ -21,6 +23,11 @@ jobs:
           go-version: stable
       - name: go vet and test
         run: go vet ./... && go test ./...
+      - name: does zproxy need a release?
+        # sets ZDXSV_SKIP_ZPROXY and ZDXSV_ZPROXY_PREV for the goreleaser steps
+        run: scripts/zproxy-release-needed.sh | tee -a "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: build
         uses: goreleaser/goreleaser-action@v6
         with:

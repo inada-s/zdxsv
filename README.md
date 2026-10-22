@@ -18,7 +18,7 @@ A server is running at [zdxsv.net](https://zdxsv.net) in Japan.
 
 Just call `make` to build the executable. `make test` runs the tests; `make cover` also writes a coverage report (`cover.txt`, `cover.html`).
 
-Releases (zproxy for every platform, the server for linux/amd64) are built by GitHub Actions from a `v*` tag; see [docs/DEPLOY.md](docs/DEPLOY.md).
+Releases (the server for linux/amd64, and zproxy for every platform when its code changed) are built by GitHub Actions from a `v*` tag; see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 

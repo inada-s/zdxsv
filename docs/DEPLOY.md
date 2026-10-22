@@ -39,7 +39,12 @@ for) and the server, `zdxsv-server_<ver>_linux-x86_64.tar.gz` (static linux/amd6
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-One tag releases both, so a zproxy release always carries a server build and the other way round.
+Every tag releases the server. zproxy is only built when its code changed since the last release that
+shipped it (`scripts/zproxy-release-needed.sh` compares the packages zproxy depends on, `go.mod`, `go.sum`
+and `.goreleaser.yml` against that release's tag): a server-only fix as `v1.2.1` does not make every
+player's zproxy self-update to an identical build. zproxy's self-update only looks at releases that
+carry a zproxy archive, so releases without one are invisible to it, and `zdxsv-release.sh` always finds
+the server in the latest release.
 The server tarball's name must never end in `<os>_<arch>` or `<os>-<arch>`: zproxy's self-update
 (old versions included) takes any such asset as its own. `src/zproxy/release_test.go` enforces it.
 
