@@ -1,7 +1,7 @@
 # Deploying zdxsv with docker
 
 This runs the whole server (DNS, DNAS front end, login, lobby, battle) on one Linux host with docker compose.
-It is one container running one process, `zdxsv all`, which serves everything. The one-server commands
+It is one container running one process, `zdxsv` with no command (same as `zdxsv all`), which serves everything. The one-server commands
 (`zdxsv dns`, `dnas`, `login`, `lobby`, `battle`) still exist for running the parts separately.
 
 ## Requirements

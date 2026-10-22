@@ -24,7 +24,7 @@ To run a server with docker, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Commands
 - `./bin/zdxsv initdb` initializes database file.
-- `./bin/zdxsv all` serves everything below in one process (what docker-compose runs).
+- `./bin/zdxsv` (no command, or `all`) serves everything below in one process (what docker-compose runs).
 - `./bin/zdxsv dns` serves dns server, which is used to direct the game console to your server.
 - `./bin/zdxsv dnas` serves the DNAS front end on 443 (the SSLv2/TLS 1.0 the PS2 speaks), with the login webpage behind it.
 - `./bin/zdxsv login` serves login webpage over plain HTTP (for a separate `dnas` process).

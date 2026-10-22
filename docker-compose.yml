@@ -1,15 +1,14 @@
 version: '3.7'
 
-# One container runs every server (`zdxsv all`): dns, dnas (the 443 front end with the
-# login pages), lobby and battle. ZDXSV_LOGIN_ADDR and ZDXSV_BATTLE_RPC_ADDR are not
-# listened on in this mode (see docs/DEPLOY.md).
+# One container runs every server (`zdxsv` with no command = `zdxsv all`): dns, dnas (the
+# 443 front end with the login pages), lobby and battle. ZDXSV_LOGIN_ADDR and
+# ZDXSV_BATTLE_RPC_ADDR are not listened on in this mode (see docs/DEPLOY.md).
 services:
   zdxsv:
     build:
       context: .
       dockerfile: "./docker/zdxsv/Dockerfile"
     restart: always
-    command: all
     ports:
       - "53:53/udp"     # dns
       - "443:443"       # dnas (game consoles), other TLS to ZDXSV_DNAS_HTTPS_BACKEND

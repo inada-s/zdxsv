@@ -50,7 +50,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all, dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port]")
 }
 
 func prepareDB() {
@@ -89,14 +89,13 @@ func main() {
 	args := flag.Args()
 	glog.Infoln(args, len(args))
 
-	if len(args) < 1 {
-		printUsage()
-		os.Exit(1)
+	// No command runs every server in this process (the docker image's default).
+	command := "all"
+	if len(args) >= 1 {
+		command = args[0]
 	}
 
 	config.LoadConfig()
-
-	command := args[0]
 	prepareOption(command)
 
 	switch command {
