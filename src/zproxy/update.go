@@ -29,7 +29,14 @@ func doSelfUpdate() {
 	}
 	log.Println("アップデートチェックを行います")
 
-	latest, found, err := selfupdate.DetectLatest("inada-s/zdxsv")
+	// Only the zproxy archives (zdxsv_<ver>_<os>_<arch>.zip): the same releases also carry
+	// the server tarball (.goreleaser.yml).
+	up, err := selfupdate.NewUpdater(selfupdate.Config{Filters: []string{`^zdxsv_`}})
+	if err != nil {
+		log.Println("アップデートチェックに失敗しました", err)
+		return
+	}
+	latest, found, err := up.DetectLatest("inada-s/zdxsv")
 	if err != nil {
 		log.Println("アップデートチェックに失敗しました", err)
 	}

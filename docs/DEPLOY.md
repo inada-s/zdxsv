@@ -7,8 +7,8 @@ still exist for running the parts separately.
 
 ## Requirements
 
-- Linux host with a public IPv4 address, Go (the version in `go.mod` or newer; the sqlite
-  driver needs cgo, so gcc too: `apt install build-essential`) and `dig` for the smoke test.
+- Linux x86_64 host with a public IPv4 address. The server binary comes from the GitHub
+  releases (static, no runtime dependencies); Go is only needed to build from source.
 - Open ports:
 
 | port | proto | service | used by |
@@ -28,14 +28,32 @@ pprof is on `127.0.0.1:16060` (`-profile=0` turns it off).
 If the host runs systemd-resolved, it already holds port 53 on 127.0.0.53; set `DNSStubListener=no` in
 `/etc/systemd/resolved.conf` and restart it.
 
-## First deploy
+## Releases
 
-As the service user (`zdxsv` below, home `/home/zdxsv`; `infra/systemd/zdxsv.service` has these paths):
+A `v*` tag makes `.github/workflows/release.yml` build and publish a GitHub release (`.goreleaser.yml`):
+the zproxy archives for every platform (`zdxsv_<ver>_<os>_<arch>.zip`, what zproxy's self-update looks
+for) and the server, `zdxsv-server_<ver>_linux-x86_64.tar.gz` (static linux/amd64 binary, `zdxsv.service`,
+`zdxsv-release.sh`). The server binary passes `scripts/smoke.sh` on the runner before anything is published.
 
 ```sh
-git clone https://github.com/inada-s/zdxsv ~/zdxsv && cd ~/zdxsv
-make build                 # bin/zdxsv (and bench, zproxy)
-# .env: the tracked one is a development sample; write yours with your public IP in the *_PUBLIC_ADDR lines
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+One tag releases both, so a zproxy release always carries a server build and the other way round.
+The server tarball's name must never end in `<os>_<arch>` or `<os>-<arch>`: zproxy's self-update
+(old versions included) takes any such asset as its own. `src/zproxy/release_test.go` enforces it.
+
+## First deploy
+
+As the service user (`zdxsv` below, home `/home/zdxsv`; `infra/systemd/zdxsv.service` has these paths).
+`zdxsv-release.sh` downloads a release into `~/zdxsv/releases/<tag>/`, checks it against `checksums.txt`,
+points `~/zdxsv/bin/zdxsv` at it and restarts the service if it is installed.
+
+```sh
+mkdir -p ~/zdxsv && cd ~/zdxsv
+curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh
+bash zdxsv-release.sh      # latest release; `bash zdxsv-release.sh v1.2.0` for one in particular
+# .env: write yours with your public IP in the *_PUBLIC_ADDR lines
 IP=203.0.113.10
 sed "s/127.0.0.1/$IP/" <<'EOS' > .env
 ZDXSV_DNAS_PUBLIC_ADDR=127.0.0.1
@@ -50,10 +68,13 @@ ZDXSV_DB_NAME=zdxsv.db
 EOS
 # initdb wipes the tables: run it on the first deploy only.
 ZDXSV_DB_NAME=zdxsv.db bin/zdxsv initdb
-sudo cp infra/systemd/zdxsv.service /etc/systemd/system/
+sudo cp releases/*/zdxsv.service /etc/systemd/system/   # or infra/systemd/zdxsv.service from a checkout
 sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv
 journalctl -u zdxsv -f
 ```
+
+To run from source instead: `git clone` the repo as `~/zdxsv`, `make build` (needs Go and gcc for
+the sqlite driver), and the unit runs `bin/zdxsv` just the same.
 
 The unit gives the process `CAP_NET_BIND_SERVICE` for ports 53 and 443, so it runs as the `zdxsv`
 user. `.env` is the unit's `EnvironmentFile` (one `NAME=value` per line, no quotes needed).
@@ -104,18 +125,19 @@ dnas sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to `Z
 ```sh
 cd ~/zdxsv
 cp zdxsv.db zdxsv.db.bak     # with the service stopped for a consistent copy
-git pull
-make build                   # replaces bin/zdxsv in place; the running process keeps the old one until restart
-sudo systemctl restart zdxsv
+bash releases/*/zdxsv-release.sh   # any copy of the script: downloads the latest release and restarts the service
+bin/zdxsv version
 bin/zdxsv migratedb          # only when a release says the schema changed (reads ZDXSV_DB_NAME from the environment: `set -a; . .env; set +a` first)
 ```
+
+Old releases stay under `releases/`; to roll back, `bash releases/*/zdxsv-release.sh v1.1.0`.
 
 ## Moving from the docker stack (before 2026-10)
 
 zdxsv used to run as docker-compose containers (6 services, then 1). The database file and `.env` stay
 where they are; only the process changes.
 
-1. Install Go and gcc on the host, `git pull`, `make build`.
+1. In the checkout (`~/zdxsv`, which is also the service home): `curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh && bash zdxsv-release.sh` (no Go needed on the host; `bin/` is git-ignored).
 2. `.env`: `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (was `172.17.0.1:8444`, the docker bridge); `ZDXSV_LOGIN_ADDR` and `ZDXSV_BATTLE_RPC_ADDR` are unused; `ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203` as before.
 3. caddy: in `/etc/caddy/Caddyfile` change `servers 172.17.0.1:8444` to `servers 127.0.0.1:8444`, copy `infra/caddy/zdxsv.caddy` (binds 127.0.0.1 now), `sudo systemctl reload caddy`.
 4. Stop the old service and the containers: `sudo systemctl stop zdxsv` (the unit that ran docker-compose), `docker compose -f docker-compose.yml -f docker-compose.prod.yml down` from the old checkout if anything is still up (`docker ps`).

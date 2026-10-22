@@ -5,8 +5,9 @@
 #   sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv
 #   journalctl -u zdxsv -f
 #
-# Paths assume the checkout at /home/zdxsv/zdxsv (binary bin/zdxsv, config .env,
-# database zdxsv.db as ZDXSV_DB_NAME says, relative to WorkingDirectory).
+# Paths assume the zdxsv home /home/zdxsv/zdxsv: bin/zdxsv (a symlink into releases/<tag>/
+# made by zdxsv-release.sh, or a `make build` output), .env, and the database zdxsv.db as
+# ZDXSV_DB_NAME says, relative to WorkingDirectory.
 [Unit]
 Description=zdxsv - Gundam vs Zeta Gundam private game server
 After=network-online.target

@@ -1,33 +1,81 @@
-env:
-  - GO111MODULE=on
-before:
-  hooks:
-    - go mod tidy
+# Releases: .github/workflows/release.yml runs `goreleaser release` on a v* tag.
+#
+# Two things ship from one tag:
+# - zproxy (the PS2 UDP proxy players download) as zdxsv_<ver>_<os>_<arch>.zip for every
+#   platform. zproxy's self-update (go-github-selfupdate, src/zproxy/update.go) finds its
+#   update by that default archive name (suffix <os>_<arch>.zip) and the `zproxy` binary
+#   inside, so the zproxy build and archive keep goreleaser's defaults.
+# - the server, zdxsv-server_<ver>_linux-x86_64.tar.gz, linux/amd64 only (cgo for sqlite,
+#   static so it runs on an older glibc). Its name MUST NOT end in <os>_<arch> or
+#   <os>-<arch> (plus .zip/.tar.gz/...), or every zproxy out there (old versions filter
+#   nothing) would download it as its update. src/zproxy/release_test.go checks this.
+version: 2
+project_name: zdxsv
+
 builds:
-- main: ./src/zproxy
-  binary: zproxy
-  env:
-    - CGO_ENABLED=0
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - 386
-    - amd64
-    - arm
-    - arm64
-  ldflags:
-    - -s -w -X main.releaseVersion={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
+  - id: zproxy
+    main: ./src/zproxy
+    binary: zproxy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    ldflags:
+      - -s -w -X main.releaseVersion={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
+  - id: zdxsv
+    main: ./src/zdxsv
+    binary: zdxsv
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    tags:
+      - netgo
+      - osusergo
+    ldflags:
+      - -s -w -extldflags "-static" -X main.releaseVersion={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
+
 archives:
-- format: zip
+  - id: zproxy
+    ids:
+      - zproxy
+    formats:
+      - zip
+  - id: server
+    ids:
+      - zdxsv
+    formats:
+      - tar.gz
+    name_template: "zdxsv-server_{{ .Version }}_linux-x86_64"
+    files:
+      - LICENSE
+      - src: infra/systemd/zdxsv.service
+        strip_parent: true
+      - src: scripts/zdxsv-release.sh
+        strip_parent: true
+
 checksum:
   name_template: 'checksums.txt'
+
+release:
+  # A tag like v1.2.0-rc1 becomes a prerelease: zproxy's self-update and zdxsv-release.sh
+  # (releases/latest) both ignore those, so it is a safe end-to-end test of this pipeline.
+  prerelease: auto
+
 changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
-    - Merge pull request
-    - Merge branch
+      - '^docs:'
+      - '^test:'
+      - Merge pull request
+      - Merge branch
