@@ -13,6 +13,9 @@ var Conf Config
 // LoadConfig loads environmental variable into Conf.
 func LoadConfig() {
 	var c Config
+	if err := env.Parse(&c.DNS); err != nil {
+		log.Fatal(err)
+	}
 	if err := env.Parse(&c.DNAS); err != nil {
 		log.Fatal(err)
 	}
@@ -34,11 +37,19 @@ func LoadConfig() {
 
 // Config stores zdxsv config.
 type Config struct {
+	DNS    DNSConfig
 	DNAS   DNASConfig
 	Login  LoginConfig
 	Lobby  LobbyConfig
 	Battle BattleConfig
 	DB     DBConfig
+}
+
+// DNSConfig stores settings for the DNS server.
+type DNSConfig struct {
+	// Addr is the UDP address to listen on. A host part binds that interface only
+	// (e.g. 192.168.1.3:53 when something else already holds 0.0.0.0:53).
+	Addr string `env:"ZDXSV_DNS_ADDR" envDefault:":53"`
 }
 
 // DNASConfig stores settings for DNAS server.

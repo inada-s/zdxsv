@@ -4,6 +4,10 @@ zdxsv.net:8444 {
 	redir https://www.zdxsv.net{uri} permanent
 }
 
+http://zdxsv.net {
+	redir https://www.zdxsv.net{uri} permanent
+}
+
 lbs.zdxsv.net:8443 {
 	header Access-Control-Allow-Origin *
 	reverse_proxy /lbs/* 127.0.0.1:8203

@@ -138,7 +138,7 @@ import sites/*.caddy
 
 ```
 {
-    servers :8444 {
+    servers 172.17.0.1:8444 {
         listener_wrappers {
             proxy_protocol
             tls
@@ -148,12 +148,18 @@ import sites/*.caddy
 import sites/*.caddy
 ```
 
+`servers` のアドレスはサイトの `bind` を含めた完全なリスナーアドレスでないと一致しない（`:8444` では付かない。2026-10-22 に遭遇）。
+
 ### /etc/caddy/sites/zdxsv.caddy（zdxsv リポジトリ infra/caddy/zdxsv.caddy）
 
 ```
 # 移行期間のみ。zdxsv の router が 443 のブラウザ接続をここへ流す。フェーズ 5 で削除
 zdxsv.net:8444 {
     bind 172.17.0.1
+    redir https://www.zdxsv.net{uri} permanent
+}
+
+http://zdxsv.net {
     redir https://www.zdxsv.net{uri} permanent
 }
 
@@ -209,29 +215,35 @@ VM 共通（要 sudo）
 11. `website/index.html`: `/api/stat` を `https://lbs.zdxsv.net:8443/lbs/status` に、`<link rel="canonical" href="https://www.zdxsv.net/">` を追加（フェーズ 5 で apex に変更）。
 12. `src/zproxy/config.go` の `-lobbyrpcaddr` デフォルトを `lbs.zdxsv.net:8201` に。
 
-コード: gdxsv リポジトリ
+コード: gdxsv リポジトリ（PR inada-s/gdxsv#432、2026-10-20 マージ済み。リリースタグはフェーズ 2 で）
 13. `infra/lbs/gdxsv.caddy`（上記）。`infra/lbs/launch-lbs.sh` の `GDXSV_LOBBY_HTTP_ADDR` は `:9880` のまま（フェーズ 5 で `127.0.0.1:9880`）。
 14. lbs に `/lbs/replay_upload`（multipart 受信 → GCS bucket gdxsv → 既存の replay_uploaded 処理を内部呼び出し）。
-15. mcsfunc を Go に移植（`google.golang.org/api/compute/v1`、起動スクリプトはテンプレート、`GDXSV_LOBBY_PUBLIC_ADDR=lbs.gdxsv.net:9876`）。
-    サービスアカウントに Compute インスタンス管理の権限を追加（GCP IAM）。`GDXSV_MCSFUNC_URL` を廃止。
+15. mcsfunc を Go に移植（`gdxsv/lbs_gce.go`、`google.golang.org/api/compute/v1`、起動スクリプトは Go 定数、lobby アドレスは `GDXSV_LOBBY_PUBLIC_ADDR=lbs.gdxsv.net:9876` から）。
+    `GDXSV_MCSFUNC_URL` を廃止し `GDXSV_GCE_ONDEMAND=true` と `GDXSV_REPLAY_BUCKET=gdxsv` を追加。
+    **フェーズ 2 の前に GCP IAM**: lbs のサービスアカウントに `roles/compute.instanceAdmin.v1` と `roles/iam.serviceAccountUser`、バケット gdxsv への objectCreator / objectViewer。
 16. `website/src/Status.tsx` の URL を `https://lbs.gdxsv.net:8443/lbs/status` に。
 17. `run4flycast.sh` のデフォルトを `lbs.gdxsv.net` に。
 
-コード: flycast
-18. `core/cfg/option.cpp` の `GdxLobbyServer` デフォルトを `lbs.gdxsv.net` に。
+コード: flycast（PR inada-s/flycast#528、2026-10-20 マージ済み。gdxsv 側がフェーズ 2 で稼働してからリリース）
+18. `core/gdxsv/gdxsv_config.cpp` の `GdxLobbyServer` デフォルトを `lbs.gdxsv.net` に。emu.cfg に保存済みの `server = zdxsv.net` は起動時に `lbs.gdxsv.net` へ書き換える（デフォルト変更だけでは既存ユーザーが移らない）。
 19. `gdxsv_replay_util.cpp` の `ReplayApiUrl` / `LiveApiUrl` デフォルトを `https://lbs.gdxsv.net:8443/lbs` に。
 20. `gdxsv_backend_rollback.cpp` のアップロード先を `https://lbs.gdxsv.net:8443/lbs/replay_upload` に。
 
-コード: pcsx2（zdxsv ビルド）
+コード: pcsx2（zdxsv ビルド。PR inada-s/pcsx2#223、2026-10-20 マージ済み。リリースはいつでも可）
 21. `pcsx2/Zdxsv/ServerHosts.cpp` の `kServerHost` を `lbs.zdxsv.net` に。
 
-### フェーズ 1: VM で master を稼働、Web サイトを www へ
+### フェーズ 1: VM で master を稼働、Web サイトを www へ（完了 2026-10-22 18:35 JST、停止時間約 1 分、オンライン 0 人）
+
+事前検証（2026-10-22 完了）: master の `zdxsv.exe` を Windows 上でネイティブ起動（dns / dnas / login / battle / lobby、`ZDXSV_DNS_ADDR=192.168.1.3:53`）し、
+実機 PS2 が Go 製 dnas の DNAS 認証（i-connect / others）→ ログインページ → `/login` → ロビー入室まで通ることを確認。account / user が DB に作られた。
 
 前提: フェーズ 0 の DNS が引けること。ロビーに人がいない時間帯に行う（再ビルドで数分止まる）。
 
 1. バックアップ: `cp zdxsv.db zdxsv.db.bak-$(date +%F)`（lobby と login を止めてから）。
 2. `git pull`。VM 側の `docker-compose.prod.yml` から `https-portal` を削除（`lobby` / `battle` の `network_mode: host` は維持）。
-3. メモリ 961 MiB のため、`docker build -f docker/zdxsv/Dockerfile .` を先に 1 回走らせてから `docker-compose up --build`。
+   実施 2026-10-22: VM の known_hosts にある GitHub の RSA 鍵が 2023 年の更新前のものだったので api.github.com/meta の鍵に差し替え、ssh 鍵が無いため remote を https に変更。`.env` は追跡ファイルで衝突するため `git checkout -- .env` 後に書き直し（`ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203`、`ZDXSV_STATUS_ADDR` 削除）。バックアップ: `zdxsv.db.bak-2026-10-22`、`.env.vm-backup-2026-10-22`、`docker-compose.prod.yml.bak-2026-10-22`。
+3. メモリ 961 MiB のため、`docker build --pull -f docker/zdxsv/Dockerfile .` を先に 1 回走らせてから `docker-compose up --build`。
+   `--pull` 必須: VM にキャッシュされた `golang:alpine` が 2019 年のもので、`embed` 非対応のため master がビルドできない（2026-10-22 に遭遇）。
 4. `docker-compose run --rm lobby migratedb`（`battle_record.replay_url` 列の追加。初回のみ）。
 5. `systemctl restart zdxsv`。この時点で 80 番が空く。
 6. （要 sudo）`infra/caddy/zdxsv.caddy` と gdxsv の `infra/lbs/gdxsv.caddy` を `/etc/caddy/sites/` にコピー、移行期間用のグローバル設定を
@@ -241,13 +253,20 @@ VM 共通（要 sudo）
    - `curl -sI https://zdxsv.net/` が 301 → `https://www.zdxsv.net/`。
    - `curl https://lbs.zdxsv.net:8443/lbs/status` と `curl https://lbs.gdxsv.net:8443/lbs/status` が JSON を返し、CORS ヘッダが付く。
    - 実機 PS2 または PCSX2 で DNAS → login → ロビー → 対戦まで通す。
-8. GitHub: zdxsv リポジトリの Pages を有効化（Source: GitHub Actions）。master への push で `www.zdxsv.net` が公開される。
+8. GitHub: zdxsv リポジトリの Pages を有効化（Source: GitHub Actions、Custom domain: www.zdxsv.net）。完了 2026-10-20: PR #116 マージ後に https://www.zdxsv.net/ が公開済み。Enforce HTTPS は証明書発行後にオン。
    カスタムドメインの DNS チェックと HTTPS 証明書発行を待つ（数分〜1 時間）。
-9. Search Console に `www.zdxsv.net` をプロパティ追加。
+9. Search Console に `www.zdxsv.net` をプロパティ追加。（未実施）
+
+完了時の確認結果（外部から）: `https://zdxsv.net/` と `http://zdxsv.net/` は 301 → `https://www.zdxsv.net/`、`lbs.zdxsv.net:8443` / `lbs.gdxsv.net:8443` の `/lbs/status` は 200 で CORS ヘッダー付き、`dnascheck 153.121.44.150:443` OK、16061 と 8203 は外から閉、9880 は予定通り開いたまま。
+つまずき: compose から消えたサービスのコンテナ（https-portal、legacyweb、web、status）は unit の `down -v` では消えないので `docker rm -f` が必要。`servers :8444` では bind 付きリスナーにラッパーが付かない。
 
 ロールバック: `systemctl stop caddy`、`git checkout deeeeef` と旧 `docker-compose.prod.yml` に戻して `systemctl restart zdxsv`。DNS は触っていないので影響なし。
 
 ### フェーズ 2: gdxsv 側の切り替えと互換シム
+
+注意: VM の `launch-lbs.sh` は gdxsv.service の再起動のたびに GitHub の最新リリースを取ってくる。
+PR #432 を含むリリースタグを打つのは、GCP IAM の付与と VM 側 `launch-lbs.sh` の差し替え（`GDXSV_GCE_ONDEMAND` / `GDXSV_REPLAY_BUCKET` / `GDXSV_LOBBY_PUBLIC_ADDR=lbs.gdxsv.net:9876`）と同時に行う。
+先にリリースだけ出すと、次の再起動でオンデマンドの mcs / relay 起動が止まる。PR のマージ自体は安全。
 
 1. gdxsv を新バージョンとしてリリース（lbs の upload / GCE 直接呼び出し）。`launch-lbs.sh` から `GDXSV_MCSFUNC_URL` を削除し、
    `systemctl restart gdxsv`。
@@ -279,7 +298,7 @@ DNS（要 DNS）
 
 zdxsv（VM）
 4. `docker-compose.yml` から `router` を外し、`dnas` に `ports: ["443:443"]` を付ける（master に PR）。`git pull` して `systemctl restart zdxsv`。
-5. （要 sudo）`sites/zdxsv.caddy` の `zdxsv.net:8444` ブロックと、`/etc/caddy/Caddyfile` のグローバル設定を削除して `systemctl reload caddy`。
+5. （要 sudo）`sites/zdxsv.caddy` の `zdxsv.net:8444` ブロックと `http://zdxsv.net` ブロック、`/etc/caddy/Caddyfile` のグローバル設定を削除して `systemctl reload caddy`。
 
 gdxsv（VM）
 6. `launch-lbs.sh` の `GDXSV_LOBBY_HTTP_ADDR` を `127.0.0.1:9880` にして `systemctl restart gdxsv`。

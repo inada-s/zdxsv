@@ -76,7 +76,8 @@ func mainDNS() {
 	log.Println("Login server ", loginPublicIP)
 	log.Println("gdx server", gdxsvPublicIP)
 
-	server := &dns.Server{Addr: ":53", Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}
+	log.Println("DNS listen", config.Conf.DNS.Addr)
+	server := &dns.Server{Addr: config.Conf.DNS.Addr, Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}
 	err = server.ListenAndServe()
 	log.Fatal(err)
 }
