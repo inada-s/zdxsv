@@ -23,6 +23,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	LoadConfig()
 
 	want := Config{
+		DNS:   DNSConfig{Addr: ":53"},
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
 		Lobby: LobbyConfig{ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
 	}
@@ -38,6 +39,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_DNAS_PUBLIC_ADDR":         "1.2.3.4:443",
 		"ZDXSV_DNAS_ADDR":                ":10443",
 		"ZDXSV_DNAS_REGION":              "us",
+		"ZDXSV_DNS_ADDR":                 "192.168.1.3:53",
 		"ZDXSV_LOGIN_ADDR":               ":9876",
 		"ZDXSV_LOGIN_PUBLIC_ADDR":        "1.2.3.4:9876",
 		"ZDXSV_LOBBY_ADDR":               ":8200",
@@ -61,6 +63,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	LoadConfig()
 
 	want := Config{
+		DNS:   DNSConfig{Addr: "192.168.1.3:53"},
 		DNAS:  DNASConfig{PublicAddr: "1.2.3.4:443", Addr: ":10443", Region: "us"},
 		Login: LoginConfig{Addr: ":9876", PublicAddr: "1.2.3.4:9876"},
 		Lobby: LobbyConfig{
