@@ -27,6 +27,8 @@ pages are served inside dnas, the lobby drives the battle logic in process), so 
 pprof is on `127.0.0.1:16060` (`-profile=0` turns it off).
 If the host runs systemd-resolved, it already holds port 53 on 127.0.0.53; set `DNSStubListener=no` in
 `/etc/systemd/resolved.conf` and restart it.
+With ufw, allow every port in the table, the UDP ones too (`sudo ufw allow 53/udp`, `8201/udp`, `8202/udp`,
+`8210/udp`); only `8203` stays closed.
 
 ## Releases
 
@@ -125,6 +127,12 @@ sudo cp infra/caddy/zdxsv.caddy /etc/caddy/sites/ && sudo systemctl reload caddy
 
 dnas sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (set it in `.env`), caddy's `zdxsv.net:8444` block, with a PROXY header, which redirects to the website. caddy needs `listener_wrappers { proxy_protocol; tls }` for that listener in the global options (`servers 127.0.0.1:8444 { ... }`, the full bound address). Without `ZDXSV_DNAS_HTTPS_BACKEND` those connections get a TLS alert.
 
+zdxsv.net reboots every morning, so both services must come back on their own: `zdxsv.service` has
+`Restart=always` and only needs the network; caddy's unit is given the same via
+`/etc/systemd/system/caddy.service.d/override.conf` (`After=network-online.target`, `Wants=network-online.target`,
+`Restart=on-failure`, `RestartSec=5s`). Neither may depend on anything else, and anything new on the host must be
+an enabled unit as well. After a change, `systemctl is-enabled zdxsv caddy` and check both after the next reboot.
+
 ## Update
 
 ```sh
@@ -135,21 +143,7 @@ bin/zdxsv version
 bin/zdxsv migratedb          # only when a release says the schema changed (reads ZDXSV_DB_NAME from the environment: `set -a; . .env; set +a` first)
 ```
 
-Old releases stay under `releases/`; to roll back, `bash releases/*/zdxsv-release.sh v1.1.0`.
-
-## Moving from the docker stack (before 2026-10)
-
-zdxsv used to run as docker-compose containers (6 services, then 1). The database file and `.env` stay
-where they are; only the process changes.
-
-1. In the checkout (`~/zdxsv`, which is also the service home): `curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh && bash zdxsv-release.sh` (no Go needed on the host; `bin/` is git-ignored). Until a release with the server tarball is the latest one, name the tag: `bash zdxsv-release.sh v1.2.0-rc1` works for a prerelease too.
-2. `.env`: `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (was `172.17.0.1:8444`, the docker bridge); `ZDXSV_LOGIN_ADDR` and `ZDXSV_BATTLE_RPC_ADDR` are unused; `ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203` as before.
-3. caddy: in `/etc/caddy/Caddyfile` change `servers 172.17.0.1:8444` to `servers 127.0.0.1:8444`, copy `infra/caddy/zdxsv.caddy` (binds 127.0.0.1 now), `sudo systemctl reload caddy`.
-4. Stop the old service and the containers: `sudo systemctl stop zdxsv` (the unit that ran docker-compose), `docker compose -f docker-compose.yml -f docker-compose.prod.yml down` from the old checkout if anything is still up (`docker ps`).
-5. Install the unit: `sudo cp infra/systemd/zdxsv.service /etc/systemd/system/zdxsv.service` (overwrites the docker-compose one), `sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv`, then `journalctl -u zdxsv -f` and `curl http://127.0.0.1:8203/lbs/status`.
-6. Firewall: the `172.16.0.0/12 -> 172.17.0.1:8444` rule is no longer needed. Check that ufw allows every port in the table above, UDP included (`ufw allow 53/udp`): docker used to open its published ports with its own iptables rules, bypassing ufw, so rules for them may never have existed (on zdxsv.net 53/udp was missing). pprof is on loopback now.
-7. caddy's unit must not wait for docker any more (`After=docker.service` was only needed for the docker0 bind): `/etc/systemd/system/caddy.service.d/override.conf` with `After=network-online.target`, `Wants=network-online.target`, `Restart=on-failure`. The host reboots daily, so both `zdxsv` and `caddy` must come back on their own: `systemctl is-enabled zdxsv caddy` and check them after the next reboot.
-8. Afterwards: `docker system prune -a` reclaims the old images, or remove docker altogether (`systemctl disable --now docker`).
+Old releases stay under `releases/`; to roll back, run `zdxsv-release.sh` with an older tag (v1.2.0 is the first with a server tarball).
 
 ## Clients
 
