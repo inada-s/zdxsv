@@ -74,3 +74,10 @@ padding-top: 0px;
 padding-bottom: 5px;
 border: none;
 }
+
+.zproxy-download {
+  margin: 8px 0;
+}
+.zproxy-download .btn {
+  margin-bottom: 4px;
+}
