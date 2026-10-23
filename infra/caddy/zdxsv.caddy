@@ -1,6 +1,7 @@
-# 移行期間のみ。zdxsv (dnas) が 443 のブラウザ接続をここへ流す。フェーズ 5 で削除
+# 移行期間のみ。zdxsv (dnas, ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444) が 443 のブラウザ接続をここへ流す。フェーズ 5 で削除
+# Caddyfile の global options に servers 127.0.0.1:8444 { listener_wrappers { proxy_protocol; tls } } が必要
 zdxsv.net:8444 {
-	bind 172.17.0.1
+	bind 127.0.0.1
 	redir https://www.zdxsv.net{uri} permanent
 }
 

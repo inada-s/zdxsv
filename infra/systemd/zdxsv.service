@@ -1,0 +1,33 @@
+# zdxsv as a systemd service: one process (`zdxsv`, no command) serving dns, dnas,
+# lobby and battle. Install: see docs/DEPLOY.md.
+#
+#   sudo cp infra/systemd/zdxsv.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv
+#   journalctl -u zdxsv -f
+#
+# Paths assume the checkout at /home/zdxsv/zdxsv (binary bin/zdxsv, config .env,
+# database zdxsv.db as ZDXSV_DB_NAME says, relative to WorkingDirectory).
+[Unit]
+Description=zdxsv - Gundam vs Zeta Gundam private game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=zdxsv
+Group=zdxsv
+WorkingDirectory=/home/zdxsv/zdxsv
+EnvironmentFile=/home/zdxsv/zdxsv/.env
+ExecStart=/home/zdxsv/zdxsv/bin/zdxsv
+Restart=always
+RestartSec=5
+# Ports 53 and 443 without root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+LimitNOFILE=65536
+# glog writes to stderr (main.go sets logtostderr); journald keeps it.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

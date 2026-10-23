@@ -2,7 +2,8 @@
 .env
 zdxsv.db
 zdxsv_test.db
-docker-compose.prod.yml
+smoke.db
+smoke.log
 *.swp
 *.swo
 

@@ -1,18 +1,18 @@
-# Production compose smoke test on a hosted runner. No secrets.
-name: compose
+# Tests, then a smoke test of the server binary on the hosted runner. No secrets.
+name: ci
 on:
   push:
     branches: [master, "ai/**"]
   workflow_dispatch:
 concurrency:
-  group: compose-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
-  smoke:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -28,9 +28,6 @@ jobs:
       - name: coverage summary
         run: |
           { echo '### Go coverage'; echo '```'; tr -s ' \t' ' ' < cover-pkg.txt; tail -1 cover.txt | tr -s ' \t' ' '; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: build compose image
-        timeout-minutes: 15
-        run: docker compose -f docker-compose.yml --progress plain build
       - name: free port 53
         # systemd-resolved's stub holds 127.0.0.53:53; drop only the stub (stopping resolved cut the runner off)
         run: |
@@ -38,9 +35,13 @@ jobs:
           sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
           sudo systemctl restart systemd-resolved
           getent hosts github.com
+      - name: build and allow ports 53 and 443
+        run: |
+          make build
+          sudo setcap cap_net_bind_service=+ep bin/zdxsv
       - name: smoke
-        timeout-minutes: 10
-        run: docker/smoke.sh
-      - name: down
-        if: always()
-        run: docker compose -f docker-compose.yml down
+        timeout-minutes: 5
+        run: scripts/smoke.sh
+      - name: server log
+        if: failure()
+        run: cat smoke.log
