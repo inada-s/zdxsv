@@ -147,8 +147,9 @@ where they are; only the process changes.
 3. caddy: in `/etc/caddy/Caddyfile` change `servers 172.17.0.1:8444` to `servers 127.0.0.1:8444`, copy `infra/caddy/zdxsv.caddy` (binds 127.0.0.1 now), `sudo systemctl reload caddy`.
 4. Stop the old service and the containers: `sudo systemctl stop zdxsv` (the unit that ran docker-compose), `docker compose -f docker-compose.yml -f docker-compose.prod.yml down` from the old checkout if anything is still up (`docker ps`).
 5. Install the unit: `sudo cp infra/systemd/zdxsv.service /etc/systemd/system/zdxsv.service` (overwrites the docker-compose one), `sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv`, then `journalctl -u zdxsv -f` and `curl http://127.0.0.1:8203/lbs/status`.
-6. Firewall: the `172.16.0.0/12 -> 172.17.0.1:8444` rule is no longer needed; nothing else changes (pprof is on loopback now).
-7. Afterwards: `docker system prune -a` reclaims the old images, or remove docker altogether.
+6. Firewall: the `172.16.0.0/12 -> 172.17.0.1:8444` rule is no longer needed. Check that ufw allows every port in the table above, UDP included (`ufw allow 53/udp`): docker used to open its published ports with its own iptables rules, bypassing ufw, so rules for them may never have existed (on zdxsv.net 53/udp was missing). pprof is on loopback now.
+7. caddy's unit must not wait for docker any more (`After=docker.service` was only needed for the docker0 bind): `/etc/systemd/system/caddy.service.d/override.conf` with `After=network-online.target`, `Wants=network-online.target`, `Restart=on-failure`. The host reboots daily, so both `zdxsv` and `caddy` must come back on their own: `systemctl is-enabled zdxsv caddy` and check them after the next reboot.
+8. Afterwards: `docker system prune -a` reclaims the old images, or remove docker altogether (`systemctl disable --now docker`).
 
 ## Clients
 
