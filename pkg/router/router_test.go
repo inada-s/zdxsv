@@ -1,4 +1,4 @@
-package main
+package router
 
 import (
 	"bufio"
@@ -40,21 +40,22 @@ func fakeBackend(t *testing.T) (string, chan net.Conn) {
 
 // startRouter routes to fresh fake backends and returns a connected client.
 func startRouter(t *testing.T) (client *net.TCPConn, dnas, https chan net.Conn) {
-	t.Helper()
-	oldDNAS, oldHTTPS, oldTimeout := dnasBackend, httpsBackend, *helloTimeout
-	t.Cleanup(func() { dnasBackend, httpsBackend, *helloTimeout = oldDNAS, oldHTTPS, oldTimeout })
-	dnasBackend, dnas = fakeBackend(t)
-	httpsBackend, https = fakeBackend(t)
-	*helloTimeout = 300 * time.Millisecond
+	r := &Router{HelloTimeout: 300 * time.Millisecond}
+	r.DNASBackend, dnas = fakeBackend(t)
+	r.HTTPSBackend, https = fakeBackend(t)
+	return startRouterWith(t, r), dnas, https
+}
 
+func startRouterWith(t *testing.T, r *Router) *net.TCPConn {
+	t.Helper()
 	l := listenLocal(t)
-	go serve(l)
+	go r.Serve(l)
 	c, err := net.Dial("tcp", l.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { c.Close() })
-	return c.(*net.TCPConn), dnas, https
+	return c.(*net.TCPConn)
 }
 
 func accepted(t *testing.T, ch chan net.Conn) net.Conn {
@@ -147,14 +148,8 @@ func TestRouteOthersToHTTPSWithProxyHeader(t *testing.T) {
 	}
 }
 
-func TestBackendDownSendsAlert(t *testing.T) {
-	c, _, _ := startRouter(t)
-	l := listenLocal(t)
-	dnasBackend = l.Addr().String()
-	l.Close()
-
-	// Only the record header: unread bytes at close would reset the conn before the alert is read.
-	c.Write(consoleHello[:5])
+func expectAlert(t *testing.T, c *net.TCPConn) {
+	t.Helper()
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))
 	got, err := io.ReadAll(c)
 	if err != nil {
@@ -162,5 +157,44 @@ func TestBackendDownSendsAlert(t *testing.T) {
 	}
 	if want := []byte{21, 3, 0, 0, 2, 2, 80}; !bytes.Equal(got, want) {
 		t.Errorf("client got % x, want internal_error alert % x", got, want)
+	}
+}
+
+func TestBackendDownSendsAlert(t *testing.T) {
+	l := listenLocal(t)
+	l.Close()
+	c := startRouterWith(t, &Router{DNASBackend: l.Addr().String(), HelloTimeout: 300 * time.Millisecond})
+
+	// Only the record header: unread bytes at close would reset the conn before the alert is read.
+	c.Write(consoleHello[:5])
+	expectAlert(t, c)
+}
+
+func TestNoHTTPSBackendSendsAlert(t *testing.T) {
+	c := startRouterWith(t, &Router{HelloTimeout: 300 * time.Millisecond})
+	c.Write([]byte{22, 3, 1, 0x02})
+	expectAlert(t, c)
+}
+
+// TestConsoleInProcess: with Console set, a game console connection is served in
+// process and reads the hello unchanged (the sniffed bytes put back in front).
+func TestConsoleInProcess(t *testing.T) {
+	got := make(chan []byte, 1)
+	r := &Router{HelloTimeout: 300 * time.Millisecond, Console: func(c net.Conn) {
+		c.SetDeadline(time.Now().Add(2 * time.Second))
+		b, _ := io.ReadAll(c)
+		c.Write([]byte("pong"))
+		got <- b
+	}}
+	r.HTTPSBackend, _ = fakeBackend(t)
+	c := startRouterWith(t, r)
+	c.Write(consoleHello)
+	c.CloseWrite()
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if b := readFull(t, c, 4); string(b) != "pong" {
+		t.Errorf("client got %q", b)
+	}
+	if b := <-got; !bytes.Equal(b, consoleHello) {
+		t.Errorf("console handler got % x, want the hello unchanged", b)
 	}
 }

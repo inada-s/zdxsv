@@ -24,16 +24,17 @@ To run a server with docker, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Commands
 - `./bin/zdxsv initdb` initializes database file.
+- `./bin/zdxsv` (no command, or `all`) serves everything below in one process (what docker-compose runs).
 - `./bin/zdxsv dns` serves dns server, which is used to direct the game console to your server.
-- `./bin/zdxsv login` serves login webpage. Aside from this, front-end server that supports SSLv2 is required.
+- `./bin/zdxsv dnas` serves the DNAS front end on 443 (the SSLv2/TLS 1.0 the PS2 speaks), with the login webpage behind it.
+- `./bin/zdxsv login` serves login webpage over plain HTTP (for a separate `dnas` process).
 - `./bin/zdxsv lobby` serves lobby.
 - `./bin/zdxsv battle` serves battle.
 
 
 ## Run with docker-compose
 
-In order to host actually connectable server, additional services are required.
-All services are configured in `docker-compose` file.
+The `docker-compose` file runs one container with `zdxsv all`.
 
 Before running docker-compose, you must prepare some file with following way.
 
@@ -42,14 +43,6 @@ Before running docker-compose, you must prepare some file with following way.
 ```
 ZDXSV_DB_NAME=zdxsv.db ./bin/zdxsv initdb
 ```
-
-### Build router binary
-```
-make router
-```
-
-That behaves as a proxy server on 443, which detects whether an incoming connection is a game console and proxies it to the dnas server (anything else goes to the host's caddy, see [docs/DEPLOY.md](docs/DEPLOY.md)).
-
 
 ### Prepare .env file
 There is the .env file in the root of this repository.

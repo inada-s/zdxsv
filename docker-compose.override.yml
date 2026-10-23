@@ -1,38 +1,6 @@
 version: '3.7'
 services:
-  dns:
-    build:
-      target: builder
-    entrypoint: /build_and_run.sh
-    volumes:
-      - ./src:/work/src:ro
-      - ./pkg:/work/pkg:ro
-
-  lobby:
-    build:
-      target: builder
-    entrypoint: /build_and_run.sh
-    volumes:
-      - ./src:/work/src:ro
-      - ./pkg:/work/pkg:ro
-
-  login:
-    build:
-      target: builder
-    entrypoint: /build_and_run.sh
-    volumes:
-      - ./src:/work/src:ro
-      - ./pkg:/work/pkg:ro
-
-  battle:
-    build:
-      target: builder
-    entrypoint: /build_and_run.sh
-    volumes:
-      - ./src:/work/src:ro
-      - ./pkg:/work/pkg:ro
-
-  dnas:
+  zdxsv:
     build:
       target: builder
     entrypoint: /build_and_run.sh

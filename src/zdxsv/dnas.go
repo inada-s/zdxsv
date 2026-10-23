@@ -5,22 +5,38 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/dnas"
+	"zdxsv/pkg/router"
 
 	"github.com/golang/glog"
 )
 
+// newDNASRouter is the 443 front end: game consoles get the DNAS server (with the login
+// pages behind /00000020/), other TLS goes to ZDXSV_DNAS_HTTPS_BACKEND.
+func newDNASRouter(login http.Handler) (*router.Router, error) {
+	s, err := dnas.NewServer(config.Conf.DNAS.Region, login)
+	if err != nil {
+		return nil, err
+	}
+	return &router.Router{Console: s.ServeConn, HTTPSBackend: config.Conf.DNAS.HTTPSBackend}, nil
+}
+
 func mainDNAS() {
-	s, err := dnas.NewServer(config.Conf.DNAS.Region, config.Conf.Login.Addr)
+	login, err := dnas.LoginProxy(config.Conf.Login.Addr)
 	if err != nil {
 		glog.Fatalln(err)
 	}
-	glog.Infoln("dnas listen", config.Conf.DNAS.Addr, "login", config.Conf.Login.Addr)
-	glog.Fatalln(s.ListenAndServe(config.Conf.DNAS.Addr))
+	r, err := newDNASRouter(login)
+	if err != nil {
+		glog.Fatalln(err)
+	}
+	glog.Infoln("dnas listen", config.Conf.DNAS.Addr, "login", config.Conf.Login.Addr, "https backend", config.Conf.DNAS.HTTPSBackend)
+	glog.Fatalln(r.ListenAndServe(config.Conf.DNAS.Addr))
 }
 
 // mainDNASCheck queries a DNAS server at addr as the game's PS2 does

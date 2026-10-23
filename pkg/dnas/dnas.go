@@ -153,21 +153,26 @@ type Server struct {
 	mux *http.ServeMux
 }
 
-// NewServer: region selects the certificate (jp, us, eu); loginAddr (host:port)
-// is the zdxsv login server behind /00000020/.
-func NewServer(region, loginAddr string) (*Server, error) {
+// NewServer: region selects the certificate (jp, us, eu); login is the zdxsv login
+// server behind /00000020/ (its handler in process, or LoginProxy to another process).
+func NewServer(region string, login http.Handler) (*Server, error) {
 	cfg, err := loadTLS(region)
 	if err != nil {
 		return nil, err
 	}
 	s := &Server{tls: cfg, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/", handleDNAS)
-	u, err := url.Parse("http://" + loginAddr + "/")
+	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", login))
+	return s, nil
+}
+
+// LoginProxy forwards to the zdxsv login server at addr (host:port) over HTTP.
+func LoginProxy(addr string) (http.Handler, error) {
+	u, err := url.Parse("http://" + addr + "/")
 	if err != nil {
 		return nil, err
 	}
-	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", httputil.NewSingleHostReverseProxy(u)))
-	return s, nil
+	return httputil.NewSingleHostReverseProxy(u), nil
 }
 
 func handleDNAS(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +215,9 @@ func (s *Server) Serve(ln net.Listener) error {
 		go s.serveConn(c)
 	}
 }
+
+// ServeConn serves one accepted connection (for pkg/router's Console).
+func (s *Server) ServeConn(c net.Conn) { s.serveConn(c) }
 
 func (s *Server) serveConn(c net.Conn) {
 	defer c.Close()

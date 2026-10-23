@@ -14,3 +14,4 @@ cover-pkg.txt
 covdata/
 cover.html
 test.txt
+*.exe

@@ -16,7 +16,11 @@ import (
 )
 
 func mainLobby() {
-	app := lobby.NewApp()
+	serveLobby(lobby.NewApp())
+}
+
+// serveLobby runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
+func serveLobby(app *lobby.App) {
 	go app.Serve()
 	sv := lobby.NewServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))
