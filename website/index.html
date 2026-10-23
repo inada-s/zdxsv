@@ -7,12 +7,6 @@
 
 <link href="/static/css/bootstrap.min.css" rel="stylesheet">
 <link href="/static/css/style.css" rel="stylesheet">
-<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
-<!-- WARNING: Respond.js doesn't work if you view the page via file -->
-<!--[if lt IE 9]>
-  <script src="httpsoss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
-  <script src="httpsoss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
-<![endif]-->
 
 <title>ガンダムvs.Zガンダム 非公式通信対戦サーバ</title>
 </head>
@@ -115,7 +109,14 @@
   <h3>必要なもの</h3>
   <ul>
   <li>PS2と同じネットワーク(ルータ)に接続しているPC(有線接続推奨)</li>
-  <li>プロキシソフト <a href="//dl.equinox.io/mecha_g3/zproxy/stable">ダウンロード</a></li>
+  <li>プロキシソフト zproxy
+    <div class="zproxy-download">
+      <a id="zproxy-download" class="btn btn-primary" href="https://github.com/inada-s/zdxsv/releases/latest">
+        <span class="glyphicon glyphicon-download-alt"></span> zproxy をダウンロード <span id="zproxy-platform"></span></a>
+      <div><small id="zproxy-file" class="text-muted">GitHub Releases から zdxsv_&lt;版&gt;_&lt;OS&gt;_&lt;CPU&gt;.zip を選んでください</small></div>
+      <div><small><a id="zproxy-others" href="https://github.com/inada-s/zdxsv/releases">他の OS / CPU 版はこちら (GitHub Releases)</a></small></div>
+    </div>
+    zip を解凍して中の zproxy (Windows は zproxy.exe) を実行してください。起動時に新しい版があれば自動で更新されます。</li>
   </ul>
 
   <h3>使い方</h3>
@@ -242,6 +243,51 @@ function pollStat(){
 }
 pollStat();
 setInterval(pollStat, 30 * 1000);
+
+// zproxy download button: the zip for the visitor's OS/CPU from the newest GitHub release that
+// has zproxy zips (server-only releases have none; zproxy's own self-update picks the same way).
+function zproxyPlatform(arch) {
+  var ua = navigator.userAgent, p = navigator.platform || "";
+  if (/Windows/.test(ua)) return {os: "windows", arch: arch || (/WOW64|Win64|x64|ARM64/.test(ua) ? (/ARM64/.test(ua) ? "arm64" : "amd64") : "386"), label: "Windows"};
+  if (/Mac/.test(p) && !/iPhone|iPad/.test(ua)) return {os: "darwin", arch: arch || "arm64", label: "macOS"};
+  if (/Linux/.test(p) && !/Android/.test(ua)) return {os: "linux", arch: arch || "amd64", label: "Linux"};
+  return null;
+}
+function zproxyArchLabel(a) { return {amd64: "64bit", "386": "32bit", arm64: "Apple Silicon / ARM64", arm: "ARM"}[a] || a; }
+function setZproxyDownload(arch) {
+  var want = zproxyPlatform(arch);
+  if (!want) {
+    document.getElementById("zproxy-platform").innerHTML = "(GitHub Releases)";
+    return;
+  }
+  var label = want.label + " " + (want.os == "darwin" ? (want.arch == "arm64" ? "Apple Silicon" : "Intel") : zproxyArchLabel(want.arch));
+  document.getElementById("zproxy-platform").innerHTML = "(" + label + ")";
+  $.getJSON('https://api.github.com/repos/inada-s/zdxsv/releases?per_page=30', function(rels) {
+    var name = new RegExp("^zdxsv_.*_" + want.os + "_" + want.arch + "[.]zip$");
+    for (var i = 0; i < rels.length; i++) {
+      var r = rels[i];
+      if (r.draft || r.prerelease) continue;
+      var assets = r.assets || [];
+      for (var j = 0; j < assets.length; j++) {
+        if (name.test(assets[j].name)) {
+          document.getElementById("zproxy-download").href = assets[j].browser_download_url;
+          document.getElementById("zproxy-file").innerHTML = r.tag_name + " / " + assets[j].name;
+          document.getElementById("zproxy-others").href = r.html_url;
+          return;
+        }
+      }
+    }
+  });
+}
+// Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
+if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+  navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
+    var arch = v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386");
+    setZproxyDownload(arch);
+  }, function() { setZproxyDownload(); });
+} else {
+  setZproxyDownload();
+}
 })
 </script>
 </body></html>
