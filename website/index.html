@@ -115,7 +115,9 @@
   <h3>必要なもの</h3>
   <ul>
   <li>PS2と同じネットワーク(ルータ)に接続しているPC(有線接続推奨)</li>
-  <li>プロキシソフト <a href="//dl.equinox.io/mecha_g3/zproxy/stable">ダウンロード</a></li>
+  <li>プロキシソフト zproxy: <a id="zproxy-download" href="https://github.com/inada-s/zdxsv/releases/latest">ダウンロード</a>
+    <span id="zproxy-version" class="text-muted"></span><br>
+    <small>Windows 64bit 版です。zip を解凍して zproxy.exe を実行してください。他の OS や 32bit 版は <a href="https://github.com/inada-s/zdxsv/releases">GitHub Releases</a> の zdxsv_&lt;版&gt;_&lt;OS&gt;_&lt;CPU&gt;.zip から。起動時に新しい版があれば自動で更新されます。</small></li>
   </ul>
 
   <h3>使い方</h3>
@@ -242,6 +244,23 @@ function pollStat(){
 }
 pollStat();
 setInterval(pollStat, 30 * 1000);
+
+// zproxy download: the newest GitHub release that has a Windows 64bit zproxy zip (releases that
+// only changed the server have none; zproxy's own self-update picks the same way).
+$.getJSON('https://api.github.com/repos/inada-s/zdxsv/releases?per_page=30', function(rels) {
+  for (var i = 0; i < rels.length; i++) {
+    var r = rels[i];
+    if (r.draft || r.prerelease) continue;
+    var assets = r.assets || [];
+    for (var j = 0; j < assets.length; j++) {
+      if (/^zdxsv_.*_windows_amd64\.zip$/.test(assets[j].name)) {
+        document.getElementById("zproxy-download").href = assets[j].browser_download_url;
+        document.getElementById("zproxy-version").innerHTML = r.tag_name + " (" + assets[j].name + ")";
+        return;
+      }
+    }
+  }
+});
 })
 </script>
 </body></html>
