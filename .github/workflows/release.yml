@@ -1,0 +1,62 @@
+# Release on a v* tag: the server tarball and, when its code changed since the last release
+# that shipped it, the zproxy archives for every platform (see .goreleaser.yml and
+# scripts/zproxy-release-needed.sh). The server binary passes scripts/smoke.sh before
+# anything is published.
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: go vet and test
+        run: go vet ./... && go test ./...
+      - name: does zproxy need a release?
+        # sets ZDXSV_SKIP_ZPROXY and ZDXSV_ZPROXY_PREV for the goreleaser steps
+        run: scripts/zproxy-release-needed.sh | tee -a "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: build
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: build --clean
+      - name: free port 53
+        # systemd-resolved's stub holds 127.0.0.53:53; drop only the stub (stopping resolved cut the runner off)
+        run: |
+          echo DNSStubListener=no | sudo tee -a /etc/systemd/resolved.conf
+          sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+          sudo systemctl restart systemd-resolved
+          getent hosts github.com
+      - name: smoke test the release binary
+        timeout-minutes: 5
+        run: |
+          bin=$(find dist -type f -name zdxsv -path '*linux_amd64*' | head -1)
+          test -n "$bin"
+          sudo setcap cap_net_bind_service=+ep "$bin"
+          "$bin" version
+          ZDXSV_BIN=$bin scripts/smoke.sh
+      - name: server log
+        if: failure()
+        run: cat smoke.log || true
+      - name: release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

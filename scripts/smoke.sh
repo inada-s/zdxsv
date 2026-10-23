@@ -1,7 +1,7 @@
 #!/bin/bash
-# Smoke test of the server binary: builds bin/zdxsv, runs it with .env (ports 53 and 443
-# need CAP_NET_BIND_SERVICE: `sudo setcap cap_net_bind_service=+ep bin/zdxsv`, or root)
-# on a throwaway database, and checks each server from outside.
+# Smoke test of the server binary: builds bin/zdxsv (or takes $ZDXSV_BIN), runs it with .env
+# (ports 53 and 443 need CAP_NET_BIND_SERVICE: `sudo setcap cap_net_bind_service=+ep bin/zdxsv`,
+# or root) on a throwaway database, and checks each server from outside.
 # Usage: IP=<public ip> scripts/smoke.sh   (default 127.0.0.1; writes .env only if absent)
 set -u
 cd "$(dirname "$0")/.."
@@ -27,17 +27,20 @@ EOS
 fi
 IP=$(sed -n 's/^ZDXSV_DNAS_PUBLIC_ADDR=//p' .env)
 
-mkdir -p bin && go build -o bin/zdxsv ./src/zdxsv || exit 1
-if ! command -v setcap >/dev/null || getcap bin/zdxsv | grep -q net_bind_service; then :; else
-	echo "note: bin/zdxsv has no cap_net_bind_service; ports 53 and 443 need it (or root)"
+bin=${ZDXSV_BIN:-bin/zdxsv}
+if [ -z "${ZDXSV_BIN:-}" ]; then
+	mkdir -p bin && go build -o bin/zdxsv ./src/zdxsv || exit 1
+fi
+if command -v getcap >/dev/null && ! getcap "$bin" | grep -q net_bind_service; then
+	echo "note: $bin has no cap_net_bind_service; ports 53 and 443 need it (or root)"
 fi
 
 # the server's environment: .env, but never the real database
 set -a; . ./.env; set +a
 export ZDXSV_DB_NAME=smoke.db
 rm -f smoke.db
-bin/zdxsv initdb > /dev/null 2>&1 || exit 1
-bin/zdxsv > smoke.log 2>&1 &
+"$bin" initdb > /dev/null 2>&1 || exit 1
+"$bin" > smoke.log 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null' EXIT
 
@@ -54,7 +57,7 @@ done
 for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
-check "dnas on 443 (DNAS answers, login pages)" bin/zdxsv -profile=0 dnascheck 127.0.0.1:443
+check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.0.0.1:443
 
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"

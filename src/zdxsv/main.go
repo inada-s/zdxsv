@@ -21,6 +21,13 @@ import (
 	"zdxsv/pkg/db"
 )
 
+var (
+	// Set by the release build (.goreleaser.yml ldflags).
+	releaseVersion = "local"
+	releaseCommit  = "local"
+	releaseDate    = "local"
+)
+
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
 var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof on 127.0.0.1 (port: 16060, or per command), 2: enable blocking profile")
 
@@ -50,7 +57,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port, version]")
 }
 
 func prepareDB() {
@@ -84,15 +91,19 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
-	glog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.")
+	glog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.", releaseVersion, releaseCommit, releaseDate)
 
 	args := flag.Args()
 	glog.Infoln(args, len(args))
 
-	// No command runs every server in this process (the docker image's default).
+	// No command runs every server in this process (the systemd service runs it so).
 	command := "all"
 	if len(args) >= 1 {
 		command = args[0]
+	}
+	if command == "version" {
+		fmt.Println("zdxsv", releaseVersion, releaseCommit, releaseDate)
+		return
 	}
 
 	config.LoadConfig()
