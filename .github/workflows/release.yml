@@ -34,9 +34,10 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: build --clean
-      - name: free port 53
-        run: scripts/free-port-53.sh
       - name: smoke test the release binary
+        # off port 53: the runner may use it for its own DNS
+        env:
+          ZDXSV_DNS_ADDR: 127.0.0.1:10053
         timeout-minutes: 5
         run: |
           bin=$(find dist -type f -name zdxsv -path '*linux_amd64*' | head -1)
