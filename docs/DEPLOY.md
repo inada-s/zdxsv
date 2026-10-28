@@ -19,7 +19,7 @@ still exist for running the parts separately.
 | 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
 | 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
-| 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
+| 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
 Port 80 does not need to be open: the game reaches the login pages through the DNAS front end on 443.
 `zdxsv` (all servers) does not listen on `ZDXSV_LOGIN_ADDR` or `ZDXSV_BATTLE_RPC_ADDR` at all (the login
@@ -89,6 +89,11 @@ user. `.env` is the unit's `EnvironmentFile` (one `NAME=value` per line, no quot
 The game ports (`ZDXSV_LOBBY_ADDR`, `ZDXSV_LOBBY_RPC_ADDR`, `ZDXSV_BATTLE_ADDR`) bind all interfaces
 whatever host part they have; only the port counts. The HTTP API (`ZDXSV_LOBBY_API_ADDR`) binds the
 host part given (`:8203` for everywhere, `127.0.0.1:8203` for loopback only).
+
+Replay upload (`POST /lbs/replay_upload`, pcsx2 posts each lobby battle's `.pb`, as gdxsv lbs):
+`ZDXSV_LOBBY_REPLAY_BUCKET=<public GCS bucket>` stores them gzip encoded as `replays/<battle_code>.pb`
+(credentials: the VM's service account or `GOOGLE_APPLICATION_CREDENTIALS`); off when unset. Players
+reach it through caddy (`lbs.zdxsv.net:8443/lbs/*`).
 
 ## Check it
 
