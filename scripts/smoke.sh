@@ -1,6 +1,6 @@
 #!/bin/bash
 # Smoke test of the server binary: builds bin/zdxsv (or takes $ZDXSV_BIN), runs it with .env
-# (ports 53 and 443 need CAP_NET_BIND_SERVICE: `sudo setcap cap_net_bind_service=+ep bin/zdxsv`,
+# (ports 53, or ZDXSV_DNS_ADDR's, and 443 need CAP_NET_BIND_SERVICE: `sudo setcap cap_net_bind_service=+ep bin/zdxsv`,
 # or root) on a throwaway database, and checks each server from outside.
 # Usage: IP=<public ip> scripts/smoke.sh   (default 127.0.0.1; writes .env only if absent)
 set -u
@@ -38,6 +38,8 @@ fi
 # the server's environment: .env, but never the real database
 set -a; . ./.env; set +a
 export ZDXSV_DB_NAME=smoke.db
+dns_addr=${ZDXSV_DNS_ADDR:-:53}
+dns_port=${dns_addr##*:}
 rm -f smoke.db
 "$bin" initdb > /dev/null 2>&1 || exit 1
 "$bin" > smoke.log 2>&1 &
@@ -52,7 +54,7 @@ done
 check "running" kill -0 $pid
 
 for h in gate1.jp.dnas.playstation.org www01.kddi-mmbb.jp ca1202.mmcp6 ca1203.mmcp6; do
-	check "dns $h -> $IP" sh -c "[ \"\$(dig +short +time=2 +tries=3 @127.0.0.1 $h)\" = $IP ]"
+	check "dns :$dns_port $h -> $IP" sh -c "[ \"\$(dig +short +time=2 +tries=3 -p $dns_port @127.0.0.1 $h)\" = $IP ]"
 done
 for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"

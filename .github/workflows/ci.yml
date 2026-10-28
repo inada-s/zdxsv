@@ -28,19 +28,15 @@ jobs:
       - name: coverage summary
         run: |
           { echo '### Go coverage'; echo '```'; tr -s ' \t' ' ' < cover-pkg.txt; tail -1 cover.txt | tr -s ' \t' ' '; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: free port 53
-        # systemd-resolved's stub holds 127.0.0.53:53; drop only the stub (stopping resolved cut the runner off)
-        run: |
-          echo DNSStubListener=no | sudo tee -a /etc/systemd/resolved.conf
-          sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-          sudo systemctl restart systemd-resolved
-          getent hosts github.com
-      - name: build and allow ports 53 and 443
+      - name: build and allow port 443
         run: |
           make build
           sudo setcap cap_net_bind_service=+ep bin/zdxsv
       - name: smoke
         timeout-minutes: 5
+        # off port 53: the runner may use it for its own DNS
+        env:
+          ZDXSV_DNS_ADDR: 127.0.0.1:10053
         run: scripts/smoke.sh
       - name: server log
         if: failure()

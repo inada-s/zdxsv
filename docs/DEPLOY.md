@@ -107,7 +107,8 @@ reach it through caddy (`lbs.zdxsv.net:8443/lbs/*`).
 
 It ends with `smoke: all PASS`, else it prints the failures and the server log. Ports 53 and 443 need
 `sudo setcap cap_net_bind_service=+ep bin/zdxsv` first (or root), and the ports must be free, so stop
-the service before running it on the server. CI (`.github/workflows/ci.yml`) runs it on every push.
+the service before running it on the server. The DNS check queries the port of `ZDXSV_DNS_ADDR` (default 53).
+CI (`.github/workflows/ci.yml`) runs it on every push with `ZDXSV_DNS_ADDR=127.0.0.1:10053`: the runner may use port 53.
 
 ## Status API
 
