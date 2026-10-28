@@ -4,7 +4,9 @@ Rules for agents working in this repository.
 
 ## Comments
 
-- What this code does and why, only when not obvious. No history.
+- None by default. Test: delete it; if the code is still clear at a
+  glance, it was not needed. Write one only for information the code
+  cannot show (a non-obvious why, a constraint, a trap). No history.
 - No references to or comparisons with other implementations (gdxsv,
   flycast, pcsx2): they go stale when the other side changes. Parity
   notes go in the PR body or docs.
