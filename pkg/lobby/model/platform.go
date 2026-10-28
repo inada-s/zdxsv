@@ -9,7 +9,7 @@ const (
 	PlatformConsole = "console"
 	// every emulator, whatever its cpu: ARM64 and x86_64 builds stay in sync.
 	// The value is the status API key.
-	PlatformEmuX8664 = "emu-x86/64"
+	PlatformEmu = "emu"
 )
 
 // ParsePlatformInfo parses "key=value" lines.
@@ -28,5 +28,5 @@ func PlatformFromInfo(info map[string]string) string {
 	if info["emulator"] == "" {
 		return PlatformConsole
 	}
-	return PlatformEmuX8664
+	return PlatformEmu
 }
