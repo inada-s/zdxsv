@@ -6,7 +6,9 @@ import "strings"
 // lobbies, rooms and battles are per platform.
 // Every peer is a console until it sends a platform info message.
 const (
-	PlatformConsole  = "console"
+	PlatformConsole = "console"
+	// every emulator, whatever its cpu: ARM64 and x86_64 builds stay in sync.
+	// The value is the status API key.
 	PlatformEmuX8664 = "emu-x86/64"
 )
 
@@ -26,8 +28,5 @@ func PlatformFromInfo(info map[string]string) string {
 	if info["emulator"] == "" {
 		return PlatformConsole
 	}
-	if info["cpu"] == "x86/64" {
-		return PlatformEmuX8664
-	}
-	return "emu-" + info["cpu"]
+	return PlatformEmuX8664
 }

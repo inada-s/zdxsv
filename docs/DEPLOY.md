@@ -119,7 +119,7 @@ The lobby's HTTP API (`ZDXSV_LOBBY_API_ADDR`, port 8203) answers `/lbs/status` w
               "emu-x86/64": {"LobbyUserCount": 3, "BattleUserCount": 4}}
 ```
 
-`console` is a real PS2. `emu-x86/64` is the zdxsv PCSX2 build. The lobby never puts the two in one battle, so the page shows both counts.
+`console` is a real PS2. `emu-x86/64` is every zdxsv PCSX2 build, whatever its CPU (ARM64 and x86_64 builds play in the same lobbies and battles; the CPU stays in the platform info log line). The lobby never puts the two in one battle, so the page shows both counts.
 
 ## zdxsv.net: website and HTTPS API
 

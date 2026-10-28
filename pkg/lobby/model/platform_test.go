@@ -8,7 +8,8 @@ func TestPlatformFromInfo(t *testing.T) {
 		want string
 	}{
 		{"emulator=pcsx2\nversion=v2.8.2\nos=windows\ncpu=x86/64\n", PlatformEmuX8664},
-		{"emulator=pcsx2\ncpu=arm64\n", "emu-arm64"},
+		{"emulator=pcsx2\ncpu=arm64\n", PlatformEmuX8664},
+		{"emulator=pcsx2\n", PlatformEmuX8664},
 		{"os=windows\n", PlatformConsole},
 		{"", PlatformConsole},
 	}
