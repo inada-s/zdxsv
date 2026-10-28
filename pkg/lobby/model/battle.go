@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"net"
 	"time"
 )
@@ -19,18 +21,22 @@ type Battle struct {
 	Platform   string
 	StartTime  time.Time
 	TestBattle bool
+	// GgpoSession: the GGPO and live uplink session id (battle info ggpo_session), random per
+	// battle so that only its players know it (the battle code is public).
+	GgpoSession uint32
 }
 
 func NewBattle(platform string, lobbyID uint16) *Battle {
 	return &Battle{
-		Users:     make([]User, 0),
-		AeugIDs:   make([]string, 0),
-		TitansIDs: make([]string, 0),
-		UDPUsers:  map[string]bool{},
-		P2PMap:    map[string]map[string]struct{}{},
-		Rule:      NewRule(),
-		LobbyID:   lobbyID,
-		Platform:  platform,
+		Users:       make([]User, 0),
+		AeugIDs:     make([]string, 0),
+		TitansIDs:   make([]string, 0),
+		UDPUsers:    map[string]bool{},
+		P2PMap:      map[string]map[string]struct{}{},
+		Rule:        NewRule(),
+		LobbyID:     lobbyID,
+		Platform:    platform,
+		GgpoSession: newGgpoSession(),
 	}
 }
 
@@ -104,4 +110,15 @@ type BattleResult struct {
 	Unk25       uint16 `json:"unk_25"`
 	Unk26       uint16 `json:"unk_26"`
 	Unk27       uint16 `json:"unk_27"`
+}
+
+// newGgpoSession returns a random nonzero session id.
+func newGgpoSession() uint32 {
+	var b [4]byte
+	for {
+		rand.Read(b[:])
+		if s := binary.LittleEndian.Uint32(b[:]); s != 0 {
+			return s
+		}
+	}
 }

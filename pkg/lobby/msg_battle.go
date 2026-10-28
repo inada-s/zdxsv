@@ -1,7 +1,6 @@
 package lobby
 
 import (
-	"hash/fnv"
 	"maps"
 	"math"
 	"net"
@@ -211,15 +210,14 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 	}
 	if ggpo {
-		// as gdxsv's P2PMatching: session id = fnv32 of the battle code, ping test 7500 ms
-		h := fnv.New32()
-		h.Write([]byte(b.BattleCode))
-		p2p += "ggpo_session=" + strconv.FormatUint(uint64(h.Sum32()), 10) + "\nggpo_ping_ms=7500\n"
-		Spectators.Open(b.BattleCode, h.Sum32(), liveUsers(b), time.Now())
+		// ping test 7500 ms as gdxsv. The session id is not gdxsv's fnv32 of the battle code: the code is
+		// public (live list, replays), and the first push with the session becomes the battle's live uplink.
+		p2p += "ggpo_session=" + strconv.FormatUint(uint64(b.GgpoSession), 10) + "\nggpo_ping_ms=7500\n"
+		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
 			p2p += "live_uplink=1\n"
 		}
-		if line := relayLine(p, users, info, h.Sum32()); line != "" {
+		if line := relayLine(p, users, info, b.GgpoSession); line != "" {
 			p2p += line
 		}
 	}

@@ -72,6 +72,7 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
 	}
 	p.Battle.BattleCode = "1696492800000"
+	p.Battle.GgpoSession = 1462212142 // NewBattle draws a random one
 	// names as login stores them (ReadEncryptedString already decoded Shift-JIS):
 	// "アムロ", a control byte (dropped), none (no line)
 	p.Battle.Users[0].Name = "アムロ"
@@ -79,7 +80,6 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	// a pilot name as login stores the game's user binary (rig capture, NULs at both ends trimmed)
 	p.Battle.Users[0].Bin = capturedUserBinary
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
-	// ggpo_session = FNV-1 32 of "1696492800000" (independent python computation)
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
 		"name_AAAAAA=アムロ\npilot_AAAAAA=カミーユ・ビダン\nname_BBBBBB=Bob\n" +
 		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
@@ -149,11 +149,12 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "relay_server": "1"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.BattleCode = "1696492800000"
+	p.Battle.GgpoSession = 1462212142
 	other := map[string]string{"udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
 	info := func(id string) map[string]string { return other }
 
 	n := battleInfoNotice(p, info)
-	// session 1462212142 = ggpo_session of this battle code (TestBattleInfoNoticeP2P)
+	// the relay token is derived from the battle's ggpo_session
 	want := "ggpo_session=1462212142\nggpo_ping_ms=7500\nrelay_0=" +
 		strconv.FormatUint(r.SessionToken(1462212142), 16) + ",192.168.1.8:8203,[2001:db8::8]:8203\n"
 	if n == nil || !strings.HasSuffix(string(n.Body), want) {
