@@ -2,7 +2,7 @@ package model
 
 import "strings"
 
-// Platform keeps emulator and real PS2 players apart, as gdxsv does:
+// Platform keeps emulator and real PS2 players apart:
 // lobbies, rooms and battles are per platform.
 // Every peer is a console until it sends a platform info message.
 const (
@@ -22,7 +22,6 @@ func ParsePlatformInfo(body string) map[string]string {
 	return info
 }
 
-// PlatformFromInfo returns the platform of a peer that sent platform info.
 func PlatformFromInfo(info map[string]string) string {
 	if info["emulator"] == "" {
 		return PlatformConsole

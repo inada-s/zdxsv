@@ -1,8 +1,8 @@
-// Package dnas is the DNAS server of zdxsv, replacing the Apache/PHP DNASrep
-// (github.com/FogNo23/DNASrep, AGPL-3.0 like zdxsv) that docker/legacyweb ran.
+// Package dnas is the DNAS server of zdxsv, ported from DNASrep
+// (github.com/FogNo23/DNASrep, AGPL-3.0 like zdxsv).
 //
 // The PS2 opens with an SSLv2-format ClientHello and TLS 1.0 RC4 (tls10.go).
-// DNAS queries are answered as DNASrep's connect.php / others.php do: canned
+// DNAS queries are answered with canned
 // packets (data/www/<gateway>/packets/<gameid>_<qrytype>); i-connect answers
 // get two 3DES-CBC layers. /00000020/* is proxied to the zdxsv login server
 // (the game's browser opens the login page through the same host).
@@ -49,7 +49,7 @@ func substr(b []byte, off, n int) []byte {
 	return b[off : off+n]
 }
 
-// encrypt3 is DNASrep's encrypt3: 3DES-EDE in CBC mode, in place.
+// encrypt3 is 3DES-EDE in CBC mode, in place.
 func encrypt3(b []byte, off, n int, key, iv []byte) {
 	c, err := des.NewTripleDESCipher(key)
 	if err != nil {
@@ -233,7 +233,7 @@ func (s *Server) serveConn(c net.Conn) {
 }
 
 // serveHTTP answers HTTP/1.x requests on c until it closes. Responses are
-// HTTP/1.0 with Content-Length (as Apache answered with force-response-1.0).
+// HTTP/1.0 with Content-Length.
 func (s *Server) serveHTTP(c net.Conn) {
 	br := bufio.NewReader(c)
 	for {

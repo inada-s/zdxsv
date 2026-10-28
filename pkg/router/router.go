@@ -38,7 +38,6 @@ func (r *Router) helloTimeout() time.Duration {
 	return r.HelloTimeout
 }
 
-// ListenAndServe listens on addr and serves until an accept error.
 func (r *Router) ListenAndServe(addr string) error {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -47,7 +46,6 @@ func (r *Router) ListenAndServe(addr string) error {
 	return r.Serve(l)
 }
 
-// Serve accepts connections on l and routes each one.
 func (r *Router) Serve(l net.Listener) error {
 	for {
 		c, err := l.Accept()

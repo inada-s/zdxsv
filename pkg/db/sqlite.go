@@ -116,20 +116,18 @@ func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
 	tables := []string{"account", "user", "battle_record"}
 
-	// begin tx
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
 		return errors.Wrap(err, "Begin failed")
 	}
 
-	// create table if not exists
+	// create the tables that do not exist yet, so every one can be renamed
 	_, err = tx.Exec(schema)
 	if err != nil {
 		tx.Rollback()
 		return errors.Wrap(err, "Begin failed")
 	}
 
-	// copy all tables
 	for _, table := range tables {
 		tmp := table + "_tmp"
 		_, err = tx.Exec(`ALTER TABLE ` + table + ` RENAME TO ` + tmp)
@@ -139,7 +137,6 @@ func (db SQLiteDB) Migrate() error {
 		}
 	}
 
-	// create new table
 	_, err = tx.Exec(schema)
 	if err != nil {
 		tx.Rollback()

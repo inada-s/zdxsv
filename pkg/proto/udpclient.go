@@ -112,7 +112,6 @@ func (c *UDPClient) SendPacketTo(pkt *Packet, addr *net.UDPAddr) {
 		return
 	}
 	if n, err := c.conn.WriteToUDP(c.pbuf.Bytes(), addr); err != nil {
-		// log.Println("Failed to write packet.", err, pkt)
 	} else if n != len(c.pbuf.Bytes()) {
 		log.Println("Attempt to write", len(c.pbuf.Bytes()), "bytes but", n, "byte wrote")
 	}

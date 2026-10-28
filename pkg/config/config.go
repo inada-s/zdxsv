@@ -7,10 +7,8 @@ import (
 	"github.com/golang/glog"
 )
 
-// Conf stores global config.
 var Conf Config
 
-// LoadConfig loads environmental variable into Conf.
 func LoadConfig() {
 	var c Config
 	if err := env.Parse(&c.DNS); err != nil {
@@ -35,7 +33,6 @@ func LoadConfig() {
 	Conf = c
 }
 
-// Config stores zdxsv config.
 type Config struct {
 	DNS    DNSConfig
 	DNAS   DNASConfig
@@ -45,14 +42,12 @@ type Config struct {
 	DB     DBConfig
 }
 
-// DNSConfig stores settings for the DNS server.
 type DNSConfig struct {
 	// Addr is the UDP address to listen on. A host part binds that interface only
 	// (e.g. 192.168.1.3:53 when something else already holds 0.0.0.0:53).
 	Addr string `env:"ZDXSV_DNS_ADDR" envDefault:":53"`
 }
 
-// DNASConfig stores settings for DNAS server.
 type DNASConfig struct {
 	PublicAddr string `env:"ZDXSV_DNAS_PUBLIC_ADDR"`
 	Addr       string `env:"ZDXSV_DNAS_ADDR" envDefault:":443"`
@@ -62,13 +57,11 @@ type DNASConfig struct {
 	HTTPSBackend string `env:"ZDXSV_DNAS_HTTPS_BACKEND"`
 }
 
-// LoginConfig stores settings for login server.
 type LoginConfig struct {
 	Addr       string `env:"ZDXSV_LOGIN_ADDR"`
 	PublicAddr string `env:"ZDXSV_LOGIN_PUBLIC_ADDR"`
 }
 
-// LobbyConfig stores settings for lobby server.
 type LobbyConfig struct {
 	Addr       string `env:"ZDXSV_LOBBY_ADDR"`
 	RPCAddr    string `env:"ZDXSV_LOBBY_RPC_ADDR"`
@@ -91,14 +84,12 @@ type LobbyConfig struct {
 	ReplayDir    string `env:"ZDXSV_LOBBY_REPLAY_DIR"`
 }
 
-// BattleConfig stores settings for battle server.
 type BattleConfig struct {
 	Addr       string `env:"ZDXSV_BATTLE_ADDR"`
 	RPCAddr    string `env:"ZDXSV_BATTLE_RPC_ADDR"`
 	PublicAddr string `env:"ZDXSV_BATTLE_PUBLIC_ADDR"`
 }
 
-// DBConfig stores database settings.
 type DBConfig struct {
 	Name string `env:"ZDXSV_DB_NAME"`
 }

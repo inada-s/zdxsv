@@ -280,7 +280,6 @@ func test203CalculateUserBattleCount(t *testing.T) {
 }
 
 func test300Ranking(t *testing.T) {
-	// ugly...
 	testDB.(SQLiteDB).Exec("DELETE FROM user")
 
 	var users []*User

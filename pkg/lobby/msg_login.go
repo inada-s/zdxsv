@@ -63,7 +63,7 @@ func RequestKeyPair(p *AppPeer) {
 	p.SendMessage(m)
 }
 
-// PlatformInfo is sent only by emulators (pcsx2 ai/zdxsv), before the key pair answer.
+// PlatformInfo is sent only by emulators, before the key pair answer.
 // Custom category, no answer: the game never sees it.
 var _ = register(0x9950, "PlatformInfo", func(p *AppPeer, m *Message) {
 	p.app.OnPlatformInfo(p, model.ParsePlatformInfo(string(m.Body)))
@@ -116,7 +116,7 @@ var _ = register(0x6132, "DecideUserID", func(p *AppPeer, m *Message) {
 	p.app.OnDecideUserID(p, userID, name)
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.WriteString(p.UserID) // これだけか？
+	w.WriteString(p.UserID)
 	p.SendMessage(a)
 })
 

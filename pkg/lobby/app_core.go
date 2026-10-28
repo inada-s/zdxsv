@@ -90,7 +90,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) {
 		// after battle user
 		// do nothing.
 	} else if len(name) == 0 || userID == string([]byte{0, 0, 0, 0, 0, 0}) {
-		// hmm.. use last login user_id
+		// use last login user_id
 		ac, err := db.DefaultDB.GetAccountByLoginKey(p.LoginKey)
 		if err != nil {
 			glog.Errorln(err)
@@ -294,7 +294,7 @@ func (a *App) OnUserGotoBattle(p *AppPeer) {
 
 func (a *App) OnUserTopPageJump(p *AppPeer) {
 	if p.Battle != nil {
-		p.Battle = nil // TODO これでいいのか
+		p.Battle = nil
 	}
 	if p.Room != nil {
 		a.OnExitRoom(p)
