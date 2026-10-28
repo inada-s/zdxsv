@@ -62,12 +62,12 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 		model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}},
 		model.User{User: db.User{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
 	infos := map[string]map[string]string{
-		// every address (IPv4 public, local, IPv6)
-		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001"},
+		// every address (IPv4 public, local, IPv6); the TCP source IP is udp_addr's: not added
+		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5"},
 		// self: never listed
 		"BBBBBB": {"udp": "1", "udp_addr": "203.0.113.6:40002"},
-		// local IPv4 only (no STUN answer), and IPv6
-		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "ggpo": "70000"},
+		// local IPv4 only (no STUN answer), and IPv6; its TCP source IP with the local port
+		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "ggpo": "70000", "tcp_ip": "198.51.100.9"},
 		// not a bridge: no p2p line even with an address
 		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
 	}
@@ -83,7 +83,7 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
 		"name_AAAAAA=アムロ\npilot_AAAAAA=カミーユ・ビダン\nname_BBBBBB=Bob\n" +
 		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
-		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003\n" +
+		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003,198.51.100.9:40003\n" +
 		"ggpo_session=1462212142\nggpo_ping_ms=7500\n"
 	if n == nil {
 		t.Fatal("no notice")
