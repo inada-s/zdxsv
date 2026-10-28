@@ -35,6 +35,7 @@ const (
 	liveMaxFramesPerPush    = 128
 	liveMaxHeaderBytes      = 16 << 10
 	liveMaxFrameBytes       = 4 * 64
+	liveMaxFrames           = 60 * 60 * 60 // an hour at 60 fps: a battle is shorter, the memory per session bounded
 	liveFanoutInterval      = 50 * time.Millisecond
 	liveSubscriberTimeout   = 10 * time.Second
 	liveRetention           = 10 * time.Minute // after close
@@ -172,7 +173,7 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 		s.frameBytes = fb
 		in := m.GetInputData()
 		start := int(m.GetStartFrame()) * fb
-		if len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) {
+		if len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) && start+len(in) <= liveMaxFrames*fb {
 			s.inputs = append(s.inputs, in[len(s.inputs)-start:]...)
 		}
 	}
