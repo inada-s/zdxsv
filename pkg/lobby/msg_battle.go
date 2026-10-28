@@ -350,7 +350,9 @@ var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 		glog.Warningln("p2p matching report without platform info ignored", p.UserID)
 		return
 	}
-	glog.Infoln(p2pMatchingReportLine(model.ParsePlatformInfo(string(m.Body))))
+	report := model.ParsePlatformInfo(string(m.Body))
+	glog.Infoln(p2pMatchingReportLine(report))
+	Spectators.End(report["battle_code"], p.UserID, time.Now())
 })
 
 // p2pMatchingReportLine formats a report as one log line: battle_code, user_id and result

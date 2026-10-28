@@ -648,6 +648,7 @@ func (a *App) OnEnterBattleAfterRoom(p *AppPeer) {
 		return
 	}
 	delete(a.battles, p.SessionID)
+	Spectators.End(battle.BattleCode, p.UserID, time.Now())
 	if battle.LobbyID != 0 {
 		a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
 	}
