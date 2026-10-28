@@ -35,12 +35,7 @@ jobs:
           version: "~> v2"
           args: build --clean
       - name: free port 53
-        # systemd-resolved's stub holds 127.0.0.53:53; drop only the stub (stopping resolved cut the runner off)
-        run: |
-          echo DNSStubListener=no | sudo tee -a /etc/systemd/resolved.conf
-          sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-          sudo systemctl restart systemd-resolved
-          getent hosts github.com
+        run: scripts/free-port-53.sh
       - name: smoke test the release binary
         timeout-minutes: 5
         run: |
