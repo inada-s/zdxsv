@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -51,6 +52,15 @@ func serveLobby(app *lobby.App) {
 		go func() {
 			glog.Infoln("Start public api", c.APIAddr)
 			api := &lobby.APIHandler{Status: app.Status}
+			if c.ReplayBucket != "" {
+				store, err := lobby.NewGCSReplayStore(context.Background(), c.ReplayBucket)
+				if err != nil {
+					glog.Fatalln("replay bucket client:", c.ReplayBucket, err)
+				}
+				api.ReplayStore = store
+			} else if c.ReplayDir != "" {
+				api.ReplayStore = &lobby.DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
+			}
 			if err := http.ListenAndServe(c.APIAddr, api); err != nil {
 				glog.Errorln("public api:", err)
 			}

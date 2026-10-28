@@ -12,7 +12,7 @@ import (
 // OpsHandler serves the lobby's private API (as gdxsv lbs /ops/*).
 //
 //	GET /ops/replay_uploaded?battle_code=C&url=U: called by the replay uploader
-//	  (infra/uploader) after it stored C's replay at U. U must start with
+//	  (an external one; pcsx2 posts to /lbs/replay_upload) after it stored C's replay at U. U must start with
 //	  ReplayURLPrefix and answer a HEAD with 200; then every record of C gets U.
 type OpsHandler struct {
 	ReplayURLPrefix string

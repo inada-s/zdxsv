@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ const (
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
+//	POST /lbs/replay_upload: a battle's replay from pcsx2 (replay_upload.go).
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
@@ -35,6 +37,11 @@ type APIHandler struct {
 	LiveList func() []*LiveBattle
 	// Status reports the lobby's users and battles (an empty lobby when nil).
 	Status func() *lobbyrpc.StatusResponse
+	// ReplayStore keeps /lbs/replay_upload's replays (upload off when nil); a DirReplayStore's
+	// files are served at /lbs/replays/.
+	ReplayStore ReplayStore
+	// SetReplayURL records an uploaded replay (db.DefaultDB.SetReplayURL when nil).
+	SetReplayURL func(battleCode, url string) error
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -48,6 +55,14 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/lbs/status" {
 		h.serveStatus(w)
+		return
+	}
+	if r.URL.Path == "/lbs/replay_upload" {
+		h.serveReplayUpload(w, r)
+		return
+	}
+	if s, ok := h.ReplayStore.(*DirReplayStore); ok && strings.HasPrefix(r.URL.Path, "/lbs/"+replayUploadPrefix) {
+		http.StripPrefix("/lbs/", http.FileServer(http.Dir(s.Dir))).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path != "/lbs/replay" {

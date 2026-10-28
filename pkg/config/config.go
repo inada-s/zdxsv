@@ -78,13 +78,17 @@ type LobbyConfig struct {
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
 	RelayPublicAddr  string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR"`
 	RelayPublicAddr6 string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6"`
-	// Private HTTP API (lobby.OpsHandler, /ops/replay_uploaded for infra/uploader), off when empty.
+	// Private HTTP API (lobby.OpsHandler, /ops/replay_uploaded for an external uploader), off when empty.
 	// Uploaded replay urls must start with ReplayURLPrefix.
 	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
 	ReplayURLPrefix string `env:"ZDXSV_LOBBY_REPLAY_URL_PREFIX" envDefault:"https://storage.googleapis.com/zdxsv/"`
 	// Public HTTP API (lobby.APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
 	// Unlike the game ports, the host part is bound (127.0.0.1:8203 stays on loopback).
 	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
+	// Where /lbs/replay_upload stores replays: a public GCS bucket, else a directory served by the
+	// API (local tests, urls http://<APIAddr>/lbs/replays/); upload off when both are empty.
+	ReplayBucket string `env:"ZDXSV_LOBBY_REPLAY_BUCKET"`
+	ReplayDir    string `env:"ZDXSV_LOBBY_REPLAY_DIR"`
 }
 
 // BattleConfig stores settings for battle server.
