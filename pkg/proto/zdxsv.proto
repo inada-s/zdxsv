@@ -95,3 +95,75 @@ message Packet {
   optional SpectatorSubscribeRequest spectator_subscribe_data = 24;
   optional SpectatorSubscribeChallenge spectator_subscribe_challenge_data = 25;
 }
+
+// Lobby -> emulator, custom notice 0x9951 (pkg/lobby/msg_battle.go battleInfoNotice).
+message P2PMatching {
+  optional string battle_code = 1;
+  optional uint32 session_id = 2;  // the battle's GGPO ping test session; 0: no GGPO
+  optional int32 peer_id = 4;  // the receiver's index in users
+  optional int32 ping_test_duration = 6;  // ms
+  repeated P2PUser users = 9;  // every player, in battle order
+  repeated PlayerAddress candidates = 10;  // the other players' UDP addresses
+  repeated RelayServer relays = 11;  // only when every player has relay_server=1
+  optional bool spectator_uplink = 12;
+  optional string lobby_session_id = 40;
+  optional string battle_server = 41;  // "a.b.c.d:port"
+}
+
+message P2PUser {
+  optional string user_id = 1;
+  optional string user_name = 2;
+  optional string pilot_name = 3;
+  optional int32 ggpo_port = 40;  // 0: none (platform info ggpo)
+  optional string sync = 41;  // settings fingerprint, 16 lowercase hex digits (platform info sync)
+}
+
+message PlayerAddress {
+  optional string user_id = 1;
+  optional int32 peer_id = 2;
+  optional string ip = 3;  // IPv4 or IPv6, no brackets
+  optional int32 port = 4;
+}
+
+message RelayServer {
+  optional string region = 1;
+  optional string ip = 2;
+  optional int32 port = 3;
+  optional uint64 token = 4;
+  optional string ip6 = 5;  // empty: no IPv6
+  optional int32 port6 = 40;  // ip6's port
+}
+
+// Emulator -> lobby, custom message 0x9952, after the platform info of the first lobby
+// connection after a GGPO lobby battle. Logged only.
+message P2PMatchingReport {
+  optional string battle_code = 1;
+  optional int32 player_count = 3;
+  optional int32 peer_id = 4;  // the sender's position
+  optional string close_reason = 5;  // how GGPO ended (unset: it did not start)
+  optional int32 frame_count = 6;
+  optional int32 input_delay = 21;
+  repeated RemotePeerReport remote_peers = 31;  // ping test result per other position
+  optional string user_id = 40;
+  optional string result = 41;  // "ggpo", "cut" or "server"
+  optional string cut_reason = 42;
+  optional string sync = 43;  // own fingerprint, when a peer's differs
+  optional string sync_differ = 44;  // positions with a differing fingerprint
+  optional int32 answered = 45;  // peers that answered the ping test
+  optional int32 relay_count = 46;
+  optional string ping_error = 47;
+  optional int32 ping_wait_ms = 48;
+  optional int32 min_delay = 49;
+  optional bool fixed_delay = 50;
+  optional int32 cut_sends = 51;
+  optional int32 rollback_frames = 52;
+  optional int32 mismatches = 53;
+  optional bool disconnected = 54;
+}
+
+message RemotePeerReport {
+  optional int32 peer_id = 1;
+  optional string route = 7;  // "direct", "peer <position>" or "relay <index>"
+  optional int32 rtt_ms = 40;  // 0: no answer
+  optional string addr = 41;  // the address that answered
+}

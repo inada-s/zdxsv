@@ -3,13 +3,17 @@ package lobby
 import (
 	"fmt"
 	"net"
+	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/proto"
+
+	pb "github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func newUDPTestPeer(info map[string]string, test bool) *AppPeer {
@@ -26,22 +30,42 @@ func newUDPTestPeer(info map[string]string, test bool) *AppPeer {
 	return p
 }
 
+func battleInfo(t *testing.T, n *Message) *proto.P2PMatching {
+	t.Helper()
+	if n == nil {
+		t.Fatal("no notice")
+	}
+	m := &proto.P2PMatching{}
+	if err := pb.Unmarshal(n.Body, m); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func wantBattleInfo(t *testing.T, got, want *proto.P2PMatching) {
+	t.Helper()
+	if !pb.Equal(got, want) {
+		t.Fatalf("battle info\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
+	}
+}
+
+func testUsers(ids ...string) []*proto.P2PUser {
+	var us []*proto.P2PUser
+	for _, id := range ids {
+		us = append(us, &proto.P2PUser{UserId: pb.String(id)})
+	}
+	return us
+}
+
 func TestBattleInfoNotice(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
 	n := battleInfoNotice(newUDPTestPeer(emu, false), nil)
-	if n == nil {
-		t.Fatal("no notice for udp emulator")
-	}
-	if n.Direction != ServerToClient || n.Category != CategoryCustom || n.Command != 0x9951 {
+	if n != nil && (n.Direction != ServerToClient || n.Category != CategoryCustom || n.Command != 0x9951) {
 		t.Errorf("header %x %x %x", n.Direction, n.Category, n.Command)
 	}
-	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB\n"
-	if string(n.Body) != want {
-		t.Errorf("body %q want %q", n.Body, want)
-	}
-	if got := model.ParsePlatformInfo(string(n.Body)); got["users"] != "AAAAAA,BBBBBB" {
-		t.Errorf("not key=value lines: %v", got)
-	}
+	wantBattleInfo(t, battleInfo(t, n), &proto.P2PMatching{
+		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
+		BattleServer: pb.String("192.168.1.8:8210"), Users: testUsers("AAAAAA", "BBBBBB")})
 
 	noUDP := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
 	for name, p := range map[string]*AppPeer{
@@ -55,58 +79,56 @@ func TestBattleInfoNotice(t *testing.T) {
 	}
 }
 
+// testdata/p2p_matching.bin is the body this test builds; the client's battle info
+// decoder is tested against the same bytes.
 func TestBattleInfoNoticeP2P(t *testing.T) {
-	emu := map[string]string{"emulator": "pcsx2", "udp": "1"}
+	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.Users = append(p.Battle.Users,
 		model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}},
 		model.User{User: db.User{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
 	infos := map[string]map[string]string{
 		// every address (IPv4 public, local, IPv6); the TCP source IP is udp_addr's: not added
-		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5"},
+		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5", "sync": "fedcba9876543210"},
 		// self: never listed
 		"BBBBBB": {"udp": "1", "udp_addr": "203.0.113.6:40002"},
-		// local IPv4 only (no STUN answer), and IPv6; its TCP source IP with the local port
-		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "ggpo": "70000", "tcp_ip": "198.51.100.9"},
-		// not a bridge: no p2p line even with an address
-		"DDDDDD": {"udp_addr": "203.0.113.7:40004"},
+		// local IPv4 only (no STUN answer), and IPv6; its TCP source IP with the local port;
+		// a bad port, a bad ggpo port, a bad fingerprint: dropped
+		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "udp_addr": "203.0.113.9:0", "ggpo": "70000", "tcp_ip": "198.51.100.9", "sync": "FEDCBA9876543210"},
+		// not a bridge: no candidates even with an address
+		"DDDDDD": {"udp_addr": "203.0.113.7:40004", "ggpo": "7004"},
 	}
 	p.Battle.BattleCode = "1696492800000"
 	p.Battle.GgpoSession = 1462212142 // NewBattle draws a random one
 	// names as login stores them (ReadEncryptedString already decoded Shift-JIS):
-	// "アムロ", a control byte (dropped), none (no line)
+	// "アムロ", a control byte (dropped), none
 	p.Battle.Users[0].Name = "アムロ"
 	p.Battle.Users[1].Name = "Bob\n"
 	// a pilot name as login stores the game's user binary (captured, NULs at both ends trimmed)
 	p.Battle.Users[0].Bin = capturedUserBinary
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
-	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
-		"name_AAAAAA=アムロ\npilot_AAAAAA=カミーユ・ビダン\nname_BBBBBB=Bob\n" +
-		"p2p_AAAAAA=203.0.113.5:40001,192.168.1.20:40001,[2001:db8::5]:40001\nggpo_AAAAAA=7001\n" +
-		"p2p_CCCCCC=192.168.1.21:40003,[2001:db8::21]:40003,198.51.100.9:40003\n" +
-		"ggpo_session=1462212142\nggpo_ping_ms=7500\n"
-	if n == nil {
-		t.Fatal("no notice")
+	users := testUsers("AAAAAA", "BBBBBB", "CCCCCC", "DDDDDD")
+	users[0].UserName, users[0].PilotName, users[0].GgpoPort, users[0].Sync = pb.String("アムロ"), pb.String("カミーユ・ビダン"), pb.Int32(7001), pb.String("fedcba9876543210")
+	users[1].UserName, users[1].Sync = pb.String("Bob"), pb.String("0123456789abcdef")
+	cand := func(id string, peer int32, ip string, port int32) *proto.PlayerAddress {
+		return &proto.PlayerAddress{UserId: pb.String(id), PeerId: pb.Int32(peer), Ip: pb.String(ip), Port: pb.Int32(port)}
 	}
-	if string(n.Body) != want {
-		t.Fatalf("body %q want %q", n.Body, want)
+	wantBattleInfo(t, battleInfo(t, n), &proto.P2PMatching{
+		BattleCode: pb.String("1696492800000"), SessionId: pb.Uint32(1462212142), PeerId: pb.Int32(1), PingTestDuration: pb.Int32(7500),
+		Users: users,
+		Candidates: []*proto.PlayerAddress{
+			cand("AAAAAA", 0, "203.0.113.5", 40001), cand("AAAAAA", 0, "192.168.1.20", 40001), cand("AAAAAA", 0, "2001:db8::5", 40001),
+			cand("CCCCCC", 2, "192.168.1.21", 40003), cand("CCCCCC", 2, "2001:db8::21", 40003), cand("CCCCCC", 2, "198.51.100.9", 40003),
+		},
+		LobbySessionId: pb.String("SBBBBBB"), BattleServer: pb.String("192.168.1.8:8210")})
+	if os.Getenv("ZDXSV_WRITE_TESTDATA") == "1" {
+		if err := os.WriteFile("testdata/p2p_matching.bin", n.Body, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-}
-
-func TestBattleInfoNoticeSync(t *testing.T) {
-	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
-	p := newUDPTestPeer(emu, false)
-	p.Battle.Users = append(p.Battle.Users, model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}})
-	infos := map[string]map[string]string{
-		"AAAAAA": {"udp": "1", "sync": "fedcba9876543210"},
-		// not 16 lowercase hex digits: no line
-		"CCCCCC": {"udp": "1", "sync": "FEDCBA9876543210"},
-	}
-	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
-	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC\n" +
-		"sync_AAAAAA=fedcba9876543210\nsync_BBBBBB=0123456789abcdef\n"
-	if n == nil || string(n.Body) != want {
-		t.Fatalf("body %q want %q", n.Body, want)
+	golden, err := os.ReadFile("testdata/p2p_matching.bin")
+	if err != nil || string(golden) != string(n.Body) {
+		t.Errorf("body differs from testdata/p2p_matching.bin (%v):\n%x", err, n.Body)
 	}
 }
 
@@ -133,18 +155,34 @@ func TestPilotName(t *testing.T) {
 	}
 }
 
-func TestP2PMatchingReportLine(t *testing.T) {
-	body := "battle_code=1696492800000\nuser_id=BBBBBB\nresult=ggpo\ndelay=2\nrtt_0=12\nframes=21563\nclose=net battle end\n"
-	got := p2pMatchingReportLine(model.ParsePlatformInfo(body))
-	want := `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" close="net battle end" delay="2" frames="21563" rtt_0="12"`
-	if got != want {
-		t.Errorf("got %s\nwant %s", got, want)
+// testdata/p2p_matching_report.bin is a report encoded by the client's codec.
+func TestP2PMatchingReport(t *testing.T) {
+	body, err := os.ReadFile("testdata/p2p_matching_report.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := &proto.P2PMatchingReport{}
+	if err := pb.Unmarshal(body, got); err != nil {
+		t.Fatal(err)
+	}
+	want := &proto.P2PMatchingReport{
+		BattleCode: pb.String("1696492800000"), UserId: pb.String("BBBBBB"), Result: pb.String("ggpo"),
+		PeerId: pb.Int32(1), PlayerCount: pb.Int32(2), InputDelay: pb.Int32(2), MinDelay: pb.Int32(1),
+		RemotePeers: []*proto.RemotePeerReport{{PeerId: pb.Int32(0), RttMs: pb.Int32(12), Addr: pb.String("203.0.113.5:7001"), Route: pb.String("direct")}},
+		RelayCount:  pb.Int32(0), PingWaitMs: pb.Int32(1500), CloseReason: pb.String("net battle end"), FrameCount: pb.Int32(21563),
+		RollbackFrames: pb.Int32(812), Mismatches: pb.Int32(0), Disconnected: pb.Bool(false)}
+	if !pb.Equal(got, want) {
+		t.Errorf("report\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
+	}
+	if line := p2pMatchingReportLine(got); !strings.HasPrefix(line, `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" player_count="2" peer_id="1" close_reason="net battle end"`) ||
+		strings.ContainsRune(line, 10) || !strings.Contains(line, ` mismatches="0" disconnected="false"`) || !strings.Contains(line, `rtt_ms:`) {
+		t.Errorf("log line %q", line)
 	}
 }
 
 func TestBattleInfoNoticeRelay(t *testing.T) {
 	r := NewRelay()
-	LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = r, "192.168.1.8:8203", "[2001:db8::8]:8203"
+	LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = r, "192.168.1.8:8203", "[2001:db8::8]:8204"
 	defer func() { LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = nil, "", "" }()
 	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "relay_server": "1"}
 	p := newUDPTestPeer(emu, false)
@@ -153,12 +191,11 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	other := map[string]string{"udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
 	info := func(id string) map[string]string { return other }
 
-	n := battleInfoNotice(p, info)
 	// the relay token is derived from the battle's ggpo_session
-	want := "ggpo_session=1462212142\nggpo_ping_ms=7500\nrelay_0=" +
-		strconv.FormatUint(r.SessionToken(1462212142), 16) + ",192.168.1.8:8203,[2001:db8::8]:8203\n"
-	if n == nil || !strings.HasSuffix(string(n.Body), want) {
-		t.Fatalf("body %q, want suffix %q", n.Body, want)
+	want := &proto.RelayServer{Ip: pb.String("192.168.1.8"), Port: pb.Int32(8203), Token: pb.Uint64(r.SessionToken(1462212142)),
+		Ip6: pb.String("2001:db8::8"), Port6: pb.Int32(8204)}
+	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 1 || !pb.Equal(got[0], want) {
+		t.Fatalf("relays %v, want %v", got, want)
 	}
 	if len(r.sessions) != 1 {
 		t.Fatalf("relay sessions %d, want 1", len(r.sessions))
@@ -166,13 +203,13 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 
 	// a player without relay support: no relay for the battle
 	delete(other, "relay_server")
-	if n := battleInfoNotice(p, info); strings.Contains(string(n.Body), "relay_") {
-		t.Fatalf("relay offered to a battle with a player without relay_server=1: %q", n.Body)
+	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 0 {
+		t.Fatalf("relay offered to a battle with a player without relay_server=1: %v", got)
 	}
 	other["relay_server"] = "1"
 	p.PlatformInfo = map[string]string{"emulator": "pcsx2", "udp": "1"}
-	if n := battleInfoNotice(p, info); strings.Contains(string(n.Body), "relay_") {
-		t.Fatalf("relay offered to a client without relay_server=1: %q", n.Body)
+	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 0 {
+		t.Fatalf("relay offered to a client without relay_server=1: %v", got)
 	}
 }
 
