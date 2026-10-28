@@ -2,7 +2,9 @@ package lobby
 
 import (
 	"hash/fnv"
+	"maps"
 	"math"
+	"net"
 	"regexp"
 	"sort"
 	"strconv"
@@ -131,6 +133,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // p2p_<user id> = that player's udp_addr,udp_local,udp_addr6 (IPv4 public, local, "[IPv6]:port";
 // platform info from its own
 // bridge, looked up by info) for direct peering, only for players that sent them;
+// then that player's lobby TCP source IP (tcpSourceAddr);
 // ggpo_<user id> = that player's GGPO UDP port (platform info "ggpo"), only for
 // bridges that sent one: the client runs the battle over GGPO at those ports and
 // the p2p_ addresses' IPs when every other player has one, else over the bridge;
@@ -196,6 +199,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 				addrs = append(addrs, a)
 			}
 		}
+		if a := tcpSourceAddr(pi["tcp_ip"], addrs); a != "" {
+			addrs = append(addrs, a)
+		}
 		if len(addrs) > 0 {
 			p2p += "p2p_" + id + "=" + strings.Join(addrs, ",") + "\n"
 		}
@@ -227,6 +233,33 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		names +
 		p2p)
 	return n
+}
+
+// tcpSourceAddr returns ip (the lobby TCP connection's source, as gdxsv adds it) with
+// the port of the first of addrs, when no address in addrs has that IP; else "".
+// Without a STUN answer a player sends only its local address: its public IP is then
+// the TCP source, with the local port for NATs that keep it.
+func tcpSourceAddr(ip string, addrs []string) string {
+	if net.ParseIP(ip) == nil || len(addrs) == 0 {
+		return ""
+	}
+	port := ""
+	for _, a := range addrs {
+		h, p, err := net.SplitHostPort(a)
+		if err != nil {
+			continue
+		}
+		if net.ParseIP(h).Equal(net.ParseIP(ip)) {
+			return ""
+		}
+		if port == "" {
+			port = p
+		}
+	}
+	if port == "" {
+		return ""
+	}
+	return net.JoinHostPort(ip, port)
 }
 
 // liveUplink returns the GGPO player that streams the battle to live spectators
@@ -347,10 +380,21 @@ func p2pMatchingReportLine(report map[string]string) string {
 var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
 	info := func(userID string) map[string]string {
-		if peer, ok := p.app.users[userID]; ok {
-			return peer.PlatformInfo
+		peer, ok := p.app.users[userID]
+		if !ok {
+			return nil
 		}
-		return nil
+		pi := maps.Clone(peer.PlatformInfo)
+		if pi == nil {
+			pi = map[string]string{}
+		}
+		pi["tcp_ip"] = "" // the server's, never the client's
+		if peer.conn != nil {
+			if h, _, err := net.SplitHostPort(peer.conn.Address()); err == nil {
+				pi["tcp_ip"] = h
+			}
+		}
+		return pi
 	}
 	if n := battleInfoNotice(p, info); n != nil {
 		glog.Infoln("udp bridge battle info", p.UserID)
