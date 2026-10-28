@@ -40,6 +40,7 @@ const (
 	liveSubscriberTimeout   = 10 * time.Second
 	liveRetention           = 10 * time.Minute // after close
 	liveIdle                = 10 * time.Minute // without a push
+	liveEndGrace            = 5 * time.Second  // after a player's battle end, without a push: the lobby closes
 	liveMaxSubscribers      = 4096
 	liveMaxBattleSubscriber = 512
 	liveCookieBytes         = 16
@@ -63,6 +64,7 @@ type liveSession struct {
 	opened      time.Time
 	lastPush    time.Time
 	closed      time.Time // zero while running
+	ended       time.Time // first player back in the lobby or reporting the battle; zero before
 	publisher   *net.UDPAddr
 	header      []byte
 	frameBytes  int
@@ -105,6 +107,24 @@ func (r *SpectatorRegistry) Open(code string, session uint32, users []*db.Replay
 	}
 	r.sessions[code] = &liveSession{code: code, session: int32(session), opened: now, lastPush: now, subs: map[string]*liveSubscriber{}, users: users}
 	glog.Infoln("live open", code)
+}
+
+// End marks userID's battle as over. A still-pushing uplink ends with its own close; a silent one
+// is closed by Fanout after liveEndGrace.
+func (r *SpectatorRegistry) End(code, userID string, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s := r.sessions[code]
+	if s == nil || !s.closed.IsZero() || !s.ended.IsZero() {
+		return
+	}
+	for _, u := range s.users {
+		if u.UserID == userID {
+			s.ended = now
+			glog.Infoln("live end", code, userID)
+			return
+		}
+	}
 }
 
 // Serve sends with conn and runs the fanout and sweep until conn is closed.
@@ -173,7 +193,7 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 		s.frameBytes = fb
 		in := m.GetInputData()
 		start := int(m.GetStartFrame()) * fb
-		if len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) && start+len(in) <= liveMaxFrames*fb {
+		if s.closed.IsZero() && len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) && start+len(in) <= liveMaxFrames*fb {
 			s.inputs = append(s.inputs, in[len(s.inputs)-start:]...)
 		}
 	}
@@ -343,6 +363,11 @@ func (r *SpectatorRegistry) Fanout(now time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, s := range r.sessions {
+		if s.closed.IsZero() && !s.ended.IsZero() && now.Sub(s.ended) >= liveEndGrace && now.Sub(s.lastPush) >= liveEndGrace {
+			s.closed = now
+			s.closeReason = "battle end"
+			glog.Infoln("live close", s.code, s.closeReason, "frames", s.frames(), "uplink silent")
+		}
 		for key, sub := range s.subs {
 			if now.Sub(sub.seen) > liveSubscriberTimeout {
 				delete(s.subs, key)
