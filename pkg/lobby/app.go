@@ -139,7 +139,7 @@ func NewApp() *App {
 		aliveCheckInterval: 10 * time.Second,
 	}
 	app.getLobby(model.PlatformConsole, 0)
-	app.getLobby(model.PlatformEmuX8664, 0)
+	app.getLobby(model.PlatformEmu, 0)
 	return app
 }
 

@@ -63,7 +63,7 @@ check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.
 
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
-check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu-x86/64\"'"
+check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu\"'"
 
 if [ $fails -ne 0 ]; then
 	tail -40 smoke.log

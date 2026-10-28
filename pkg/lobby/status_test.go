@@ -14,13 +14,13 @@ func TestMakeStatusPlatforms(t *testing.T) {
 	res := &lobbyrpc.StatusResponse{
 		LobbyUsers: []lobbyrpc.User{
 			{UserID: "AAAAAA", Platform: model.PlatformConsole},
-			{UserID: "BBBBBB", Platform: model.PlatformEmuX8664, UDP: true},
+			{UserID: "BBBBBB", Platform: model.PlatformEmu, UDP: true},
 			{UserID: "CCCCCC"}, // no platform: a console
-			{UserID: "DDDDDD", Platform: model.PlatformEmuX8664},
+			{UserID: "DDDDDD", Platform: model.PlatformEmu},
 		},
-		Battles: []lobbyrpc.Battle{{Platform: model.PlatformEmuX8664, Users: []lobbyrpc.User{
-			{UserID: "DDDDDD", Platform: model.PlatformEmuX8664}, // also in the lobby list: counted once
-			{UserID: "EEEEEE", Platform: model.PlatformEmuX8664},
+		Battles: []lobbyrpc.Battle{{Platform: model.PlatformEmu, Users: []lobbyrpc.User{
+			{UserID: "DDDDDD", Platform: model.PlatformEmu}, // also in the lobby list: counted once
+			{UserID: "EEEEEE", Platform: model.PlatformEmu},
 		}}},
 	}
 	s := MakeStatus(res, time.Now())
@@ -30,7 +30,7 @@ func TestMakeStatusPlatforms(t *testing.T) {
 	if c := s.Platforms[model.PlatformConsole]; c.LobbyUserCount != 2 || c.BattleUserCount != 0 {
 		t.Errorf("console %+v", *c)
 	}
-	if c := s.Platforms[model.PlatformEmuX8664]; c.LobbyUserCount != 2 || c.BattleUserCount != 1 {
+	if c := s.Platforms[model.PlatformEmu]; c.LobbyUserCount != 2 || c.BattleUserCount != 1 {
 		t.Errorf("emulator %+v", *c)
 	}
 	if s.LobbyUsers[1].UDP != "○" || s.LobbyUsers[2].Platform != model.PlatformConsole {

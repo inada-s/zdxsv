@@ -62,8 +62,8 @@ func MakeStatus(res *lobbyrpc.StatusResponse, now time.Time) Status {
 		LobbyUsers:  []StatusUser{},
 		BattleUsers: []StatusUser{},
 		Platforms: map[string]*PlatformCount{
-			model.PlatformConsole:  {},
-			model.PlatformEmuX8664: {},
+			model.PlatformConsole: {},
+			model.PlatformEmu:     {},
 		},
 	}
 	count := func(platform string) *PlatformCount {
