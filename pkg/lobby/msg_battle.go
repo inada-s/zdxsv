@@ -31,7 +31,7 @@ var _ = register(0x6911, "GetBattleUserCount", func(p *AppPeer, m *Message) {
 	count := p.app.OnGetBattleUserCount(p)
 	w := a.Writer()
 	if count > 0 {
-		w.Write8(count) // ユーザ数
+		w.Write8(count)
 	} else {
 		a.Status = StatusError
 	}
@@ -140,7 +140,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // name_<user id> = that player's name (UTF-8), for the network status OSD;
 // pilot_<user id> = that player's pilot name (UTF-8, pilotName), for the OSD too;
 // with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
-// packets (flycast UdpPingPong), ggpo_ping_ms = its length (input delay from rtt);
+// packets, ggpo_ping_ms = its length (input delay from rtt);
 // relay_0 = the lobby's relay server (relayLine), when every player supports it;
 // sync_<user id> = that player's sync-settings fingerprint (platform info "sync", 16
 // lowercase hex digits), self included: the client cuts the battle when one differs from its own.
@@ -210,7 +210,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 	}
 	if ggpo {
-		// ping test 7500 ms as gdxsv. The session id is not gdxsv's fnv32 of the battle code: the code is
+		// The session id is random, not derived from the battle code: the code is
 		// public (live list, replays), and the first push with the session becomes the battle's live uplink.
 		p2p += "ggpo_session=" + strconv.FormatUint(uint64(b.GgpoSession), 10) + "\nggpo_ping_ms=7500\n"
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
@@ -233,7 +233,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	return n
 }
 
-// tcpSourceAddr returns ip (the lobby TCP connection's source, as gdxsv adds it) with
+// tcpSourceAddr returns ip (the lobby TCP connection's source) with
 // the port of the first of addrs, when no address in addrs has that IP; else "".
 // Without a STUN answer a player sends only its local address: its public IP is then
 // the TCP source, with the local port for NATs that keep it.
@@ -261,7 +261,7 @@ func tcpSourceAddr(ip string, addrs []string) string {
 }
 
 // liveUplink returns the GGPO player that streams the battle to live spectators
-// (pkg/lobby/spectator.go): the lowest udp_rtt (platform info, ms to the lobby's UDP
+// (Spectators): the lowest udp_rtt (platform info, ms to the lobby's UDP
 // socket), ties and unknown in battle order; "" if no player has GGPO.
 func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]string) string {
 	best, bestRtt := "", math.MaxInt32
@@ -287,7 +287,7 @@ func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]
 	return best
 }
 
-// relayLine offers the lobby's relay to a GGPO battle as gdxsv's P2PMatching.relays, only
+// relayLine offers the lobby's relay to a GGPO battle, only
 // when every player reports relay_server=1 (platform info): "relay_0=<token hex>,<ip:port>
 // [,<[ip6]:port>]". The relay session is the battle's ggpo_session, so every player gets the
 // same token.
@@ -307,9 +307,7 @@ func relayLine(p *AppPeer, users []string, info func(userID string) map[string]s
 	return line + "\n"
 }
 
-// battleInfoName returns a player's name (UTF-8: login's ReadEncryptedString decoded
-// the game's Shift-JIS) without control characters, for the emulator's network
-// status OSD; "" if none.
+// battleInfoName returns a player's name without control characters; "" if none.
 func battleInfoName(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
@@ -323,8 +321,7 @@ func battleInfoName(s string) string {
 // (SetUserBinary, 110 bytes): pilot name, then four quick chat messages.
 const userBinaryField = 22
 
-// pilotName returns the pilot name in a user binary as login stores it
-// (ReadEncryptedString decoded the Shift-JIS): the first field up to its NUL,
+// pilotName returns the pilot name in a user binary: the first field up to its NUL,
 // without control characters; "" if none.
 func pilotName(bin string) string {
 	b, _, err := transform.String(japanese.ShiftJIS.NewEncoder(), bin)
@@ -344,9 +341,8 @@ func pilotName(bin string) string {
 	return battleInfoName(s)
 }
 
-// P2PMatchingReport is sent by emulators with lobby GGPO (pcsx2 ZDXSV_GGPO lobby=1), as
-// gdxsv's lbsP2PMatchingReport: on the first lobby connection after a battle, after the
-// platform info, "key=value" lines on how the battle ran (battle_code, user_id, result =
+// P2PMatchingReport is sent by emulators with lobby GGPO on the first lobby connection
+// after a battle, after the platform info: "key=value" lines on how the battle ran (battle_code, user_id, result =
 // ggpo / cut / server, per-peer ping test rtt, delay, frames, close reason).
 // Custom category, no answer: logged for server-side stats and troubleshooting.
 var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {

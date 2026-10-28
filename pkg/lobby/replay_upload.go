@@ -19,13 +19,13 @@ import (
 	"github.com/golang/glog"
 )
 
-// POST /lbs/replay_upload (as gdxsv lbs): pcsx2 posts a battle's replay as a multipart file
+// POST /lbs/replay_upload: an emulator posts a battle's replay as a multipart file
 // named <battle_code>.pb after the battle. It is stored as replays/<battle_code>.pb and its
 // url is recorded on the battle (served by /lbs/replay). 409 when that replay is already there.
 
 const (
 	replayUploadPrefix  = "replays/"
-	replayUploadMaxSize = 64 << 20 // a pcsx2 replay with its start state is ~10 MB
+	replayUploadMaxSize = 64 << 20 // a replay with its start state is ~10 MB
 	replayUploadMemory  = 16 << 20
 )
 

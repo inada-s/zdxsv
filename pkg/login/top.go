@@ -172,6 +172,5 @@ func HandleTestPage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
 	w.WriteHeader(200)
-	// writeMessagePage(w, r, messageRegister)
 	io.Copy(w, transform.NewReader(file, japanese.EUCJP.NewEncoder()))
 }

@@ -106,7 +106,7 @@ type BattleRecord struct {
 	System  uint32    `db:"system" json:"system,omitempty"`
 }
 
-// FindReplayQuery filters FindReplay (as gdxsv). A battle matches each player filter when one of its
+// FindReplayQuery filters FindReplay. A battle matches each player filter when one of its
 // players matches one of the values (names are LIKE patterns); -1 = any players / aggregate.
 type FindReplayQuery struct {
 	BattleCode string   `json:"battle_code"`
@@ -153,51 +153,26 @@ type RankingRecord struct {
 	User
 }
 
-// DB is an interface of database operation.
 type DB interface {
-	// Init initializes the database.
 	Init() error
-
-	// Migrate converts old version database to current version.
 	Migrate() error
-
-	// RegisterAccount creates new user account.
 	RegisterAccount(ip string) (*Account, error)
 
-	// RegisterAccountWithLoginKey creates new user account with specific login key.
-	// This function enables users to share login-key among different servers.
+	// RegisterAccountWithLoginKey lets users share a login key among servers.
 	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
-
-	// GetAccountByLoginKey retrieves an account by login-key.
 	GetAccountByLoginKey(key string) (*Account, error)
-
-	// LoginAccount updates last login information.
 	LoginAccount(*Account) error
 
-	// RegisterUser creates new user.
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)
-
-	// GetUserList returns user list that the account holds.
 	GetUserList(loginKey string) ([]*User, error)
-
-	// GetUser retrieves an account by user_id
 	GetUser(userID string) (*User, error)
-
-	// LoginUser updates last login information.
 	LoginUser(user *User) error
-
-	// UpdateUser updates all user's mutable information.
 	UpdateUser(user *User) error
 
-	// AddBattleRecord saves new battle record.
-	// This function is used when a battle starts.
+	// AddBattleRecord is called when a battle starts.
 	AddBattleRecord(battle *BattleRecord) error
-
-	// GetBattleRecordUser load a battle record by battle_code and user_id.
 	GetBattleRecordUser(battleCode string, userID string) (*BattleRecord, error)
-
-	// UpdateBattleRecord updates all mutable information of battle_record.
 	UpdateBattleRecord(record *BattleRecord) error
 
 	// SetReplayURL sets the replay url of every player's record of the battle.
@@ -206,16 +181,9 @@ type DB interface {
 	// FindReplay returns the battles with an uploaded replay that match q, 100 per page.
 	FindReplay(q *FindReplayQuery) ([]*FoundReplay, error)
 
-	// CalculateUserTotalBattleCount calculates battle count of the user.
-	// You can get the results of one army using the `side` parameter.
+	// CalculateUserTotalBattleCount counts one army's battles with side, else all.
 	CalculateUserTotalBattleCount(userID string, side byte) (ret BattleCountResult, err error)
-
-	// CalculateUserDailyBattleCount calculates daily battle count of the user.
 	CalculateUserDailyBattleCount(userID string) (ret BattleCountResult, err error)
-
-	// GetWinCountRanking returns top users of win count.
 	GetWinCountRanking(side byte) (ret []*RankingRecord, err error)
-
-	// GetWinCountRanking returns top users of kill count.
 	GetKillCountRanking(side byte) (ret []*RankingRecord, err error)
 }

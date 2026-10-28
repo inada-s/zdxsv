@@ -11,8 +11,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// A relay server for lobby GGPO battles (pcsx2 ZDXSV_GGPO lobby=1), ported from gdxsv's
-// `gdxsv relay` (gdxsv/relay.go): it forwards GGPO packets between the players of a battle
+// A relay server for lobby GGPO battles: it forwards GGPO packets between the players of a battle
 // when that is faster than their direct route.
 //   - Packets use GGPO's peer-relay header (type 99 with relay_to_endpoint); the relay
 //     restores the original type, like a relaying peer does, and sends the packet to the
@@ -116,7 +115,6 @@ func ServeRelay(addr, publicAddr, publicAddr6 string) error {
 	return nil
 }
 
-// serveMaintained runs Serve on conn and maintain every interval until Serve returns.
 func (r *Relay) serveMaintained(conn *net.UDPConn, interval time.Duration, maintain func()) {
 	ticker := time.NewTicker(interval)
 	done := make(chan struct{})
@@ -155,8 +153,8 @@ func (r *Relay) SessionToken(id uint32) uint64 {
 	return token
 }
 
-// ServeTestRelay runs a relay on addr without a lobby, for rigs (as gdxsv's
-// -relay_test_session): session id with token, registered again while it has expired.
+// ServeTestRelay runs a relay on addr without a lobby, for tests: session id with token,
+// registered again while it has expired.
 func ServeTestRelay(addr string, id uint32, token uint64) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {

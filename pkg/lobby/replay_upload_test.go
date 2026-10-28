@@ -53,7 +53,7 @@ func TestAPIReplayUpload(t *testing.T) {
 		t.Errorf("GET stored: code %d body %q", w.Code, w.Body.String())
 	}
 
-	// the same replay again: 409, kept as first stored (pcsx2 treats it as success)
+	// the same replay again: 409, kept as first stored (the client treats it as success)
 	if w := do(replayUploadRequest(t, "C1234.pb", []byte("other"))); w.Code != http.StatusConflict {
 		t.Errorf("second upload code %d", w.Code)
 	}

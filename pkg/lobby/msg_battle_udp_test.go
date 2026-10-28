@@ -77,7 +77,7 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	// "アムロ", a control byte (dropped), none (no line)
 	p.Battle.Users[0].Name = "アムロ"
 	p.Battle.Users[1].Name = "Bob\n"
-	// a pilot name as login stores the game's user binary (rig capture, NULs at both ends trimmed)
+	// a pilot name as login stores the game's user binary (captured, NULs at both ends trimmed)
 	p.Battle.Users[0].Bin = capturedUserBinary
 	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	want := "session_id=SBBBBBB\nuser_id=BBBBBB\nbattle_code=1696492800000\nbattle_server=192.168.1.8:8210\nusers=AAAAAA,BBBBBB,CCCCCC,DDDDDD\n" +
@@ -110,7 +110,7 @@ func TestBattleInfoNoticeSync(t *testing.T) {
 	}
 }
 
-// capturedUserBinary is a SetUserBinary body from a pcsx2 rig after ReadEncryptedString:
+// capturedUserBinary is a captured SetUserBinary body after ReadEncryptedString:
 // five 22-byte Shift-JIS fields (pilot name, four quick chat messages), NUL padded.
 var capturedUserBinary = "カミーユ・ビダン" + strings.Repeat("\x00", 6) +
 	"了解！" + strings.Repeat("\x00", 16) +

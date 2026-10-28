@@ -21,7 +21,7 @@ const (
 	statusMaxAge = time.Second
 )
 
-// APIHandler serves the lobby's public API (as gdxsv lbs /lbs/*).
+// APIHandler serves the lobby's public API.
 //
 //	GET /lbs/replay?battle_code=C&user_id=U&user_name=N&pilot_name=P&players=4&aggregate=1&reverse=1&page=0:
 //	  the battles with an uploaded replay, newest first, 100 per page, as JSON (db.FoundReplay);
@@ -29,7 +29,7 @@ const (
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
-//	POST /lbs/replay_upload: a battle's replay from pcsx2 (replay_upload.go).
+//	POST /lbs/replay_upload: a battle's replay from an emulator.
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)

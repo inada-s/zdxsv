@@ -18,8 +18,8 @@ import (
 	pb "github.com/golang/protobuf/proto"
 )
 
-// Live spectating over the lobby's UDP socket (ServeUDPStunServer), as gdxsv's
-// lbs_spectator.go: one GGPO participant of a lobby battle (live_uplink=1 in the
+// Live spectating over the lobby's UDP socket (ServeUDPStunServer): one GGPO participant
+// of a lobby battle (live_uplink=1 in the
 // battle info) pushes its replay as it records it, and the lobby fans it out to
 // spectators that subscribed with a cookie proving their address.
 //
@@ -320,7 +320,7 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 	return list
 }
 
-// next is auto-next's pick (gdxsv's live_autoplay_pick): the latest opened running
+// next is auto-next's pick: the latest opened running
 // battle with an uplink that the spectator has not watched, so it joins near the start.
 func (r *SpectatorRegistry) next(skip []string) string {
 	var best *liveSession
@@ -414,8 +414,8 @@ func (r *SpectatorRegistry) Sweep(now time.Time) {
 	}
 }
 
-// cookie binds a subscription to one battle, observed address and epoch (gdxsv's
-// subscribeCookie); length prefixes keep the encoding unambiguous.
+// cookie binds a subscription to one battle, observed address and epoch;
+// length prefixes keep the encoding unambiguous.
 func (r *SpectatorRegistry) cookie(code string, addr *net.UDPAddr, epoch int64) []byte {
 	mac := hmac.New(sha256.New, r.cookieKey[:])
 	var enc [8]byte
