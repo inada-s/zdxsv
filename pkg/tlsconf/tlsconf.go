@@ -1,6 +1,6 @@
 // Package tlsconf serves the emulators' TLS ports. The emulator trusts no CA and checks
-// no hostname or expiry: it accepts a chain when a certificate in it has a pinned public
-// key (Pin). The server sends its certificate and the zdxsv CA's (scripts/tls-keys.sh).
+// no hostname or expiry: it accepts a server certificate that has a pinned public key (Pin)
+// or is signed by one. The server sends its certificate and the zdxsv CA's (scripts/tls-keys.sh).
 package tlsconf
 
 import (
@@ -38,20 +38,38 @@ func Pin(cert *x509.Certificate) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ClientConfig accepts a server whose chain has a certificate with one of pins.
+// ClientConfig accepts a server whose certificate has one of pins or is signed by a
+// certificate in its chain that has one.
 func ClientConfig(pins ...string) *tls.Config {
+	pinned := func(c *x509.Certificate) bool {
+		for _, p := range pins {
+			if Pin(c) == p {
+				return true
+			}
+		}
+		return false
+	}
 	return &tls.Config{
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS12,
 		VerifyConnection: func(cs tls.ConnectionState) error {
-			for _, c := range cs.PeerCertificates {
-				for _, p := range pins {
-					if Pin(c) == p {
-						return nil
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("no certificate")
+			}
+			leaf := cs.PeerCertificates[0]
+			if pinned(leaf) {
+				return nil
+			}
+			// The CA certificate is public: it vouches for the server only through its signature.
+			for _, c := range cs.PeerCertificates[1:] {
+				if pinned(c) {
+					if err := leaf.CheckSignatureFrom(c); err != nil {
+						return fmt.Errorf("pinned certificate did not sign the server certificate: %w", err)
 					}
+					return nil
 				}
 			}
-			return fmt.Errorf("no certificate in the chain matches a pin")
+			return fmt.Errorf("no pinned key in the server's certificates")
 		},
 	}
 }
