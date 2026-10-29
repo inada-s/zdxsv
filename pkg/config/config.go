@@ -26,6 +26,9 @@ func LoadConfig() {
 	if err := env.Parse(&c.Battle); err != nil {
 		log.Fatal(err)
 	}
+	if err := env.Parse(&c.TLS); err != nil {
+		log.Fatal(err)
+	}
 	if err := env.Parse(&c.DB); err != nil {
 		log.Fatal(err)
 	}
@@ -40,6 +43,7 @@ type Config struct {
 	Lobby  LobbyConfig
 	Battle BattleConfig
 	DB     DBConfig
+	TLS    TLSConfig
 }
 
 type DNSConfig struct {
@@ -92,4 +96,15 @@ type BattleConfig struct {
 
 type DBConfig struct {
 	Name string `env:"ZDXSV_DB_NAME"`
+}
+
+// TLSConfig is the emulators' TLS ports, one beside each plain TCP port (the client maps
+// 443, 8200 and 8210 to them). CertFile holds the server certificate, then the CA
+// certificate (PEM); KeyFile the server key. Both empty: no TLS ports.
+type TLSConfig struct {
+	CertFile   string `env:"ZDXSV_TLS_CERT_FILE"`
+	KeyFile    string `env:"ZDXSV_TLS_KEY_FILE"`
+	DNASAddr   string `env:"ZDXSV_DNAS_TLS_ADDR" envDefault:":8220"`
+	LobbyAddr  string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8221"`
+	BattleAddr string `env:"ZDXSV_BATTLE_TLS_ADDR" envDefault:":8222"`
 }

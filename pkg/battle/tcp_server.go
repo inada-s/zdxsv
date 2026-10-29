@@ -1,6 +1,7 @@
 package battle
 
 import (
+	"errors"
 	"net"
 )
 
@@ -15,16 +16,20 @@ func NewTCPServer(logic *Logic) *TCPServer {
 }
 
 func (s *TCPServer) ListenAndServe(addr string) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
-	listner, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		return err
-	}
+	return s.Serve(l)
+}
+
+// Serve accepts connections on l until l is closed.
+func (s *TCPServer) Serve(l net.Listener) error {
 	for {
-		conn, err := listner.AcceptTCP()
+		conn, err := l.Accept()
+		if errors.Is(err, net.ErrClosed) {
+			return err
+		}
 		if err != nil {
 			continue
 		}

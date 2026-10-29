@@ -17,12 +17,12 @@ type TCPPeer struct {
 	BasePeer
 
 	sendMtx sync.Mutex
-	conn    *net.TCPConn
+	conn    net.Conn
 	room    *Room
 	seq     uint32
 }
 
-func NewTCPPeer(conn *net.TCPConn) *TCPPeer {
+func NewTCPPeer(conn net.Conn) *TCPPeer {
 	return &TCPPeer{
 		conn: conn,
 		seq:  1,

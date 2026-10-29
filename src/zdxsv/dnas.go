@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/dnas"
 	"zdxsv/pkg/router"
+	"zdxsv/pkg/tlsconf"
 
 	"github.com/golang/glog"
 )
@@ -36,13 +38,16 @@ func mainDNAS() {
 		glog.Fatalln(err)
 	}
 	glog.Infoln("dnas listen", config.Conf.DNAS.Addr, "login", config.Conf.Login.Addr, "https backend", config.Conf.DNAS.HTTPSBackend)
+	if l := tlsListen("dnas", config.Conf.TLS.DNASAddr); l != nil {
+		go func() { glog.Fatalln("dnas tls:", r.Serve(l)) }()
+	}
 	glog.Fatalln(r.ListenAndServe(config.Conf.DNAS.Addr))
 }
 
 // mainDNASCheck queries a DNAS server at addr as the game's PS2 does
 // (i-connect, then others), then the login page proxy (/00000020/health), and
-// exits 1 unless all three answer as expected.
-func mainDNASCheck(addr string) {
+// exits 1 unless all three answer as expected. With pins it goes through the TLS port addr.
+func mainDNASCheck(addr string, pins []string) {
 	ok := true
 	for _, q := range []struct {
 		kind  string
@@ -52,7 +57,7 @@ func mainDNASCheck(addr string) {
 		{"others", dnasQuery(0x1b, "01188001", "bdfe36f1209991ec", 184)},
 	} {
 		want, note := dnas.Answer("gai-gw", q.kind == "i-connect", q.query)
-		c, err := net.DialTimeout("tcp", addr, 10*time.Second)
+		c, err := dialCheck(addr, pins)
 		if err == nil {
 			c.SetDeadline(time.Now().Add(20 * time.Second))
 			var status int
@@ -69,7 +74,7 @@ func mainDNASCheck(addr string) {
 			fmt.Println("OK", q.kind, note, len(want), "B")
 		}
 	}
-	c, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	c, err := dialCheck(addr, pins)
 	if err == nil {
 		c.SetDeadline(time.Now().Add(20 * time.Second))
 		var status int
@@ -100,4 +105,12 @@ func dnasQuery(idOff int, qt, gid string, n int) []byte {
 	copy(q[0:4], t)
 	copy(q[idOff:], id)
 	return q
+}
+
+func dialCheck(addr string, pins []string) (net.Conn, error) {
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	if len(pins) == 0 {
+		return d.Dial("tcp", addr)
+	}
+	return tls.DialWithDialer(d, "tcp", addr, tlsconf.ClientConfig(pins...))
 }

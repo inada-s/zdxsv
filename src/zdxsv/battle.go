@@ -11,5 +11,8 @@ func mainBattle() {
 	udpsv := battle.NewUDPServer(logic)
 	go udpsv.ListenAndServe(stripHost(config.Conf.Battle.Addr))
 	go tcpsv.ListenAndServe(stripHost(config.Conf.Battle.Addr))
+	if l := tlsListen("battle", config.Conf.TLS.BattleAddr); l != nil {
+		go tcpsv.Serve(l)
+	}
 	logic.ServeRpc(stripHost(config.Conf.Battle.RPCAddr))
 }

@@ -26,6 +26,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		DNS:   DNSConfig{Addr: ":53"},
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
 		Lobby: LobbyConfig{ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
+		TLS:   TLSConfig{DNASAddr: ":8220", LobbyAddr: ":8221", BattleAddr: ":8222"},
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v, want %+v", Conf, want)
@@ -56,6 +57,11 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_BATTLE_RPC_ADDR":          ":8211",
 		"ZDXSV_BATTLE_PUBLIC_ADDR":       "1.2.3.4:8210",
 		"ZDXSV_DB_NAME":                  "/tmp/zdxsv.db",
+		"ZDXSV_TLS_CERT_FILE":            "/etc/zdxsv/server.crt",
+		"ZDXSV_TLS_KEY_FILE":             "/etc/zdxsv/server.key",
+		"ZDXSV_DNAS_TLS_ADDR":            ":9220",
+		"ZDXSV_LOBBY_TLS_ADDR":           ":9221",
+		"ZDXSV_BATTLE_TLS_ADDR":          ":9222",
 	}
 	for k, v := range env {
 		t.Setenv(k, v)
@@ -80,6 +86,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		},
 		Battle: BattleConfig{Addr: ":8210", RPCAddr: ":8211", PublicAddr: "1.2.3.4:8210"},
 		DB:     DBConfig{Name: "/tmp/zdxsv.db"},
+		TLS:    TLSConfig{CertFile: "/etc/zdxsv/server.crt", KeyFile: "/etc/zdxsv/server.key", DNASAddr: ":9220", LobbyAddr: ":9221", BattleAddr: ":9222"},
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v\nwant   %+v", Conf, want)

@@ -19,6 +19,7 @@ still exist for running the parts separately.
 | 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
 | 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
+| 8220, 8221, 8222 | tcp | TLS ports of dnas, lobby, battle ([TLS.md](TLS.md)); open only with `ZDXSV_TLS_CERT_FILE` set | emulators |
 | 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
 Port 80 does not need to be open: the game reaches the login pages through the DNAS front end on 443.
@@ -103,6 +104,7 @@ reach it through caddy (`lbs.zdxsv.net:8443/lbs/*`).
 - DNS answers the 4 game hosts (`gate1.jp.dnas.playstation.org`, `www01.kddi-mmbb.jp`, `ca1202.mmcp6`, `ca1203.mmcp6`) with your public IP;
 - ports 443, 8200, 8201, 8203, 8210 accept connections;
 - `zdxsv dnascheck 127.0.0.1:443` (the console's SSLv2 hello, TLS 1.0 RC4) gets the expected DNAS answers and the login page through the DNAS front end (`/00000020/health`);
+- on the test keys (`pkg/tlsconf/testdata`, never `.env`'s): the TLS ports 8220-8222 accept the test CA, backup CA and server key pins and refuse a chain without the pin; `dnascheck` passes through 8220;
 - the lobby HTTP API answers `/lbs/status` with the platform counts.
 
 It ends with `smoke: all PASS`, else it prints the failures and the server log. Ports 53 and 443 need
