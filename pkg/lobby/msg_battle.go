@@ -300,11 +300,11 @@ func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]
 	return best
 }
 
-// relayServers offers the lobby's relay to a GGPO battle, only
+// relayServers offers the relays of battleRelays to a GGPO battle, only
 // when every player reports relay_server=1 (platform info). The relay session is the
 // battle's ggpo_session, so every player gets the same token.
 func relayServers(p *AppPeer, users []string, info func(userID string) map[string]string, session uint32) []*proto.RelayServer {
-	if LobbyRelay == nil || RelayPublicAddr == "" || info == nil || p.PlatformInfo["relay_server"] != "1" {
+	if info == nil || p.PlatformInfo["relay_server"] != "1" {
 		return nil
 	}
 	for _, id := range users {
@@ -312,15 +312,25 @@ func relayServers(p *AppPeer, users []string, info func(userID string) map[strin
 			return nil
 		}
 	}
-	ip, port, ok := splitUDPAddr(RelayPublicAddr)
-	if !ok {
-		return nil
+	playerInfo := func(id string) map[string]string {
+		if id == p.UserID {
+			return p.PlatformInfo
+		}
+		return info(id)
 	}
-	r := &proto.RelayServer{Ip: pb.String(ip), Port: pb.Int32(int32(port)), Token: pb.Uint64(LobbyRelay.SessionToken(session))}
-	if ip6, port6, ok := splitUDPAddr(RelayPublicAddr6); ok {
-		r.Ip6, r.Port6 = pb.String(ip6), pb.Int32(int32(port6))
+	var relays []*proto.RelayServer
+	for _, rr := range battleRelays(users, playerInfo) {
+		ip, port, ok := splitUDPAddr(rr.PublicAddr)
+		if !ok {
+			continue
+		}
+		r := &proto.RelayServer{Ip: pb.String(ip), Port: pb.Int32(int32(port)), Token: pb.Uint64(rr.Sessions.SessionToken(session))}
+		if ip6, port6, ok := splitUDPAddr(rr.PublicAddr6); ok {
+			r.Ip6, r.Port6 = pb.String(ip6), pb.Int32(int32(port6))
+		}
+		relays = append(relays, r)
 	}
-	return []*proto.RelayServer{r}
+	return relays
 }
 
 // battleInfoName returns a player's name without control characters; "" if none.
