@@ -25,6 +25,9 @@ func serveLobby(app *lobby.App) {
 	go app.Serve()
 	sv := lobby.NewServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))
+	if l := tlsListen("lobby", config.Conf.TLS.LobbyAddr); l != nil {
+		go sv.Serve(l)
+	}
 	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.RPCAddr))
 	if c := config.Conf.Lobby; c.RelayAddr != "" {
 		public := c.RelayPublicAddr

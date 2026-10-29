@@ -22,7 +22,7 @@ type Peer interface {
 }
 
 type Server struct {
-	conn *net.TCPConn
+	conn net.Conn
 	pf   PeerFactory
 }
 
@@ -45,9 +45,9 @@ func (s *Server) ListenAndServe(addr string) error {
 }
 
 // Serve accepts connections on l until l is closed.
-func (s *Server) Serve(l *net.TCPListener) error {
+func (s *Server) Serve(l net.Listener) error {
 	for {
-		tcpConn, err := l.AcceptTCP()
+		tcpConn, err := l.Accept()
 		if errors.Is(err, net.ErrClosed) {
 			return err
 		}
@@ -63,7 +63,7 @@ func (s *Server) Serve(l *net.TCPListener) error {
 }
 
 type Conn struct {
-	conn *net.TCPConn
+	conn net.Conn
 	peer Peer
 
 	chWrite    chan bool
@@ -77,7 +77,7 @@ type Conn struct {
 	inbuf  []byte
 }
 
-func NewConn(conn *net.TCPConn) *Conn {
+func NewConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:       conn,
 		chWrite:    make(chan bool, 1),
