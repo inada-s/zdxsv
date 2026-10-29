@@ -19,6 +19,7 @@ still exist for running the parts separately.
 | 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
 | 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
+| 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`), offered to emulator players as `relay_0`: the path of a pair whose NATs cannot reach each other directly | emulators |
 | 8220, 8221, 8222 | tcp | TLS ports of dnas, lobby, battle ([TLS.md](TLS.md)); open only with `ZDXSV_TLS_CERT_FILE` set | emulators |
 | 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
@@ -28,7 +29,7 @@ pages are served inside dnas, the lobby drives the battle logic in process), so 
 pprof is on `127.0.0.1:16060` (`-profile=0` turns it off).
 If the host runs systemd-resolved, it already holds port 53 on 127.0.0.53; set `DNSStubListener=no` in
 `/etc/systemd/resolved.conf` and restart it.
-With ufw, allow every port in the table, the UDP ones too (`sudo ufw allow 53/udp`, `8201/udp`, `8202/udp`,
+With ufw, allow every port in the table, the UDP ones too (`sudo ufw allow 53/udp`, `8201/udp`, `8202/udp`, `8204/udp`,
 `8210/udp`); only `8203` stays closed.
 
 ## Releases
@@ -71,6 +72,7 @@ ZDXSV_LOBBY_RPC_ADDR=:8201
 ZDXSV_LOBBY_PUBLIC_ADDR=127.0.0.1:8200
 ZDXSV_BATTLE_ADDR=:8210
 ZDXSV_BATTLE_PUBLIC_ADDR=127.0.0.1:8210
+ZDXSV_LOBBY_RELAY_ADDR=:8204
 ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203
 ZDXSV_DB_NAME=zdxsv.db
 EOS
@@ -90,6 +92,11 @@ user. `.env` is the unit's `EnvironmentFile` (one `NAME=value` per line, no quot
 The game ports (`ZDXSV_LOBBY_ADDR`, `ZDXSV_LOBBY_RPC_ADDR`, `ZDXSV_BATTLE_ADDR`) bind all interfaces
 whatever host part they have; only the port counts. The HTTP API (`ZDXSV_LOBBY_API_ADDR`) binds the
 host part given (`:8203` for everywhere, `127.0.0.1:8203` for loopback only).
+
+The GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR=:8204`, UDP) binds the address given and is offered to players at
+`ZDXSV_LOBBY_PUBLIC_ADDR`'s host with the relay port (`ZDXSV_LOBBY_RELAY_PUBLIC_ADDR` overrides it,
+`ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6` adds an IPv6 one). Without it a pair whose NATs cannot reach each other has no
+path and its battle is cut.
 
 Replay upload (`POST /lbs/replay_upload`, pcsx2 posts each lobby battle's `.pb`, as gdxsv lbs):
 `ZDXSV_LOBBY_REPLAY_BUCKET=<public GCS bucket>` stores them gzip encoded as `replays/<battle_code>.pb`
