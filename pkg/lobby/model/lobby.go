@@ -79,7 +79,11 @@ func (l *Lobby) GetEntryUserCount() (uint16, uint16) {
 }
 
 func (l *Lobby) CanBattleStart() bool {
-	a, b := l.GetEntryUserCount()
+	_, ok := l.startGroup()
+	return ok
+}
+
+func (l *Lobby) canStart(a, b int) bool {
 	if l.ID == uint16(2) {
 		return 1 <= a && 1 <= b
 	}
@@ -89,13 +93,46 @@ func (l *Lobby) CanBattleStart() bool {
 	return 2 <= a && 2 <= b
 }
 
+// startGroup returns the sync fingerprint of the first entry group (in entry order)
+// that can start a battle, else the first entry user's and false.
+func (l *Lobby) startGroup() (string, bool) {
+	first, seen := "", false
+	counts := map[string]*[2]int{}
+	for _, id := range l.EntryUsers {
+		u, ok := l.Users[id]
+		if !ok {
+			continue
+		}
+		if !seen {
+			first, seen = u.Sync, true
+		}
+		c := counts[u.Sync]
+		if c == nil {
+			c = &[2]int{}
+			counts[u.Sync] = c
+		}
+		switch u.Entry {
+		case EntryAeug:
+			c[0]++
+		case EntryTitans:
+			c[1]++
+		}
+		if l.canStart(c[0], c[1]) {
+			return u.Sync, true
+		}
+	}
+	return first, false
+}
+
+// StartBattleUsers picks up to two users per side from the startGroup.
 func (l *Lobby) StartBattleUsers() []*User {
+	sync, _ := l.startGroup()
 	a := uint16(0)
 	b := uint16(0)
 	ret := []*User{}
 	for _, id := range l.EntryUsers {
 		u, ok := l.Users[id]
-		if ok {
+		if ok && u.Sync == sync {
 			switch u.Entry {
 			case EntryAeug:
 				if a < 2 {

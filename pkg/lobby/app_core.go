@@ -503,6 +503,10 @@ func (a *App) OnPlatformInfo(p *AppPeer, info map[string]string) {
 func (a *App) OnEnterLobby(p *AppPeer, lobbyID uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
+		p.User.Sync = ""
+		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
+			p.User.Sync = s
+		}
 		p.Lobby = l
 		p.Lobby.Enter(&p.User)
 		a.noticeLobbyUserCountAll(l.Platform, l.ID)
