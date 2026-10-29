@@ -5,7 +5,7 @@ import (
 	"math"
 	"net"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,12 +13,16 @@ import (
 
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/proto"
 
 	"encoding/json"
 
 	"github.com/golang/glog"
+	pb "github.com/golang/protobuf/proto"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func NoticeBattleStart(p *AppPeer) {
@@ -126,24 +130,16 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 
 // battleInfoNotice returns the custom notice 0x9951 for an emulator that runs
 // the zproxy bridge itself (platform info "udp=1"), else nil.
-// Sent just before the battle server address: the emulator strips it from the
-// game's stream and bridges the game's battle TCP to the battle server over UDP.
-// Body: "key=value" lines like 0x9950; users = every player's user id, in battle order;
-// p2p_<user id> = that player's udp_addr,udp_local,udp_addr6 (IPv4 public, local, "[IPv6]:port";
-// platform info from its own
-// bridge, looked up by info) for direct peering, only for players that sent them;
-// then that player's lobby TCP source IP (tcpSourceAddr);
-// ggpo_<user id> = that player's GGPO UDP port (platform info "ggpo"), only for
-// bridges that sent one: the client runs the battle over GGPO at those ports and
-// the p2p_ addresses' IPs when every other player has one, else over the bridge;
-// battle_code = the battle's code (echoed in the client's P2PMatchingReport);
-// name_<user id> = that player's name (UTF-8), for the network status OSD;
-// pilot_<user id> = that player's pilot name (UTF-8, pilotName), for the OSD too;
-// with any ggpo_ line: ggpo_session = the battle's id in the clients' ping test
-// packets, ggpo_ping_ms = its length (input delay from rtt);
-// relay_0 = the lobby's relay server (relayLine), when every player supports it;
-// sync_<user id> = that player's sync-settings fingerprint (platform info "sync", 16
-// lowercase hex digits), self included: the client cuts the battle when one differs from its own.
+// Sent just before the battle server address. Body: a P2PMatching (zdxsv.proto).
+// candidates: the other players' udp_addr, udp_local, udp_addr6 (platform info from
+// their own bridge, looked up by info), then their lobby TCP source IP (tcpSourceAddr);
+// users[].ggpo_port: platform info "ggpo": the client runs the battle over GGPO at
+// those ports and the candidates' IPs when every other player has one, else over the bridge;
+// session_id, ping_test_duration: set with any ggpo_port (the battle's id in the clients'
+// ping test packets, its length in ms);
+// relays: the lobby's relay server (relayServers), when every player supports it;
+// users[].sync: platform info "sync", self included: the client cuts the battle when one
+// differs from its own.
 var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
@@ -154,19 +150,23 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	if b.ServerIP == nil || b.ServerIP.To4() == nil || b.ServerPort == 0 {
 		return nil
 	}
-	sessionID := ""
+	m := &proto.P2PMatching{
+		BattleCode:   pb.String(b.BattleCode),
+		BattleServer: pb.String(net.JoinHostPort(b.ServerIP.String(), strconv.Itoa(int(b.ServerPort)))),
+	}
 	var users []string
-	names := ""
-	for _, u := range b.Users {
+	for i, u := range b.Users {
 		users = append(users, u.UserID)
+		pu := &proto.P2PUser{UserId: pb.String(u.UserID)}
 		if u.UserID == p.UserID {
-			sessionID = u.SessionID
+			m.LobbySessionId = pb.String(u.SessionID)
+			m.PeerId = pb.Int32(int32(i))
 		}
 		if name := battleInfoName(u.Name); name != "" {
-			names += "name_" + u.UserID + "=" + name + "\n"
+			pu.UserName = pb.String(name)
 		}
 		if pilot := pilotName(u.Bin); pilot != "" {
-			names += "pilot_" + u.UserID + "=" + pilot + "\n"
+			pu.PilotName = pb.String(pilot)
 		}
 		pi := p.PlatformInfo
 		if u.UserID != p.UserID {
@@ -176,15 +176,15 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 			}
 		}
 		if s := pi["sync"]; syncFingerprint.MatchString(s) {
-			names += "sync_" + u.UserID + "=" + s + "\n"
+			pu.Sync = pb.String(s)
 		}
+		m.Users = append(m.Users, pu)
 	}
-	if sessionID == "" {
+	if m.LobbySessionId == nil {
 		return nil
 	}
-	p2p := ""
 	ggpo := false
-	for _, id := range users {
+	for i, id := range users {
 		if id == p.UserID || info == nil {
 			continue
 		}
@@ -194,43 +194,56 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		var addrs []string
 		for _, k := range []string{"udp_addr", "udp_local", "udp_addr6"} {
-			if a := pi[k]; a != "" && !strings.ContainsAny(a, ",\n") {
-				addrs = append(addrs, a)
+			if _, _, ok := splitUDPAddr(pi[k]); ok {
+				addrs = append(addrs, pi[k])
 			}
 		}
 		if a := tcpSourceAddr(pi["tcp_ip"], addrs); a != "" {
 			addrs = append(addrs, a)
 		}
-		if len(addrs) > 0 {
-			p2p += "p2p_" + id + "=" + strings.Join(addrs, ",") + "\n"
+		for _, a := range addrs {
+			ip, port, _ := splitUDPAddr(a)
+			m.Candidates = append(m.Candidates, &proto.PlayerAddress{
+				UserId: pb.String(id), PeerId: pb.Int32(int32(i)), Ip: pb.String(ip), Port: pb.Int32(int32(port))})
 		}
 		if port, err := strconv.Atoi(pi["ggpo"]); err == nil && 0 < port && port < 65536 {
-			p2p += "ggpo_" + id + "=" + strconv.Itoa(port) + "\n"
+			m.Users[i].GgpoPort = pb.Int32(int32(port))
 			ggpo = true
 		}
 	}
 	if ggpo {
 		// The session id is random, not derived from the battle code: the code is
 		// public (live list, replays), and the first push with the session becomes the battle's live uplink.
-		p2p += "ggpo_session=" + strconv.FormatUint(uint64(b.GgpoSession), 10) + "\nggpo_ping_ms=7500\n"
+		m.SessionId = pb.Uint32(b.GgpoSession)
+		m.PingTestDuration = pb.Int32(7500)
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
-			p2p += "live_uplink=1\n"
+			m.SpectatorUplink = pb.Bool(true)
 		}
-		if line := relayLine(p, users, info, b.GgpoSession); line != "" {
-			p2p += line
-		}
+		m.Relays = relayServers(p, users, info, b.GgpoSession)
+	}
+	body, err := pb.Marshal(m)
+	if err != nil {
+		glog.Errorln("battle info:", err)
+		return nil
 	}
 	n := NewServerNotice(0x9951)
 	n.Category = CategoryCustom
-	n.Body = []byte("session_id=" + sessionID + "\n" +
-		"user_id=" + p.UserID + "\n" +
-		"battle_code=" + b.BattleCode + "\n" +
-		"battle_server=" + b.ServerIP.String() + ":" + strconv.Itoa(int(b.ServerPort)) + "\n" +
-		"users=" + strings.Join(users, ",") + "\n" +
-		names +
-		p2p)
+	n.Body = body
 	return n
+}
+
+// splitUDPAddr splits "ip:port" or "[ip6]:port" with a numeric IP and a port in 1..65535.
+func splitUDPAddr(a string) (string, int, bool) {
+	h, ps, err := net.SplitHostPort(a)
+	if err != nil || net.ParseIP(h) == nil {
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(ps)
+	if err != nil || port <= 0 || 65535 < port {
+		return "", 0, false
+	}
+	return h, port, true
 }
 
 // tcpSourceAddr returns ip (the lobby TCP connection's source) with
@@ -287,24 +300,27 @@ func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]
 	return best
 }
 
-// relayLine offers the lobby's relay to a GGPO battle, only
-// when every player reports relay_server=1 (platform info): "relay_0=<token hex>,<ip:port>
-// [,<[ip6]:port>]". The relay session is the battle's ggpo_session, so every player gets the
-// same token.
-func relayLine(p *AppPeer, users []string, info func(userID string) map[string]string, session uint32) string {
+// relayServers offers the lobby's relay to a GGPO battle, only
+// when every player reports relay_server=1 (platform info). The relay session is the
+// battle's ggpo_session, so every player gets the same token.
+func relayServers(p *AppPeer, users []string, info func(userID string) map[string]string, session uint32) []*proto.RelayServer {
 	if LobbyRelay == nil || RelayPublicAddr == "" || info == nil || p.PlatformInfo["relay_server"] != "1" {
-		return ""
+		return nil
 	}
 	for _, id := range users {
 		if id != p.UserID && info(id)["relay_server"] != "1" {
-			return ""
+			return nil
 		}
 	}
-	line := "relay_0=" + strconv.FormatUint(LobbyRelay.SessionToken(session), 16) + "," + RelayPublicAddr
-	if RelayPublicAddr6 != "" {
-		line += "," + RelayPublicAddr6
+	ip, port, ok := splitUDPAddr(RelayPublicAddr)
+	if !ok {
+		return nil
 	}
-	return line + "\n"
+	r := &proto.RelayServer{Ip: pb.String(ip), Port: pb.Int32(int32(port)), Token: pb.Uint64(LobbyRelay.SessionToken(session))}
+	if ip6, port6, ok := splitUDPAddr(RelayPublicAddr6); ok {
+		r.Ip6, r.Port6 = pb.String(ip6), pb.Int32(int32(port6))
+	}
+	return []*proto.RelayServer{r}
 }
 
 // battleInfoName returns a player's name without control characters; "" if none.
@@ -342,33 +358,46 @@ func pilotName(bin string) string {
 }
 
 // P2PMatchingReport is sent by emulators with lobby GGPO on the first lobby connection
-// after a battle, after the platform info: "key=value" lines on how the battle ran (battle_code, user_id, result =
-// ggpo / cut / server, per-peer ping test rtt, delay, frames, close reason).
-// Custom category, no answer: logged for server-side stats and troubleshooting.
+// after a battle, after the platform info: a P2PMatchingReport (zdxsv.proto) on how the
+// battle ran. Custom category, no answer: logged for server-side stats and troubleshooting.
 var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	if p.PlatformInfo == nil {
 		glog.Warningln("p2p matching report without platform info ignored", p.UserID)
 		return
 	}
-	report := model.ParsePlatformInfo(string(m.Body))
+	report := &proto.P2PMatchingReport{}
+	if err := pb.Unmarshal(m.Body, report); err != nil {
+		glog.Warningln("p2p matching report:", p.UserID, err)
+		return
+	}
 	glog.Infoln(p2pMatchingReportLine(report))
-	Spectators.End(report["battle_code"], p.UserID, time.Now())
+	Spectators.End(report.GetBattleCode(), p.UserID, time.Now())
 })
 
-// p2pMatchingReportLine formats a report as one log line: battle_code, user_id and result
-// first, then the other keys sorted.
-func p2pMatchingReportLine(report map[string]string) string {
-	head := []string{"battle_code", "user_id", "result"}
-	var rest []string
-	for k := range report {
-		if k != head[0] && k != head[1] && k != head[2] {
-			rest = append(rest, k)
-		}
-	}
-	sort.Strings(rest)
+// p2pMatchingReportLine formats a report as one log line of name="value": battle_code,
+// user_id and result first, then the set fields in field order.
+func p2pMatchingReportLine(report *proto.P2PMatchingReport) string {
+	m := report.ProtoReflect()
+	fields := m.Descriptor().Fields()
+	head := []protoreflect.Name{"battle_code", "user_id", "result"}
 	line := "p2p matching report:"
-	for _, k := range append(head, rest...) {
-		line += " " + k + "=" + strconv.Quote(report[k])
+	for _, name := range head {
+		line += " " + string(name) + "=" + strconv.Quote(m.Get(fields.ByName(name)).String())
+	}
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		if slices.Contains(head, fd.Name()) || !m.Has(fd) {
+			continue
+		}
+		s := m.Get(fd).String()
+		if fd.IsList() {
+			var items []string
+			for j, l := 0, m.Get(fd).List(); j < l.Len(); j++ {
+				items = append(items, prototext.MarshalOptions{}.Format(l.Get(j).Message().Interface()))
+			}
+			s = strings.Join(items, ", ")
+		}
+		line += " " + string(fd.Name()) + "=" + strconv.Quote(s)
 	}
 	return line
 }
