@@ -81,5 +81,5 @@ func assertIndexes(t *testing.T, db SQLiteDB) {
 	t.Helper()
 	var names []string
 	must(t, db.Select(&names, `SELECT name FROM sqlite_master WHERE name LIKE '%_tmp' OR type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name`))
-	assertEq(t, []string{"BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
+	assertEq(t, []string{"ACCOUNT_LAST_LOGIN_MACHINE_ID", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
 }

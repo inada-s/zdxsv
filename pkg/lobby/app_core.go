@@ -48,6 +48,24 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 		return
 	}
 
+	ip := p.IP()
+	machineID := p.PlatformInfo["machine_id"]
+	if len(machineID) > maxMachineIDLen {
+		machineID = machineID[:maxMachineIDLen]
+	}
+	if err := db.DefaultDB.SetLoginEndpoint(ac.LoginKey, ip, machineID); err != nil {
+		glog.Errorln("SetLoginEndpoint failure", err)
+	}
+	ban, err := db.DefaultDB.FindBan(ac.LoginKey, ip, machineID)
+	if err != nil {
+		glog.Errorln("FindBan failure", err)
+	}
+	if ban != nil {
+		glog.Infoln("banned login refused", ac.LoginKey, ip, machineID, ban.Kind, ban.Value)
+		SendBanned(p)
+		return
+	}
+
 	p.LoginKey = ac.LoginKey
 	p.SessionID = ac.SessionID
 	RequestFirstData(p)
