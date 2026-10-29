@@ -19,7 +19,7 @@ still exist for running the parts separately.
 | 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
 | 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
-| 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`), offered to emulator players as `relay_0`: the path of a pair whose NATs cannot reach each other directly | emulators |
+| 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`), offered in the battle info when every player of the battle reports `relay_server=1`: the path of a pair whose NATs cannot reach each other directly | emulators |
 | 8220, 8221, 8222 | tcp | TLS ports of dnas, lobby, battle ([TLS.md](TLS.md)); open only with `ZDXSV_TLS_CERT_FILE` set | emulators |
 | 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
