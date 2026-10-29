@@ -159,10 +159,14 @@ message P2PMatchingReport {
   optional int32 rollback_frames = 52;
   optional int32 mismatches = 53;
   optional bool disconnected = 54;
+  repeated int32 disconnected_peer_ids = 55 [packed = true];  // positions whose peer disconnected
 }
 
 message RemotePeerReport {
   optional int32 peer_id = 1;
+  optional int32 ping_min_ms = 4;  // GGPO ping during the battle, sampled once a second
+  optional int32 ping_median_ms = 5;
+  optional int32 ping_max_ms = 6;
   optional string route = 7;  // "direct", "peer <position>" or "relay <index>"
   optional int32 rtt_ms = 40;  // 0: no answer
   optional string addr = 41;  // the address that answered

@@ -168,14 +168,15 @@ func TestP2PMatchingReport(t *testing.T) {
 	want := &proto.P2PMatchingReport{
 		BattleCode: pb.String("1696492800000"), UserId: pb.String("BBBBBB"), Result: pb.String("ggpo"),
 		PeerId: pb.Int32(1), PlayerCount: pb.Int32(2), InputDelay: pb.Int32(2), MinDelay: pb.Int32(1),
-		RemotePeers: []*proto.RemotePeerReport{{PeerId: pb.Int32(0), RttMs: pb.Int32(12), Addr: pb.String("203.0.113.5:7001"), Route: pb.String("direct")}},
-		RelayCount:  pb.Int32(0), PingWaitMs: pb.Int32(1500), CloseReason: pb.String("net battle end"), FrameCount: pb.Int32(21563),
-		RollbackFrames: pb.Int32(812), Mismatches: pb.Int32(0), Disconnected: pb.Bool(false)}
+		RemotePeers: []*proto.RemotePeerReport{{PeerId: pb.Int32(0), RttMs: pb.Int32(12), Addr: pb.String("203.0.113.5:7001"), Route: pb.String("direct"),
+			PingMinMs: pb.Int32(201), PingMedianMs: pb.Int32(215), PingMaxMs: pb.Int32(250)}},
+		RelayCount: pb.Int32(0), PingWaitMs: pb.Int32(1500), CloseReason: pb.String("net battle end"), FrameCount: pb.Int32(21563),
+		RollbackFrames: pb.Int32(812), Mismatches: pb.Int32(0), Disconnected: pb.Bool(true), DisconnectedPeerIds: []int32{0}}
 	if !pb.Equal(got, want) {
 		t.Errorf("report\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
 	}
 	if line := p2pMatchingReportLine(got); !strings.HasPrefix(line, `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" player_count="2" peer_id="1" close_reason="net battle end"`) ||
-		strings.ContainsRune(line, 10) || !strings.Contains(line, ` mismatches="0" disconnected="false"`) || !strings.Contains(line, `rtt_ms:`) {
+		strings.ContainsRune(line, 10) || !strings.Contains(line, ` mismatches="0" disconnected="true" disconnected_peer_ids="0"`) || !strings.Contains(line, `ping_median_ms:215`) {
 		t.Errorf("log line %q", line)
 	}
 }
