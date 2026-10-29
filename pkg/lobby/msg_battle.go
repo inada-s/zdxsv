@@ -393,7 +393,11 @@ func p2pMatchingReportLine(report *proto.P2PMatchingReport) string {
 		if fd.IsList() {
 			var items []string
 			for j, l := 0, m.Get(fd).List(); j < l.Len(); j++ {
-				items = append(items, prototext.MarshalOptions{}.Format(l.Get(j).Message().Interface()))
+				if fd.Message() == nil {
+					items = append(items, l.Get(j).String())
+				} else {
+					items = append(items, prototext.MarshalOptions{}.Format(l.Get(j).Message().Interface()))
+				}
 			}
 			s = strings.Join(items, ", ")
 		}
