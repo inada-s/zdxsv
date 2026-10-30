@@ -27,13 +27,16 @@ import (
 // and the header's lobby answers. Every stream (header, inputs) is go-back-N: up
 // to liveWindow datagrams past the receiver's ack, back to the ack after
 // liveResend without progress. Receivers keep contiguous data only and ack every
-// push. Order to a spectator: header, inputs, close.
+// push. Order to a spectator: header, inputs, close. The round results so far
+// (round_data, a few bytes per round) go whole after the header, resent until
+// the receiver acks their length.
 const (
 	liveChunkBytes          = 1000
 	liveWindow              = 32
 	liveResend              = 200 * time.Millisecond
 	liveMaxFramesPerPush    = 128
 	liveMaxHeaderBytes      = 16 << 10
+	liveMaxRoundBytes       = 4 << 10
 	liveMaxFrameBytes       = 4 * 64
 	liveMaxFrames           = 60 * 60 * 60 // an hour at 60 fps: a battle is shorter, the memory per session bounded
 	liveFanoutInterval      = 50 * time.Millisecond
@@ -67,6 +70,7 @@ type liveSession struct {
 	ended       time.Time // first player back in the lobby or reporting the battle; zero before
 	publisher   *net.UDPAddr
 	header      []byte
+	rounds      []byte
 	frameBytes  int
 	inputs      []byte
 	closeReason string
@@ -85,6 +89,8 @@ type liveSubscriber struct {
 	seen       time.Time
 	headerAck  bool
 	headerSent time.Time
+	roundAck   int
+	roundSent  time.Time
 	frames     liveStream
 	closeAck   bool
 	closeSent  time.Time
@@ -189,6 +195,9 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 	if h := m.GetHeader(); len(h) > 0 && s.header == nil && len(h) <= liveMaxHeaderBytes {
 		s.header = append([]byte(nil), h...)
 	}
+	if rd := m.GetRoundData(); len(s.rounds) < len(rd) && len(rd) <= liveMaxRoundBytes {
+		s.rounds = append([]byte(nil), rd...)
+	}
 	if fb := int(m.GetFrameBytes()); 0 < fb && fb <= liveMaxFrameBytes && (s.frameBytes == 0 || s.frameBytes == fb) {
 		s.frameBytes = fb
 		in := m.GetInputData()
@@ -208,6 +217,7 @@ func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAdd
 			BattleCode: pb.String(s.code),
 			AckFrame:   pb.Int32(int32(s.frames())),
 			HeaderAck:  pb.Bool(s.header != nil),
+			RoundAck:   pb.Int32(int32(len(s.rounds))),
 			CloseAck:   pb.Bool(!s.closed.IsZero()),
 		},
 	}, from)
@@ -230,6 +240,9 @@ func (r *SpectatorRegistry) onAck(m *proto.SpectatorInputAck, from *net.UDPAddr,
 		return
 	}
 	sub.headerAck = sub.headerAck || m.GetHeaderAck()
+	if n := int(m.GetRoundAck()); n > sub.roundAck {
+		sub.roundAck = n
+	}
 	sub.frames.ack(int(m.GetAckFrame()), now)
 	sub.closeAck = sub.closeAck || m.GetCloseAck()
 	r.fanoutTo(s, sub, now)
@@ -390,6 +403,10 @@ func (r *SpectatorRegistry) fanoutTo(s *liveSession, sub *liveSubscriber, now ti
 			push(&proto.SpectatorInputPush{Header: s.header})
 		}
 		return
+	}
+	if sub.roundAck < len(s.rounds) && now.Sub(sub.roundSent) >= liveResend {
+		sub.roundSent = now
+		push(&proto.SpectatorInputPush{RoundData: s.rounds})
 	}
 	if fb := s.frameBytes; fb > 0 {
 		per := liveChunkBytes / fb
