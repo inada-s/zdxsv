@@ -177,6 +177,7 @@ Old releases stay under `releases/`; to roll back, run `zdxsv-release.sh` with a
 
 - Real PS2: set the network setting's DNS to the server's IP.
 - The zdxsv PCSX2 build maps the 4 game hosts to `153.121.44.150` (zdxsv.net) by default. To use your own server, change those 4 entries in the Network & HDD settings (Ethernet DNS hosts).
+- The connectivity test can also ask the `udptest` Cloud Function (Google network, a second IP) to send to the client's public port: deploy it from [infra/udptest](../infra/udptest/README.md).
 
 ## Known limits
 

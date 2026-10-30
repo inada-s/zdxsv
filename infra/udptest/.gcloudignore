@@ -1,0 +1,3 @@
+.gcloudignore
+.gitignore
+*_test.go
