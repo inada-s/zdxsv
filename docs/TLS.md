@@ -26,7 +26,7 @@ Keys (all ECDSA P-256, made by `scripts/tls-keys.sh`, needs openssl):
 | key | where | secret |
 |---|---|---|
 | CA, backup CA (`ca.key`, `backup-ca.key`) | offline only: encrypted files, kept apart from each other, never on a server or in a repository | yes |
-| server key (`server.key`) | the production server only: a file readable by the zdxsv user only, outside the repository and any image | yes |
+| server key (`server.key`) | the production server only: owned by root, readable by the zdxsv group only, outside the repository and any image | yes |
 | certificates, pins | anywhere | no |
 
 ## Making the keys
@@ -39,11 +39,20 @@ scripts/tls-keys.sh server keys ca server      # server.key, server.crt (server 
 ```
 
 Paste the two CA pins into pcsx2 (`pcsx2/Zdxsv/`). Copy `server.key` and `server.crt` to the
-server (`~/zdxsv/tls/`, `chmod 600 server.key`, owner `zdxsv`) and add to `.env`:
+server and install them under `/etc/zdxsv/tls/`, so the service can read the key but not change it:
 
 ```sh
-ZDXSV_TLS_CERT_FILE=/home/zdxsv/zdxsv/tls/server.crt
-ZDXSV_TLS_KEY_FILE=/home/zdxsv/zdxsv/tls/server.key
+sudo install -d -o root -g root  -m 755 /etc/zdxsv
+sudo install -d -o root -g zdxsv -m 750 /etc/zdxsv/tls
+sudo install -o root -g zdxsv -m 640 server.key /etc/zdxsv/tls/
+sudo install -o root -g zdxsv -m 644 server.crt /etc/zdxsv/tls/
+```
+
+and add to `.env`:
+
+```sh
+ZDXSV_TLS_CERT_FILE=/etc/zdxsv/tls/server.crt
+ZDXSV_TLS_KEY_FILE=/etc/zdxsv/tls/server.key
 ```
 
 Keep `ca.key` and `backup-ca.key` on separate offline media; never copy them to the server.
