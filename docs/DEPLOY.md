@@ -123,6 +123,19 @@ The lobby's HTTP API (`ZDXSV_LOBBY_API_ADDR`, port 8203) answers `/lbs/status` w
 
 `console` is a real PS2. `emu` is every zdxsv PCSX2 build, whatever its CPU (ARM64 and x86_64 builds play in the same lobbies and battles; the CPU stays in the platform info log line). The lobby never puts the two in one battle, so the page shows both counts.
 
+## Bans
+
+The lobby records each account's last login ip and the `machine_id` its emulator sends, and refuses a login (`YOU ARE BANNED`) when a ban matches: `user` (a user id: every account holding it, also consoles, which send no machine id), `machine` (every account on that PC) or `ip`. Manage them on the private API (set `ZDXSV_LOBBY_OPS_ADDR=127.0.0.1:<port>` in `.env`; off when empty), after `migratedb` on an older DB:
+
+```sh
+curl "$ZDXSV_LOBBY_OPS_ADDR/ops/accounts?machine_id=M"        # accounts last logged in from M, with their users
+curl "$ZDXSV_LOBBY_OPS_ADDR/ops/ban?kind=machine&value=M&reason=R"
+curl "$ZDXSV_LOBBY_OPS_ADDR/ops/bans"
+curl "$ZDXSV_LOBBY_OPS_ADDR/ops/unban?kind=machine&value=M"
+```
+
+A ban applies at the next login; a player already in the lobby stays until they leave.
+
 ## zdxsv.net: website and HTTPS API
 
 The website (`website/`) is not served by zdxsv. `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to master; the custom domain (`www.zdxsv.net`) is set in the repository's Pages settings, not by a CNAME file.

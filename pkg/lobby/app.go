@@ -85,6 +85,14 @@ func (p *AppPeer) SendMessage(msg *message.Message) {
 	p.conn.SendMessage(msg)
 }
 
+func (p *AppPeer) IP() string {
+	h, _, err := net.SplitHostPort(p.conn.Address())
+	if err != nil {
+		return ""
+	}
+	return h
+}
+
 // BattleServer is the lobby's link to the battle server: the net/rpc client of a
 // separate `zdxsv battle` process, or the battle logic itself in `zdxsv all`.
 type BattleServer interface {

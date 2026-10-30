@@ -31,6 +31,15 @@ func SendServerShutDown(p *AppPeer) {
 	p.SendMessage(n)
 }
 
+// maxMachineIDLen bounds what a client can store as its machine id.
+const maxMachineIDLen = 64
+
+func SendBanned(p *AppPeer) {
+	n := NewServerNotice(0x6003)
+	n.Writer().WriteString("<BODY><LF=5><CENTER>YOU ARE BANNED<END>")
+	p.SendMessage(n)
+}
+
 func RequestLineCheck(p *AppPeer) {
 	m := NewServerQuestion(0x6001)
 	p.SendMessage(m)

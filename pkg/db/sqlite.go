@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS account (
 	created_ip text default '',
 	created timestamp,
 	last_login timestamp,
+	last_login_ip text default '',
+	last_login_machine_id text default '',
 	system integer default 0,
 	PRIMARY KEY (login_key)
 );
@@ -98,6 +100,13 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	system      integer default 0,
 	PRIMARY KEY (battle_code, user_id)
 );
+CREATE TABLE IF NOT EXISTS ban (
+	kind text,
+	value text,
+	reason text default '',
+	created timestamp,
+	PRIMARY KEY (kind, value)
+);
 `
 
 const indexes = `
@@ -105,6 +114,7 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_USER_ID ON battle_record(user_id);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
+CREATE INDEX IF NOT EXISTS ACCOUNT_LAST_LOGIN_MACHINE_ID ON account(last_login_machine_id);
 `
 
 func (db SQLiteDB) Init() error {
@@ -114,7 +124,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record"}
+	tables := []string{"account", "user", "battle_record", "ban"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -242,6 +252,58 @@ WHERE
 		a.LastLogin,
 		a.LoginKey)
 	return err
+}
+
+func (db SQLiteDB) SetLoginEndpoint(loginKey, ip, machineID string) error {
+	_, err := db.Exec(`UPDATE account SET last_login_ip = ?, last_login_machine_id = ? WHERE login_key = ?`,
+		ip, machineID, loginKey)
+	return err
+}
+
+func (db SQLiteDB) GetAccountsByMachineID(machineID string) ([]*Account, error) {
+	accounts := []*Account{}
+	err := db.Select(&accounts, `SELECT * FROM account WHERE last_login_machine_id = ? ORDER BY last_login DESC`, machineID)
+	return accounts, err
+}
+
+func (db SQLiteDB) AddBan(ban *Ban) error {
+	if ban.Created.IsZero() {
+		ban.Created = time.Now()
+	}
+	_, err := db.NamedExec(`INSERT OR REPLACE INTO ban (kind, value, reason, created) VALUES (:kind, :value, :reason, :created)`, ban)
+	return err
+}
+
+func (db SQLiteDB) DeleteBan(kind, value string) (bool, error) {
+	res, err := db.Exec(`DELETE FROM ban WHERE kind = ? AND value = ?`, kind, value)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (db SQLiteDB) GetBanList() ([]*Ban, error) {
+	bans := []*Ban{}
+	err := db.Select(&bans, `SELECT * FROM ban ORDER BY created`)
+	return bans, err
+}
+
+func (db SQLiteDB) FindBan(loginKey, ip, machineID string) (*Ban, error) {
+	ban := &Ban{}
+	err := db.QueryRowx(`
+SELECT * FROM ban WHERE
+	(kind = 'user' AND value IN (SELECT user_id FROM user WHERE login_key = ?)) OR
+	(kind = 'machine' AND value <> '' AND value = ?) OR
+	(kind = 'ip' AND value <> '' AND value = ?)
+LIMIT 1`, loginKey, machineID, ip).StructScan(ban)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ban, nil
 }
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {

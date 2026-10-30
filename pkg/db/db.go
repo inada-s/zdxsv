@@ -40,14 +40,30 @@ func GenBattleCode() string {
 }
 
 type Account struct {
-	LoginKey   string    `db:"login_key" json:"login_key,omitempty"`
-	SessionID  string    `db:"session_id" json:"session_id,omitempty"`
-	LastUserID string    `db:"last_user_id" json:"last_user_id,omitempty"`
-	Created    time.Time `db:"created" json:"created,omitempty"`
-	CreatedIP  string    `db:"created_ip" json:"created_ip,omitempty"`
-	LastLogin  time.Time `db:"last_login" json:"last_login,omitempty"`
-	System     byte      `db:"system" json:"system,omitempty"`
+	LoginKey           string    `db:"login_key" json:"login_key,omitempty"`
+	SessionID          string    `db:"session_id" json:"session_id,omitempty"`
+	LastUserID         string    `db:"last_user_id" json:"last_user_id,omitempty"`
+	Created            time.Time `db:"created" json:"created,omitempty"`
+	CreatedIP          string    `db:"created_ip" json:"created_ip,omitempty"`
+	LastLogin          time.Time `db:"last_login" json:"last_login,omitempty"`
+	LastLoginIP        string    `db:"last_login_ip" json:"last_login_ip,omitempty"`
+	LastLoginMachineID string    `db:"last_login_machine_id" json:"last_login_machine_id,omitempty"`
+	System             byte      `db:"system" json:"system,omitempty"`
 }
+
+// Ban refuses a login whose user (any user of the account), machine id or ip is Value.
+type Ban struct {
+	Kind    string    `db:"kind" json:"kind"`
+	Value   string    `db:"value" json:"value"`
+	Reason  string    `db:"reason" json:"reason,omitempty"`
+	Created time.Time `db:"created" json:"created"`
+}
+
+const (
+	BanUser    = "user"
+	BanMachine = "machine"
+	BanIP      = "ip"
+)
 
 type User struct {
 	LoginKey  string `db:"login_key" json:"login_key,omitempty"`
@@ -162,6 +178,17 @@ type DB interface {
 	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
 	GetAccountByLoginKey(key string) (*Account, error)
 	LoginAccount(*Account) error
+
+	// SetLoginEndpoint records where the account last logged in to the lobby from.
+	SetLoginEndpoint(loginKey, ip, machineID string) error
+	GetAccountsByMachineID(machineID string) ([]*Account, error)
+
+	AddBan(ban *Ban) error
+	// DeleteBan returns false when there was no such ban.
+	DeleteBan(kind, value string) (bool, error)
+	GetBanList() ([]*Ban, error)
+	// FindBan returns the ban matching the login, nil if none.
+	FindBan(loginKey, ip, machineID string) (*Ban, error)
 
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)
