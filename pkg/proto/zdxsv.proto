@@ -160,6 +160,8 @@ message P2PMatchingReport {
   optional int32 mismatches = 53;
   optional bool disconnected = 54;
   repeated int32 disconnected_peer_ids = 55 [packed = true];  // positions whose peer disconnected
+  optional float rollback_budget = 56;  // frames, learned per PC from the frame slack
+  optional float rollback_budget_used = 57;  // frames the input delay left to rollbacks
 }
 
 message RemotePeerReport {
