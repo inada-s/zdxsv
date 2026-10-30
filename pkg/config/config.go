@@ -29,6 +29,9 @@ func LoadConfig() {
 	if err := env.Parse(&c.TLS); err != nil {
 		log.Fatal(err)
 	}
+	if err := env.Parse(&c.Relay); err != nil {
+		log.Fatal(err)
+	}
 	if err := env.Parse(&c.DB); err != nil {
 		log.Fatal(err)
 	}
@@ -44,6 +47,7 @@ type Config struct {
 	Battle BattleConfig
 	DB     DBConfig
 	TLS    TLSConfig
+	Relay  RelayConfig
 }
 
 type DNSConfig struct {
@@ -75,6 +79,10 @@ type LobbyConfig struct {
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
 	RelayPublicAddr  string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR"`
 	RelayPublicAddr6 string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6"`
+	// TCP address where regional relays (`zdxsv relay`) register, off when empty; they must
+	// send RelaySecret.
+	RelayControlAddr string `env:"ZDXSV_LOBBY_RELAY_CONTROL_ADDR"`
+	RelaySecret      Secret `env:"ZDXSV_RELAY_SECRET"`
 	// Private HTTP API (lobby.OpsHandler: /ops/replay_uploaded for an external uploader, bans), off when empty.
 	// Uploaded replay urls must start with ReplayURLPrefix.
 	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
@@ -107,4 +115,25 @@ type TLSConfig struct {
 	DNASAddr   string `env:"ZDXSV_DNAS_TLS_ADDR" envDefault:":8220"`
 	LobbyAddr  string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8221"`
 	BattleAddr string `env:"ZDXSV_BATTLE_TLS_ADDR" envDefault:":8222"`
+}
+
+// RelayConfig is a regional relay (`zdxsv relay`): it relays on Addr, offered to players at
+// PublicAddr / PublicAddr6, for the players near Region (a "<region>=<ms>" platform info key),
+// registered with the lobby's LobbyConfig.RelayControlAddr at LobbyAddr with Lobby.RelaySecret.
+type RelayConfig struct {
+	Region      string `env:"ZDXSV_RELAY_REGION"`
+	Addr        string `env:"ZDXSV_RELAY_ADDR" envDefault:":8204"`
+	PublicAddr  string `env:"ZDXSV_RELAY_PUBLIC_ADDR"`
+	PublicAddr6 string `env:"ZDXSV_RELAY_PUBLIC_ADDR6"`
+	LobbyAddr   string `env:"ZDXSV_RELAY_LOBBY_ADDR"`
+}
+
+// Secret is kept out of the logged config.
+type Secret string
+
+func (s Secret) String() string {
+	if s == "" {
+		return ""
+	}
+	return "***"
 }

@@ -57,7 +57,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, dnas, login, lobby, battle, relay <session id> <hex token>, initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, dnas, login, lobby, battle, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
 }
 
 func prepareDB() {
@@ -123,7 +123,11 @@ func main() {
 		prepareDB()
 		mainLogin()
 	case "relay":
-		mainRelayTest(args[1:])
+		if len(args) == 1 {
+			mainRelay()
+		} else {
+			mainRelayTest(args[1:])
+		}
 	case "dnas":
 		mainDNAS()
 	case "dnascheck":

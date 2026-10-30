@@ -27,6 +27,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
 		Lobby: LobbyConfig{ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
 		TLS:   TLSConfig{DNASAddr: ":8220", LobbyAddr: ":8221", BattleAddr: ":8222"},
+		Relay: RelayConfig{Addr: ":8204"},
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v, want %+v", Conf, want)
@@ -50,6 +51,12 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_LOBBY_RELAY_ADDR":         ":8202",
 		"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR":  "5.6.7.8:8202",
 		"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6": "[::1]:8202",
+		"ZDXSV_LOBBY_RELAY_CONTROL_ADDR": ":8205",
+		"ZDXSV_RELAY_SECRET":             "s3cret",
+		"ZDXSV_RELAY_REGION":             "asia-northeast1",
+		"ZDXSV_RELAY_ADDR":               ":9204",
+		"ZDXSV_RELAY_PUBLIC_ADDR":        "9.9.9.9:9204",
+		"ZDXSV_RELAY_LOBBY_ADDR":         "1.2.3.4:8205",
 		"ZDXSV_LOBBY_OPS_ADDR":           "127.0.0.1:8203",
 		"ZDXSV_LOBBY_REPLAY_URL_PREFIX":  "https://example.com/r/",
 		"ZDXSV_LOBBY_API_ADDR":           ":8204",
@@ -80,6 +87,8 @@ func TestLoadConfigFromEnv(t *testing.T) {
 			RelayAddr:        ":8202",
 			RelayPublicAddr:  "5.6.7.8:8202",
 			RelayPublicAddr6: "[::1]:8202",
+			RelayControlAddr: ":8205",
+			RelaySecret:      "s3cret",
 			OpsAddr:          "127.0.0.1:8203",
 			ReplayURLPrefix:  "https://example.com/r/",
 			APIAddr:          ":8204",
@@ -87,6 +96,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		Battle: BattleConfig{Addr: ":8210", RPCAddr: ":8211", PublicAddr: "1.2.3.4:8210"},
 		DB:     DBConfig{Name: "/tmp/zdxsv.db"},
 		TLS:    TLSConfig{CertFile: "/etc/zdxsv/server.crt", KeyFile: "/etc/zdxsv/server.key", DNASAddr: ":9220", LobbyAddr: ":9221", BattleAddr: ":9222"},
+		Relay:  RelayConfig{Region: "asia-northeast1", Addr: ":9204", PublicAddr: "9.9.9.9:9204", LobbyAddr: "1.2.3.4:8205"},
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v\nwant   %+v", Conf, want)

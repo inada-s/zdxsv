@@ -19,7 +19,7 @@ still exist for running the parts separately.
 | 8201 | tcp, udp | lobby RPC, STUN | zproxy (UDP proxy for real PS2), emulators |
 | 8202 | udp | STUN test socket (lobby RPC port + 1) | emulators (connectivity test: NAT type, open port) |
 | 8210 | tcp, udp | battle | everyone |
-| 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`), offered in the battle info when every player of the battle reports `relay_server=1`: the path of a pair whose NATs cannot reach each other directly | emulators |
+| 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`, and `zdxsv relay` hosts on `ZDXSV_RELAY_ADDR`), offered in the battle info when every player of the battle reports `relay_server=1`: the path of a pair whose NATs cannot reach each other directly | emulators |
 | 8220, 8221, 8222 | tcp | TLS ports of dnas, lobby, battle ([TLS.md](TLS.md)); open only with `ZDXSV_TLS_CERT_FILE` set | emulators |
 | 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
@@ -97,6 +97,15 @@ The GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR=:8204`, UDP) binds the address given and
 `ZDXSV_LOBBY_PUBLIC_ADDR`'s host with the relay port (`ZDXSV_LOBBY_RELAY_PUBLIC_ADDR` overrides it,
 `ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6` adds an IPv6 one). Without it a pair whose NATs cannot reach each other has no
 path and its battle is cut.
+
+Regional relays: `zdxsv relay` (no arguments) on a host in a cloud region relays on `ZDXSV_RELAY_ADDR`
+(default `:8204`, UDP), offered at `ZDXSV_RELAY_PUBLIC_ADDR` (and `ZDXSV_RELAY_PUBLIC_ADDR6`), and registers
+over TCP with the lobby's `ZDXSV_LOBBY_RELAY_CONTROL_ADDR` given as `ZDXSV_RELAY_LOBBY_ADDR`. Both sides set
+the same `ZDXSV_RELAY_SECRET` (the lobby refuses the control address without one); `ZDXSV_RELAY_REGION` is the
+`<region>=<ms>` key players report (e.g. `asia-northeast1`). A battle is offered up to 4 relays: the
+registered ones by the worst relayed RTT of a player pair, then the lobby's own. A relay is offered while its
+control connection lives (status every 10 s, dropped after 30 s silent) and reconnects every 5 s. Open the
+control port to the relay hosts only; the secret is sent in clear.
 
 Replay upload (`POST /lbs/replay_upload`, pcsx2 posts each lobby battle's `.pb`, as gdxsv lbs):
 `ZDXSV_LOBBY_REPLAY_BUCKET=<public GCS bucket>` stores them gzip encoded as `replays/<battle_code>.pb`
