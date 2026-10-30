@@ -41,6 +41,19 @@ func serveLobby(app *lobby.App) {
 			}
 		}()
 	}
+	if c := config.Conf.Lobby; c.RelayControlAddr != "" {
+		if c.RelaySecret == "" {
+			glog.Fatalln("ZDXSV_LOBBY_RELAY_CONTROL_ADDR needs ZDXSV_RELAY_SECRET")
+		}
+		l, err := net.Listen("tcp", c.RelayControlAddr)
+		if err != nil {
+			glog.Fatalln("relay control:", err)
+		}
+		glog.Infoln("Start relay control", c.RelayControlAddr)
+		go func() {
+			glog.Errorln("relay control:", lobby.ServeRelayControl(l, string(c.RelaySecret)))
+		}()
+	}
 	// The HTTP APIs bind the host given in their address (127.0.0.1:8203 stays on loopback),
 	// unlike the game ports, whose host part is only advertised.
 	if c := config.Conf.Lobby; c.OpsAddr != "" {
@@ -96,4 +109,28 @@ func mainRelayTest(args []string) {
 		addr = ":8203"
 	}
 	glog.Fatalln(lobby.ServeTestRelay(addr, uint32(id), token))
+}
+
+// mainRelay: `zdxsv relay` runs a regional relay (config.RelayConfig) registered with the lobby
+// until SIGINT/SIGTERM or the lobby shuts it down.
+func mainRelay() {
+	c := config.Conf.Relay
+	if c.Region == "" || c.PublicAddr == "" || c.LobbyAddr == "" || config.Conf.Lobby.RelaySecret == "" {
+		glog.Fatalln("zdxsv relay needs ZDXSV_RELAY_REGION, ZDXSV_RELAY_PUBLIC_ADDR, ZDXSV_RELAY_LOBBY_ADDR and ZDXSV_RELAY_SECRET")
+	}
+	udpAddr, err := net.ResolveUDPAddr("udp", c.Addr)
+	if err != nil {
+		glog.Fatalln("relay addr:", err)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		glog.Fatalln("relay listen:", err)
+	}
+	defer conn.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+	err = lobby.RunRegionalRelay(ctx, conn, c.LobbyAddr, lobby.RelayStatus{
+		Region: c.Region, PublicAddr: c.PublicAddr, PublicAddr6: c.PublicAddr6, Secret: string(config.Conf.Lobby.RelaySecret),
+	})
+	glog.Infoln("relay stopped:", err)
 }
