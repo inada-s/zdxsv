@@ -40,6 +40,12 @@ func SendBanned(p *AppPeer) {
 	p.SendMessage(n)
 }
 
+func SendPleaseUpdate(p *AppPeer) {
+	n := NewServerNotice(0x6003)
+	n.Writer().WriteString("<BODY><LF=5><CENTER>PLEASE UPDATE PCSX2<END>")
+	p.SendMessage(n)
+}
+
 func RequestLineCheck(p *AppPeer) {
 	m := NewServerQuestion(0x6001)
 	p.SendMessage(m)

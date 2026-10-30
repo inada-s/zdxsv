@@ -107,6 +107,10 @@ CREATE TABLE IF NOT EXISTS ban (
 	created timestamp,
 	PRIMARY KEY (kind, value)
 );
+CREATE TABLE IF NOT EXISTS m_server_setting (
+	key text PRIMARY KEY,
+	value text default ''
+);
 `
 
 const indexes = `
@@ -124,7 +128,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "ban"}
+	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -304,6 +308,15 @@ LIMIT 1`, loginKey, machineID, ip).StructScan(ban)
 		return nil, err
 	}
 	return ban, nil
+}
+
+func (db SQLiteDB) GetServerSetting(key string) (string, error) {
+	value := ""
+	err := db.QueryRowx(`SELECT value FROM m_server_setting WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
 }
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
