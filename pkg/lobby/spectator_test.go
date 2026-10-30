@@ -113,6 +113,7 @@ type liveSpectator struct {
 	header  []byte
 	state   []byte
 	inputs  []byte
+	rounds  []byte
 	closed  bool
 	pushes  int
 	dropped int
@@ -136,6 +137,9 @@ func (c *liveSpectator) receive(pkt *proto.Packet) *proto.Packet {
 	if h := m.GetHeader(); h != nil && c.header == nil {
 		c.header = h
 	}
+	if rd := m.GetRoundData(); len(rd) > len(c.rounds) {
+		c.rounds = rd
+	}
 	if st := m.GetState(); st != nil && int(m.GetStateOffset()) == len(c.state) {
 		c.state = append(c.state, st...)
 	}
@@ -148,7 +152,7 @@ func (c *liveSpectator) receive(pkt *proto.Packet) *proto.Packet {
 	}
 	return &proto.Packet{Type: proto.MessageType_SpectatorInputAckType.Enum(), SpectatorInputAckData: &proto.SpectatorInputAck{
 		BattleCode: pb.String(c.code), HeaderAck: pb.Bool(c.header != nil), StateAck: pb.Int32(int32(len(c.state))),
-		AckFrame: pb.Int32(int32(len(c.inputs) / 4)), CloseAck: pb.Bool(c.closed)}}
+		AckFrame: pb.Int32(int32(len(c.inputs) / 4)), CloseAck: pb.Bool(c.closed), RoundAck: pb.Int32(int32(len(c.rounds)))}}
 }
 
 func TestLiveFanoutLossy(t *testing.T) {
@@ -176,12 +180,18 @@ func TestLiveFanoutLossy(t *testing.T) {
 	}
 	// the battle goes on while the spectator joins: frames arrive over time
 	pushed := 0
+	var rounds []byte
 	pushFrames := func(n int) {
 		if pushed+n > 3000 {
 			n = 3000 - pushed
 		}
 		r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(pushed)), FrameBytes: pb.Int32(4), InputData: inputs[pushed*4 : (pushed+n)*4]}), liveUp, now)
 		pushed += n
+		if pushed%1200 < n {
+			rounds = append(rounds, byte(pushed/1200), 1)
+			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{RoundData: rounds}), liveUp, now)
+			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{RoundData: rounds[:1]}), liveUp, now)
+		}
 		if pushed == 3000 {
 			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(3000), CloseReason: pb.String("end")}), liveUp, now)
 		}
@@ -216,6 +226,9 @@ func TestLiveFanoutLossy(t *testing.T) {
 		if step%200 == 0 {
 			r.Handle(c.subscribe(), liveSpec, now)
 		}
+	}
+	if len(rounds) != 4 || !bytes.Equal(c.rounds, rounds) {
+		t.Fatalf("rounds %v, want %v", c.rounds, rounds)
 	}
 	if c.code != "B1" || !c.closed || string(c.header) != "header" || len(c.state) != 0 || !bytes.Equal(c.inputs, inputs) {
 		t.Fatalf("code %s closed %v header %q state %d/%d inputs %d/%d", c.code, c.closed, c.header, len(c.state), 0, len(c.inputs), len(inputs))
