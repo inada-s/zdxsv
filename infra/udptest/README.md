@@ -30,7 +30,7 @@ gcloud functions deploy udptest \
   --region asia-northeast1 \
   --entry-point FunctionEntryPoint \
   --trigger-http \
-  --runtime go123 \
+  --runtime go127 \
   --allow-unauthenticated \
   --max-instances 3
 ```

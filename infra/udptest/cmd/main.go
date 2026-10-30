@@ -6,7 +6,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/functions-framework-go/funcframework"
 
-	_ "zdxsv/infra/udptest"
+	_ "github.com/inada-s/zdxsv/infra/udptest"
 )
 
 func main() {

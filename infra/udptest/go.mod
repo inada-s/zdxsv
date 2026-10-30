@@ -1,4 +1,4 @@
-module zdxsv/infra/udptest
+module github.com/inada-s/zdxsv/infra/udptest
 
 go 1.23
 
