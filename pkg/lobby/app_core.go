@@ -65,6 +65,11 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 		SendBanned(p)
 		return
 	}
+	if v := p.PlatformInfo["pcsx2"]; pcsx2NeedsUpdate(v) {
+		glog.Infoln("outdated client refused", ac.LoginKey, v)
+		SendPleaseUpdate(p)
+		return
+	}
 
 	p.LoginKey = ac.LoginKey
 	p.SessionID = ac.SessionID

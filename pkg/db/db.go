@@ -189,6 +189,8 @@ type DB interface {
 	GetBanList() ([]*Ban, error)
 	// FindBan returns the ban matching the login, nil if none.
 	FindBan(loginKey, ip, machineID string) (*Ban, error)
+	// GetServerSetting returns the m_server_setting value of key, "" if none.
+	GetServerSetting(key string) (string, error)
 
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)
