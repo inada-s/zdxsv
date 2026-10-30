@@ -107,6 +107,14 @@ registered ones by the worst relayed RTT of a player pair, then the lobby's own.
 control connection lives (status every 10 s, dropped after 30 s silent) and reconnects every 5 s. Open the
 control port to the relay hosts only; the secret is sent in clear.
 
+On-demand relays: `ZDXSV_LOBBY_RELAY_REGIONS=asia-northeast1,us-west2` (needs the control address) makes the
+lobby run `ZDXSV_LOBBY_RELAY_START_COMMAND <region>` (an executable, e.g. a script that starts a stopped VM
+running `zdxsv relay`) for each listed region without a registered relay, while 4 or more `relay_server=1`
+players are online whose best regions are in two or more region groups (asia-east, asia-northeast, us-west, ...).
+Checked every 10 s; a region is started again after 10 min if its relay has not registered. A registered relay
+of a listed region is told to shut down (`zdxsv relay` exits; the script or VM stops the host) once relays
+have been unneeded for 30 min and it reports 0 sessions.
+
 Replay upload (`POST /lbs/replay_upload`, pcsx2 posts each lobby battle's `.pb`, as gdxsv lbs):
 `ZDXSV_LOBBY_REPLAY_BUCKET=<public GCS bucket>` stores them gzip encoded as `replays/<battle_code>.pb`
 (credentials: the VM's service account or `GOOGLE_APPLICATION_CREDENTIALS`); off when unset. Players

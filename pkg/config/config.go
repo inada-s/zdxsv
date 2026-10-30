@@ -83,6 +83,10 @@ type LobbyConfig struct {
 	// send RelaySecret.
 	RelayControlAddr string `env:"ZDXSV_LOBBY_RELAY_CONTROL_ADDR"`
 	RelaySecret      Secret `env:"ZDXSV_RELAY_SECRET"`
+	// On-demand regional relays, off when RelayRegions (comma separated "<region>=<ms>" keys) is
+	// empty: RelayStartCommand is run with a region as its argument to start a relay there.
+	RelayRegions      string `env:"ZDXSV_LOBBY_RELAY_REGIONS"`
+	RelayStartCommand string `env:"ZDXSV_LOBBY_RELAY_START_COMMAND"`
 	// Private HTTP API (lobby.OpsHandler: /ops/replay_uploaded for an external uploader, bans), off when empty.
 	// Uploaded replay urls must start with ReplayURLPrefix.
 	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`

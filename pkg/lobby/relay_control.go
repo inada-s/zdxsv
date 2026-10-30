@@ -143,9 +143,19 @@ func serveRelayControlConn(conn net.Conn, secret string) {
 				return
 			}
 			registered = &RegionalRelay{Region: st.Region, PublicAddr: st.PublicAddr, PublicAddr6: st.PublicAddr6, Sessions: sessions}
+			registered.shutdown = func() {
+				select {
+				case sessions.out <- RelayControl{Shutdown: true}:
+				default:
+					glog.Errorln("relay control queue full, shutdown dropped", st.PublicAddr)
+				}
+			}
 			RegisterRelay(registered)
 			glog.Infoln("relay registered", st.Region, st.PublicAddr, st.PublicAddr6, "from", conn.RemoteAddr())
 		}
+		regionalRelays.Lock()
+		registered.activeSessions = st.Sessions
+		regionalRelays.Unlock()
 	}
 }
 
