@@ -67,6 +67,16 @@ func TestBattleInfoNotice(t *testing.T) {
 		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
 		BattleServer: pb.String("192.168.1.8:8210"), Users: testUsers("AAAAAA", "BBBBBB")})
 
+	p := newUDPTestPeer(emu, false)
+	p.Battle.Users[0].Entry = model.EntryTitans
+	p.Battle.Users[1].Entry = model.EntryAeug
+	users := testUsers("AAAAAA", "BBBBBB")
+	users[0].Team = pb.Int32(2)
+	users[1].Team = pb.Int32(1)
+	wantBattleInfo(t, battleInfo(t, battleInfoNotice(p, nil)), &proto.P2PMatching{
+		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
+		BattleServer: pb.String("192.168.1.8:8210"), Users: users})
+
 	noUDP := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
 	for name, p := range map[string]*AppPeer{
 		"console":     newUDPTestPeer(map[string]string{}, false),

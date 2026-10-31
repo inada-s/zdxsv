@@ -138,6 +138,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // session_id, ping_test_duration: set with any ggpo_port (the battle's id in the clients'
 // ping test packets, its length in ms);
 // relays: the lobby's relay server (relayServers), when every player supports it;
+// users[].team: the entry side (1 / 2);
 // users[].sync: platform info "sync", self included: the client cuts the battle when one
 // differs from its own.
 var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
@@ -167,6 +168,9 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 		}
 		if pilot := pilotName(u.Bin); pilot != "" {
 			pu.PilotName = pb.String(pilot)
+		}
+		if u.Entry == model.EntryAeug || u.Entry == model.EntryTitans {
+			pu.Team = pb.Int32(int32(u.Entry))
 		}
 		pi := p.PlatformInfo
 		if u.UserID != p.UserID {
