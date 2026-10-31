@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	replay_url  text default '',
 	used_ms_mask integer default 0,
 	used_ms_list text default '',
+	play_count  integer default 0,
 	created     timestamp,
 	updated     timestamp,
 	system      integer default 0,
@@ -449,6 +450,11 @@ func (db SQLiteDB) SetReplayURL(battleCode string, url string) error {
 	return err
 }
 
+func (db SQLiteDB) IncrementReplayPlayCount(battleCode string) error {
+	_, err := db.Exec(`UPDATE battle_record SET play_count = play_count + 1 WHERE battle_code = ?`, battleCode)
+	return err
+}
+
 func (db SQLiteDB) FindReplay(q *FindReplayQuery) ([]*FoundReplay, error) {
 	where := []string{"replay_url <> ''"}
 	var args []interface{}
@@ -526,6 +532,9 @@ ORDER BY created `+order, args...)
 		f.Users = append(f.Users, &ReplayUser{UserID: r.UserID, UserName: r.UserName, PilotName: r.PilotName, Team: r.Side, Pos: r.Pos, UsedMsList: r.UsedMsList})
 		if f.Round < r.Round {
 			f.Round = r.Round
+		}
+		if f.PlayCount < r.PlayCount {
+			f.PlayCount = r.PlayCount
 		}
 	}
 	for _, f := range found {

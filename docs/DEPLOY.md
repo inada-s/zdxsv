@@ -21,7 +21,7 @@ still exist for running the parts separately.
 | 8210 | tcp, udp | battle | everyone |
 | 8204 | udp | GGPO relay (`ZDXSV_LOBBY_RELAY_ADDR`, and `zdxsv relay` hosts on `ZDXSV_RELAY_ADDR`), offered in the battle info when every player of the battle reports `relay_server=1`: the path of a pair whose NATs cannot reach each other directly | emulators |
 | 8220, 8221, 8222 | tcp | TLS ports of dnas, lobby, battle ([TLS.md](TLS.md)); open only with `ZDXSV_TLS_CERT_FILE` set | emulators |
-| 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
+| 8203 | tcp | lobby HTTP API (`/lbs/status`, `/lbs/replay`, `/lbs/live`, `/lbs/replay_upload`, `/lbs/replay_played`) | LAN only: status check with `curl http://<host>:8203/lbs/status`; do not open it to the internet |
 
 Port 80 does not need to be open: the game reaches the login pages through the DNAS front end on 443.
 `zdxsv` (all servers) does not listen on `ZDXSV_LOGIN_ADDR` or `ZDXSV_BATTLE_RPC_ADDR` at all (the login
@@ -119,6 +119,9 @@ Replay upload (`POST /lbs/replay_upload`, pcsx2 posts each lobby battle's `.pb`,
 `ZDXSV_LOBBY_REPLAY_BUCKET=<public GCS bucket>` stores them gzip encoded as `replays/<battle_code>.pb`
 (credentials: the VM's service account or `GOOGLE_APPLICATION_CREDENTIALS`); off when unset. Players
 reach it through caddy (`lbs.zdxsv.net:8443/lbs/*`).
+Replay play count (`/lbs/replay_played?battle_code=`, as gdxsv lbs): pcsx2 calls it when it starts a
+replay from the server list; `/lbs/replay` returns the count as `play_count`. Needs the
+`battle_record.play_count` column: run `zdxsv migratedb` once on an older database.
 
 ## Check it
 
