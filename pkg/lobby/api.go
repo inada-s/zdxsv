@@ -23,9 +23,10 @@ const (
 
 // APIHandler serves the lobby's public API.
 //
-//	GET /lbs/replay?battle_code=C&user_id=U&user_name=N&pilot_name=P&players=4&aggregate=1&reverse=1&page=0:
+//	GET /lbs/replay?battle_code=C&user_id=U&user_name=N&pilot_name=P&players=4&aggregate=1&used_ms=M&reverse=1&page=0:
 //	  the battles with an uploaded replay, newest first, 100 per page, as JSON (db.FoundReplay);
 //	  204 when none. user_id, user_name and pilot_name may repeat; names are LIKE patterns.
+//	  used_ms: an MS id + 1 that a player matching the player filters (any player without them) used.
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
@@ -100,6 +101,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}{
 		{"players", &q.Players},
 		{"aggregate", &q.Aggregate},
+		{"used_ms", &q.UsedMs},
 		{"page", &q.Page},
 	} {
 		if v := r.FormValue(f.name); v != "" {

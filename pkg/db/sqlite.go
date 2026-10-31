@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	frame       integer default 0,
 	result      text default '',
 	replay_url  text default '',
+	used_ms_mask integer default 0,
+	used_ms_list text default '',
 	created     timestamp,
 	updated     timestamp,
 	system      integer default 0,
@@ -462,6 +464,8 @@ func (db SQLiteDB) FindReplay(q *FindReplayQuery) ([]*FoundReplay, error) {
 		where = append(where, "aggregate = ?")
 		args = append(args, q.Aggregate)
 	}
+	var players []string
+	var playerArgs []interface{}
 	for _, f := range []struct {
 		column, op string
 		values     []string
@@ -477,8 +481,19 @@ func (db SQLiteDB) FindReplay(q *FindReplayQuery) ([]*FoundReplay, error) {
 		for _, v := range f.values {
 			or = append(or, f.column+" "+f.op+" ?")
 			args = append(args, v)
+			playerArgs = append(playerArgs, v)
 		}
+		players = append(players, or...)
 		where = append(where, "battle_code IN (SELECT battle_code FROM battle_record WHERE "+strings.Join(or, " OR ")+")")
+	}
+	if q.UsedMs > 0 {
+		ms := "battle_code IN (SELECT battle_code FROM battle_record WHERE (used_ms_mask & (1 << ?)) != 0"
+		args = append(args, q.UsedMs)
+		if len(players) > 0 {
+			ms += " AND (" + strings.Join(players, " OR ") + ")"
+			args = append(args, playerArgs...)
+		}
+		where = append(where, ms+")")
 	}
 	order := "DESC"
 	if q.Reverse {
@@ -508,7 +523,7 @@ ORDER BY created `+order, args...)
 			byCode[r.BattleCode] = f
 			found = append(found, f)
 		}
-		f.Users = append(f.Users, &ReplayUser{UserID: r.UserID, UserName: r.UserName, PilotName: r.PilotName, Team: r.Side, Pos: r.Pos})
+		f.Users = append(f.Users, &ReplayUser{UserID: r.UserID, UserName: r.UserName, PilotName: r.PilotName, Team: r.Side, Pos: r.Pos, UsedMsList: r.UsedMsList})
 		if f.Round < r.Round {
 			f.Round = r.Round
 		}
@@ -523,6 +538,18 @@ func (db SQLiteDB) GetBattleRecordUser(battleCode string, userID string) (*Battl
 	b := new(BattleRecord)
 	err := db.Get(b, `SELECT * FROM battle_record WHERE battle_code = ? AND user_id = ?`, battleCode, userID)
 	return b, err
+}
+
+func (db SQLiteDB) GetBattleRecords(battleCode string) ([]*BattleRecord, error) {
+	var rs []*BattleRecord
+	err := db.Select(&rs, `SELECT * FROM battle_record WHERE battle_code = ? ORDER BY pos`, battleCode)
+	return rs, err
+}
+
+func (db SQLiteDB) SetUsedMs(battleCode string, userID string, mask uint64, list string) error {
+	_, err := db.Exec(`UPDATE battle_record SET used_ms_mask = ?, used_ms_list = ? WHERE battle_code = ? AND user_id = ?`,
+		int64(mask), list, battleCode, userID)
+	return err
 }
 
 func (db SQLiteDB) CalculateUserTotalBattleCount(userID string, side byte) (ret BattleCountResult, err error) {
