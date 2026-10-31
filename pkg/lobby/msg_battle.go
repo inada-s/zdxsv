@@ -382,7 +382,11 @@ var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	}
 	glog.Infoln(p2pMatchingReportLine(report))
 	Spectators.End(report.GetBattleCode(), p.UserID, time.Now())
-	saveUsedMs(report, p.UserID)
+	sender := p.UserID
+	if sender == "" { // the report comes before the user login
+		sender = report.GetUserId()
+	}
+	saveUsedMs(report, sender)
 })
 
 // saveUsedMs sets each player's used_ms from a battle member's report round_data. Every

@@ -43,7 +43,6 @@ func TestReportUsedMsSearch(t *testing.T) {
 			t.Fatal(err)
 		}
 		p := &AppPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
-		p.UserID = sender
 		m := NewClientNotice(0x9952)
 		m.Writer().Write(body)
 		defaultHandlers.handlers[0x9952](p, m)
