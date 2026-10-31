@@ -27,11 +27,11 @@ func TestAPIReplay(t *testing.T) {
 	}
 
 	result = []*db.FoundReplay{{BattleCode: "123", ReplayURL: "https://example.com/123.pb", Users: []*db.ReplayUser{{UserID: "u1"}}}}
-	w := get("battle_code=123&user_id=u1&user_id=u2&user_id=&pilot_name=g%25&players=4&aggregate=1&reverse=1&page=2")
+	w := get("battle_code=123&user_id=u1&user_id=u2&user_id=&pilot_name=g%25&players=4&aggregate=1&used_ms=13&reverse=1&page=2")
 	if w.Code != 200 || w.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("code %d, content type %q", w.Code, w.Header().Get("Content-Type"))
 	}
-	want := &db.FindReplayQuery{BattleCode: "123", UserIDs: []string{"u1", "u2"}, PilotNames: []string{"g%"}, Players: 4, Aggregate: 1, Reverse: true, Page: 2}
+	want := &db.FindReplayQuery{BattleCode: "123", UserIDs: []string{"u1", "u2"}, PilotNames: []string{"g%"}, Players: 4, Aggregate: 1, UsedMs: 13, Reverse: true, Page: 2}
 	if !reflect.DeepEqual(want, got) {
 		t.Fatalf("query %+v, want %+v", got, want)
 	}

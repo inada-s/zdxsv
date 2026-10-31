@@ -116,6 +116,9 @@ type BattleRecord struct {
 	Result string `db:"result" json:"result,omitempty"`
 	// ReplayURL is where the battle's replay was uploaded (SetReplayURL), "" if none.
 	ReplayURL string `db:"replay_url" json:"replay_url,omitempty"`
+	// UsedMsMask has bit n set for each MS id + 1 = n the player used; UsedMsList: those per round, comma separated.
+	UsedMsMask uint64 `db:"used_ms_mask" json:"used_ms_mask,omitempty"`
+	UsedMsList string `db:"used_ms_list" json:"used_ms_list,omitempty"`
 
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
@@ -131,6 +134,7 @@ type FindReplayQuery struct {
 	PilotNames []string `json:"pilot_name"`
 	Players    int      `json:"players"`
 	Aggregate  int      `json:"aggregate"`
+	UsedMs     int      `json:"used_ms"` // an MS id + 1 a matched player (any player without player filters) used; 0 = any
 	Reverse    bool     `json:"reverse"` // oldest first
 	Page       int      `json:"page"`
 }
@@ -140,11 +144,12 @@ func NewFindReplayQuery() *FindReplayQuery {
 }
 
 type ReplayUser struct {
-	UserID    string `json:"user_id"`
-	UserName  string `json:"user_name"`
-	PilotName string `json:"pilot_name"`
-	Team      int    `json:"team"`
-	Pos       int    `json:"pos"`
+	UserID     string `json:"user_id"`
+	UserName   string `json:"user_name"`
+	PilotName  string `json:"pilot_name"`
+	Team       int    `json:"team"`
+	Pos        int    `json:"pos"`
+	UsedMsList string `json:"used_ms_list,omitempty"`
 }
 
 type FoundReplay struct {
@@ -209,6 +214,11 @@ type DB interface {
 
 	// FindReplay returns the battles with an uploaded replay that match q, 100 per page.
 	FindReplay(q *FindReplayQuery) ([]*FoundReplay, error)
+
+	// SetUsedMs sets the used_ms_mask and used_ms_list of a player's record of the battle.
+	SetUsedMs(battleCode string, userID string, mask uint64, list string) error
+	// GetBattleRecords returns every player's record of the battle.
+	GetBattleRecords(battleCode string) ([]*BattleRecord, error)
 
 	// CalculateUserTotalBattleCount counts one army's battles with side, else all.
 	CalculateUserTotalBattleCount(userID string, side byte) (ret BattleCountResult, err error)

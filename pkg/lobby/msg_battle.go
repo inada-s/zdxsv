@@ -382,7 +382,45 @@ var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	}
 	glog.Infoln(p2pMatchingReportLine(report))
 	Spectators.End(report.GetBattleCode(), p.UserID, time.Now())
+	saveUsedMs(report, p.UserID)
 })
+
+// saveUsedMs sets each player's used_ms from a battle member's report round_data. Every
+// member reports the same rounds; the last report wins.
+func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
+	rounds := report.GetRoundData()
+	if len(rounds) == 0 || report.GetBattleCode() == "" {
+		return
+	}
+	records, err := db.DefaultDB.GetBattleRecords(report.GetBattleCode())
+	if err != nil {
+		glog.Warningln("p2p matching report: GetBattleRecords:", err)
+		return
+	}
+	if !slices.ContainsFunc(records, func(r *db.BattleRecord) bool { return r.UserID == sender }) {
+		return
+	}
+	for _, r := range records {
+		var mask uint64
+		var list []string
+		for _, rd := range rounds {
+			ms := 0
+			if i := r.Pos - 1; 0 <= i && i < len(rd.GetUsedMs()) {
+				ms = int(rd.GetUsedMs()[i])
+			}
+			if ms < 0 || 64 <= ms {
+				ms = 0
+			}
+			list = append(list, strconv.Itoa(ms))
+			if ms > 0 {
+				mask |= 1 << ms
+			}
+		}
+		if err := db.DefaultDB.SetUsedMs(r.BattleCode, r.UserID, mask, strings.Join(list, ",")); err != nil {
+			glog.Warningln("p2p matching report: SetUsedMs:", err)
+		}
+	}
+}
 
 // p2pMatchingReportLine formats a report as one log line of name="value": battle_code,
 // user_id and result first, then the set fields in field order.

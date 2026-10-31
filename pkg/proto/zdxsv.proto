@@ -137,13 +137,14 @@ message RelayServer {
 }
 
 // Emulator -> lobby, custom message 0x9952, after the platform info of the first lobby
-// connection after a GGPO lobby battle. Logged only.
+// connection after a GGPO lobby battle. Logged; round_data also sets the battle records' used_ms.
 message P2PMatchingReport {
   optional string battle_code = 1;
   optional int32 player_count = 3;
   optional int32 peer_id = 4;  // the sender's position
   optional string close_reason = 5;  // how GGPO ended (unset: it did not start)
   optional int32 frame_count = 6;
+  repeated BattleLogRound round_data = 20;  // per round played: replay BattleLogFile round_data (field 18) entries
   optional int32 input_delay = 21;
   repeated RemotePeerReport remote_peers = 31;  // ping test result per other position
   optional string user_id = 40;
@@ -164,6 +165,11 @@ message P2PMatchingReport {
   repeated int32 disconnected_peer_ids = 55 [packed = true];  // positions whose peer disconnected
   optional float rollback_budget = 56;  // frames, learned per PC from the frame slack
   optional float rollback_budget_used = 57;  // frames the input delay left to rollbacks
+}
+
+message BattleLogRound {
+  optional int32 win_team = 1;  // 1 / 2, -1 = a draw
+  repeated int32 used_ms = 2 [packed = true];  // by position: the MS id + 1, 0 = unknown
 }
 
 message RemotePeerReport {
