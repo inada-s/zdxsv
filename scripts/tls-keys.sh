@@ -9,6 +9,9 @@
 # plain, for test data only.
 set -euo pipefail
 
+# Git Bash on Windows rewrites a leading-slash argument such as -subj "/CN=..." into a Windows path.
+export MSYS2_ARG_CONV_EXCL='/CN='
+
 pin_one() { # one PEM certificate on stdin
 	openssl x509 -noout -pubkey | openssl pkey -pubin -outform der | openssl dgst -sha256 -r | cut -d' ' -f1
 }
