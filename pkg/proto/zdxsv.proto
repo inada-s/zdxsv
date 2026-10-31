@@ -116,6 +116,7 @@ message P2PUser {
   optional string user_id = 1;
   optional string user_name = 2;
   optional string pilot_name = 3;
+  optional int32 team = 9;  // 1 / 2 (entry side), unset when unknown
   optional int32 ggpo_port = 40;  // 0: none (platform info ggpo)
   optional string sync = 41;  // settings fingerprint, 16 lowercase hex digits (platform info sync)
 }
