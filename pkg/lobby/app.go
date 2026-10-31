@@ -128,6 +128,7 @@ type App struct {
 	chQuit       chan interface{}
 
 	aliveCheckInterval time.Duration
+	relayProv          *relayProvisioning
 }
 
 const (
@@ -271,6 +272,7 @@ func (a *App) Serve() {
 			}
 		case now := <-aliveCheck.C:
 			a.checkAlive(now)
+			a.updateRelays(now)
 		}
 	}
 }

@@ -22,6 +22,18 @@ func mainLobby() {
 
 // serveLobby runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
 func serveLobby(app *lobby.App) {
+	if c := config.Conf.Lobby; c.RelayRegions != "" {
+		if c.RelayControlAddr == "" || c.RelayStartCommand == "" {
+			glog.Fatalln("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_LOBBY_RELAY_CONTROL_ADDR and ZDXSV_LOBBY_RELAY_START_COMMAND")
+		}
+		var regions []string
+		for _, r := range strings.Split(c.RelayRegions, ",") {
+			if r = strings.TrimSpace(r); r != "" {
+				regions = append(regions, r)
+			}
+		}
+		app.SetRelayProvisioning(regions, lobby.CommandProvisioner{Command: c.RelayStartCommand})
+	}
 	go app.Serve()
 	sv := lobby.NewServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))

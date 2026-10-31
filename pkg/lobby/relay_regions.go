@@ -24,6 +24,10 @@ type RegionalRelay struct {
 	PublicAddr  string
 	PublicAddr6 string
 	Sessions    RelaySessions
+
+	// set by the relay control connection, under regionalRelays
+	activeSessions int
+	shutdown       func()
 }
 
 var regionalRelays = struct {
