@@ -31,6 +31,8 @@ const (
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
+//	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
+//	  play_count counts these. 200 even when the count fails, 400 without battle_code.
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
@@ -43,6 +45,8 @@ type APIHandler struct {
 	ReplayStore ReplayStore
 	// SetReplayURL records an uploaded replay (db.DefaultDB.SetReplayURL when nil).
 	SetReplayURL func(battleCode, url string) error
+	// ReplayPlayed counts a play (db.DefaultDB.IncrementReplayPlayCount when nil).
+	ReplayPlayed func(battleCode string) error
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -60,6 +64,10 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/lbs/replay_upload" {
 		h.serveReplayUpload(w, r)
+		return
+	}
+	if r.URL.Path == "/lbs/replay_played" {
+		h.serveReplayPlayed(w, r)
 		return
 	}
 	if s, ok := h.ReplayStore.(*DirReplayStore); ok && strings.HasPrefix(r.URL.Path, "/lbs/"+replayUploadPrefix) {
@@ -133,6 +141,26 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(replays); err != nil {
 		glog.Warningln("lbs/replay: JSON encode failure", err)
 	}
+}
+
+func (h *APIHandler) serveReplayPlayed(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	battleCode := r.FormValue("battle_code")
+	if battleCode == "" || len(battleCode) > maxReplayFilterBytes {
+		http.Error(w, "invalid battle_code", http.StatusBadRequest)
+		return
+	}
+	played := h.ReplayPlayed
+	if played == nil {
+		played = db.DefaultDB.IncrementReplayPlayCount
+	}
+	if err := played(battleCode); err != nil {
+		glog.Warningln("lbs/replay_played: IncrementReplayPlayCount failure", battleCode, err)
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // serveStatus answers from the lobby's state, reused for statusMaxAge.

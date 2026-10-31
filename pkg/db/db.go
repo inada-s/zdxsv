@@ -119,6 +119,8 @@ type BattleRecord struct {
 	// UsedMsMask has bit n set for each MS id + 1 = n the player used; UsedMsList: those per round, comma separated.
 	UsedMsMask uint64 `db:"used_ms_mask" json:"used_ms_mask,omitempty"`
 	UsedMsList string `db:"used_ms_list" json:"used_ms_list,omitempty"`
+	// PlayCount: how often the replay was played (IncrementReplayPlayCount), the same on every player's record.
+	PlayCount int `db:"play_count" json:"play_count,omitempty"`
 
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
@@ -159,6 +161,7 @@ type FoundReplay struct {
 	StartUnix  int64         `json:"start_unix,omitempty"`
 	StartDate  time.Time     `json:"start_date,omitempty"`
 	ReplayURL  string        `json:"replay_url,omitempty"`
+	PlayCount  int           `json:"play_count"`
 }
 
 type BattleCountResult struct {
@@ -211,6 +214,8 @@ type DB interface {
 
 	// SetReplayURL sets the replay url of every player's record of the battle.
 	SetReplayURL(battleCode string, url string) error
+	// IncrementReplayPlayCount counts one play of the battle's replay; no error for an unknown battle.
+	IncrementReplayPlayCount(battleCode string) error
 
 	// FindReplay returns the battles with an uploaded replay that match q, 100 per page.
 	FindReplay(q *FindReplayQuery) ([]*FoundReplay, error)
