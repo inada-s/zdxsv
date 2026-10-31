@@ -164,6 +164,9 @@ message P2PMatchingReport {
   repeated int32 disconnected_peer_ids = 55 [packed = true];  // positions whose peer disconnected
   optional float rollback_budget = 56;  // frames, learned per PC from the frame slack
   optional float rollback_budget_used = 57;  // frames the input delay left to rollbacks
+  optional int32 total_timesync = 58;  // frames slept so a peer could catch up
+  optional int32 input_block_count = 59;  // frames that waited for a peer's input (GGPO prediction limit)
+  repeated int32 fps_history = 60 [packed = true];  // frames run in each second of the battle
 }
 
 message RemotePeerReport {
@@ -174,4 +177,6 @@ message RemotePeerReport {
   optional string route = 7;  // "direct", "peer <position>" or "relay <index>"
   optional int32 rtt_ms = 40;  // 0: no answer
   optional string addr = 41;  // the address that answered
+  optional int32 recv_loss = 42;  // GGPO packets from the peer never received
+  optional int32 send_loss = 43;  // GGPO packets to the peer it reported lost
 }
