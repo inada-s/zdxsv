@@ -139,7 +139,7 @@ func loginAccount(remoteAddr, loginKey string) (*db.Account, error) {
 // LbsInfo must match the CRS-LBS-INFO-GET entry in assets/login.tpl.
 const LbsInfo = "0ad601082008,ZDX BETA SERVER"
 
-type apiLoginResponse struct {
+type APILoginResponse struct {
 	LoginKey  string `json:"login_key"`
 	SessionID string `json:"session_id"`
 	LobbyAddr string `json:"lobby_addr"`
@@ -165,7 +165,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiLoginResponse{
+	json.NewEncoder(w).Encode(APILoginResponse{
 		LoginKey:  a.LoginKey,
 		SessionID: a.SessionID,
 		LobbyAddr: config.Conf.Lobby.PublicAddr,
