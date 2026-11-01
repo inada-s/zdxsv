@@ -66,6 +66,8 @@ archives:
         strip_parent: true
       - src: scripts/zdxsv-release.sh
         strip_parent: true
+      - src: scripts/zdxsv-db.sh
+        strip_parent: true
 
 checksum:
   name_template: 'checksums.txt'
