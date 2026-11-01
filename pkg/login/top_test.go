@@ -1,6 +1,7 @@
 package login
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ func startLoginServer(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/CRS-top.jsp", HandleTopPage)
 	mux.HandleFunc("/login", HandleLoginPage)
+	mux.HandleFunc("/api/login", HandleAPILogin)
 	mux.HandleFunc("/register", HandleRegisterPage)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -118,6 +120,53 @@ func TestRegisterThenLogin(t *testing.T) {
 	}
 	if !strings.Contains(body, `"`+b.SessionID+`"`) {
 		t.Errorf("second login page lacks session id %s", b.SessionID)
+	}
+}
+
+func TestAPILogin(t *testing.T) {
+	dbtest.Use(t)
+	ts := startLoginServer(t)
+
+	resp, err := http.PostForm(ts.URL+"/api/login", url.Values{"login_key": {"apiKey0001"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	var got apiLoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	a, err := db.DefaultDB.GetAccountByLoginKey("apiKey0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := apiLoginResponse{"apiKey0001", a.SessionID, "198.51.100.7:8200", LbsInfo}
+	if a.SessionID == "" || got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+
+	for _, c := range []struct {
+		method string
+		form   url.Values
+		code   int
+	}{
+		{http.MethodGet, nil, http.StatusMethodNotAllowed},
+		{http.MethodPost, url.Values{}, http.StatusBadRequest},
+		{http.MethodPost, url.Values{"login_key": {"short"}}, http.StatusForbidden},
+	} {
+		req, _ := http.NewRequest(c.method, ts.URL+"/api/login", strings.NewReader(c.form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != c.code {
+			t.Errorf("%s %v: status %d, want %d", c.method, c.form, resp.StatusCode, c.code)
+		}
 	}
 }
 

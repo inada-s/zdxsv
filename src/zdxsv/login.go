@@ -96,6 +96,7 @@ func newLoginHandler() http.Handler {
 	router.HandleFunc("/assets/", handleAssets)
 	router.HandleFunc("/CRS-top.jsp", login.HandleTopPage)
 	router.HandleFunc("/login", login.HandleLoginPage)
+	router.HandleFunc("/api/login", login.HandleAPILogin)
 	router.HandleFunc("/register", login.HandleRegisterPage)
 	return wrapHandler(router)
 }
