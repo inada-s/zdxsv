@@ -48,7 +48,7 @@ sudo install -o root -g zdxsv -m 640 server.key /etc/zdxsv/tls/
 sudo install -o root -g zdxsv -m 644 server.crt /etc/zdxsv/tls/
 ```
 
-and add to `/etc/zdxsv/zdxsv.env`:
+and add to the server's environment:
 
 ```sh
 ZDXSV_TLS_CERT_FILE=/etc/zdxsv/tls/server.crt

@@ -1,8 +1,8 @@
 # Deploying zdxsv
 
 The whole server (DNS, DNAS front end with the login pages, lobby, battle) is one binary and
-one process: `zdxsv` with no command (same as `zdxsv all`). It runs on one Linux host as a
-systemd service. The one-server commands (`zdxsv dns`, `dnas`, `login`, `lobby`, `battle`)
+one process: `zdxsv` with no command (same as `zdxsv all`). It runs on one Linux host, e.g. as a
+systemd service ([a sample unit and update script on the wiki](https://github.com/inada-s/zdxsv/wiki)). The one-server commands (`zdxsv dns`, `dnas`, `login`, `lobby`, `battle`)
 still exist for running the parts separately.
 
 ## Requirements
@@ -48,70 +48,39 @@ Every tag releases the server. zproxy is only built when its code changed since 
 shipped it (`scripts/zproxy-release-needed.sh` compares the packages zproxy depends on, `go.mod`, `go.sum`
 and `.goreleaser.yml` against that release's tag): a server-only fix as `v1.2.1` does not make every
 player's zproxy self-update to an identical build. zproxy's self-update only looks at releases that
-carry a zproxy archive, so releases without one are invisible to it, and `zdxsv-release.sh` always finds
-the server in the latest release.
+carry a zproxy archive, so releases without one are invisible to it, while every release carries
+the server.
 The server tarball's name must never end in `<os>_<arch>` or `<os>-<arch>`: zproxy's self-update
 (old versions included) takes any such asset as its own. `src/zproxy/release_test.go` enforces it.
 
-## First deploy
+## Running it
 
-Layout (`infra/systemd/zdxsv.service` has these paths):
-
-| Path | Owner | What |
-|---|---|---|
-| `/opt/zdxsv/releases/<tag>/`, `/opt/zdxsv/bin/zdxsv` | root | the releases and a symlink to the running one |
-| `/opt/zdxsv/bin/zdxsv-release.sh`, `zdxsv-db.sh` | root | the deploy scripts, copied from `scripts/` |
-| `/etc/systemd/system/zdxsv.service` | root | the unit, copied from `infra/systemd/` |
-| `/etc/zdxsv/zdxsv.env` | root:zdxsv 640 | the environment (one `NAME=value` per line, no quotes needed) |
-| `/etc/zdxsv/tls/` | root:zdxsv | the TLS keys ([TLS.md](TLS.md)) |
-| `/var/lib/zdxsv/` | zdxsv 750 | the database, the only place the service can write |
-
-The service runs as the `zdxsv` user with `CAP_NET_BIND_SERVICE` for ports 53 and 443. It cannot
-write its own binary (root-owned) nor see `/home` (`ProtectHome`): files the environment names
-(credentials, `ZDXSV_LOBBY_RELAY_START_COMMAND`) go under `/etc/zdxsv` or `/opt/zdxsv`.
-`zdxsv-release.sh` downloads a release into `/opt/zdxsv/releases/<tag>/`, checks it against
-`checksums.txt`, points `/opt/zdxsv/bin/zdxsv` at it and restarts the service if it is installed.
-The unit and the scripts are not in the release: install them from the repository (`ref`: `master` or a tag),
-and again the same way when they change.
+The server is configured by `ZDXSV_*` environment variables (one `NAME=value` per line in a file,
+no quotes needed). With your public IP in the `*_PUBLIC_ADDR` lines:
 
 ```sh
-ref=master
-for f in infra/systemd/zdxsv.service scripts/zdxsv-release.sh scripts/zdxsv-db.sh; do
-  curl -fsSLO "https://raw.githubusercontent.com/inada-s/zdxsv/$ref/$f"
-done
-sudo install -D -m 755 -t /opt/zdxsv/bin zdxsv-release.sh zdxsv-db.sh
-sudo install -m 644 zdxsv.service /etc/systemd/system/
-```
-
-Then:
-
-```sh
-sudo useradd --system --home-dir /var/lib/zdxsv --shell /usr/sbin/nologin zdxsv   # if there is no zdxsv user yet
-sudo bash /opt/zdxsv/bin/zdxsv-release.sh   # latest release; `... zdxsv-release.sh v1.3.0` for one in particular
-# the environment: yours, with your public IP in the *_PUBLIC_ADDR lines
-IP=203.0.113.10
-sudo install -d -o root -g root -m 755 /etc/zdxsv
-sed "s/127.0.0.1/$IP/" <<'EOS' | sudo install -o root -g zdxsv -m 640 /dev/stdin /etc/zdxsv/zdxsv.env
-ZDXSV_DNAS_PUBLIC_ADDR=127.0.0.1
-ZDXSV_LOGIN_PUBLIC_ADDR=127.0.0.1
+ZDXSV_DNAS_PUBLIC_ADDR=203.0.113.10
+ZDXSV_LOGIN_PUBLIC_ADDR=203.0.113.10
 ZDXSV_LOBBY_ADDR=:8200
 ZDXSV_LOBBY_RPC_ADDR=:8201
-ZDXSV_LOBBY_PUBLIC_ADDR=127.0.0.1:8200
+ZDXSV_LOBBY_PUBLIC_ADDR=203.0.113.10:8200
 ZDXSV_BATTLE_ADDR=:8210
-ZDXSV_BATTLE_PUBLIC_ADDR=127.0.0.1:8210
+ZDXSV_BATTLE_PUBLIC_ADDR=203.0.113.10:8210
 ZDXSV_LOBBY_RELAY_ADDR=:8204
 ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203
 ZDXSV_DB_NAME=/var/lib/zdxsv/zdxsv.db
-EOS
-sudo install -d -o zdxsv -g zdxsv -m 750 /var/lib/zdxsv
-# initdb wipes the tables: run it on the first deploy only.
-sudo bash /opt/zdxsv/bin/zdxsv-db.sh initdb
-sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv
-journalctl -u zdxsv -f
 ```
 
-To run a build from source instead: `make build` (needs Go and gcc for the sqlite driver), then
-`sudo install -D bin/zdxsv /opt/zdxsv/releases/local/zdxsv` and point `/opt/zdxsv/bin/zdxsv` at it.
+With those variables set:
+
+- `zdxsv initdb` creates the database (it wipes the tables: first deploy only);
+- `zdxsv` runs the server. It needs `CAP_NET_BIND_SERVICE` (or root) for ports 53 and 443, and write
+  access to the database's directory (sqlite keeps its journal there);
+- `zdxsv migratedb`, with the server stopped, when a release says the schema changed. It prints
+  `Migration done` or `Migration failed` (the exit code is 0 either way).
+
+The binary is the `zdxsv` in a release's `zdxsv-server_<ver>_linux-x86_64.tar.gz` (checked with the
+release's `checksums.txt`), or `make build` from source (needs Go and gcc for the sqlite driver).
 
 The game ports (`ZDXSV_LOBBY_ADDR`, `ZDXSV_LOBBY_RPC_ADDR`, `ZDXSV_BATTLE_ADDR`) bind all interfaces
 whatever host part they have; only the port counts. The HTTP API (`ZDXSV_LOBBY_API_ADDR`) binds the
@@ -176,7 +145,7 @@ The lobby's HTTP API (`ZDXSV_LOBBY_API_ADDR`, port 8203) answers `/lbs/status` w
 
 ## Bans
 
-The lobby records each account's last login ip and the `machine_id` its emulator sends, and refuses a login (`YOU ARE BANNED`) when a ban matches: `user` (a user id: every account holding it, also consoles, which send no machine id), `machine` (every account on that PC) or `ip`. Manage them on the private API (set `ZDXSV_LOBBY_OPS_ADDR=127.0.0.1:<port>` in `/etc/zdxsv/zdxsv.env`; off when empty), after `migratedb` on an older DB:
+The lobby records each account's last login ip and the `machine_id` its emulator sends, and refuses a login (`YOU ARE BANNED`) when a ban matches: `user` (a user id: every account holding it, also consoles, which send no machine id), `machine` (every account on that PC) or `ip`. Manage them on the private API (set `ZDXSV_LOBBY_OPS_ADDR=127.0.0.1:<port>` in the server's environment; off when empty), after `migratedb` on an older DB:
 
 ```sh
 curl "$ZDXSV_LOBBY_OPS_ADDR/ops/accounts?machine_id=M"        # accounts last logged in from M, with their users
@@ -197,9 +166,9 @@ The page reads `https://lbs.zdxsv.net:8443/lbs/status`. That is caddy, installed
 sudo cp infra/caddy/zdxsv.caddy /etc/caddy/sites/ && sudo systemctl reload caddy
 ```
 
-dnas sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (set it in `/etc/zdxsv/zdxsv.env`), caddy's `zdxsv.net:8444` block, with a PROXY header, which redirects to the website. caddy needs `listener_wrappers { proxy_protocol; tls }` for that listener in the global options (`servers 127.0.0.1:8444 { ... }`, the full bound address). Without `ZDXSV_DNAS_HTTPS_BACKEND` those connections get a TLS alert.
+dnas sends the non-console TLS on 443 (browsers opening https://zdxsv.net) to `ZDXSV_DNAS_HTTPS_BACKEND=127.0.0.1:8444` (set it in the server's environment), caddy's `zdxsv.net:8444` block, with a PROXY header, which redirects to the website. caddy needs `listener_wrappers { proxy_protocol; tls }` for that listener in the global options (`servers 127.0.0.1:8444 { ... }`, the full bound address). Without `ZDXSV_DNAS_HTTPS_BACKEND` those connections get a TLS alert.
 
-zdxsv.net reboots every morning, so both services must come back on their own: `zdxsv.service` has
+zdxsv.net reboots every morning, so both services must come back on their own: the zdxsv unit has
 `Restart=always` and only needs the network; caddy's unit is given the same via
 `/etc/systemd/system/caddy.service.d/override.conf` (`After=network-online.target`, `Wants=network-online.target`,
 `Restart=on-failure`, `RestartSec=5s`). Neither may depend on anything else, and anything new on the host must be
@@ -207,58 +176,11 @@ an enabled unit as well. After a change, `systemctl is-enabled zdxsv caddy` and 
 
 ## Update
 
-```sh
-sudo bash /opt/zdxsv/bin/zdxsv-release.sh   # downloads the latest release and restarts the service
-/opt/zdxsv/bin/zdxsv version
-```
+Replace the binary with the new release's and restart the server; run `zdxsv migratedb` in between
+when the release says the schema changed. Keep the previous binary to roll back.
 
-When a release says the schema changed, install it without the restart, back up and migrate with the
-service stopped:
-
-```sh
-sudo systemctl stop zdxsv
-sudo cp -p /var/lib/zdxsv/zdxsv.db /var/lib/zdxsv/zdxsv.db.bak
-sudo ZDXSV_NO_RESTART=1 bash /opt/zdxsv/bin/zdxsv-release.sh
-sudo bash /opt/zdxsv/bin/zdxsv-db.sh migratedb
-sudo systemctl start zdxsv
-```
-
-`zdxsv-db.sh <command>` runs `/opt/zdxsv/bin/zdxsv <command>` as the `zdxsv` user with
-`/etc/zdxsv/zdxsv.env`, for `initdb` and `migratedb` (both refuse while the service runs).
-
-Old releases stay under `/opt/zdxsv/releases/`; to roll back, run `zdxsv-release.sh` with an older tag
-(v1.2.0 is the first with a server tarball).
-
-Back up `/var/lib/zdxsv/zdxsv.db` from the host's own cron or timer. The database is live: copy it with
-`sqlite3 /var/lib/zdxsv/zdxsv.db ".backup <file>"`, not `cp`.
-
-### Moving from ~/zdxsv
-
-Releases before this layout ran from the service user's home (`/home/zdxsv/zdxsv`: `bin/zdxsv`, `.env`,
-`zdxsv.db`). To move, with the unit and scripts of the release's tag:
-
-```sh
-ref=<tag>
-for f in infra/systemd/zdxsv.service scripts/zdxsv-release.sh scripts/zdxsv-db.sh; do
-  curl -fsSLO "https://raw.githubusercontent.com/inada-s/zdxsv/$ref/$f"
-done
-sudo install -D -m 755 -t /opt/zdxsv/bin zdxsv-release.sh zdxsv-db.sh
-sudo ZDXSV_NO_RESTART=1 bash /opt/zdxsv/bin/zdxsv-release.sh <tag>    # the old service keeps running
-sudo install -d -o root -g root -m 755 /etc/zdxsv
-sudo install -o root -g zdxsv -m 640 /home/zdxsv/zdxsv/.env /etc/zdxsv/zdxsv.env
-sudo sed -i 's|^ZDXSV_DB_NAME=.*|ZDXSV_DB_NAME=/var/lib/zdxsv/zdxsv.db|' /etc/zdxsv/zdxsv.env
-sudo systemctl stop zdxsv
-sudo install -d -o zdxsv -g zdxsv -m 750 /var/lib/zdxsv
-sudo install -o zdxsv -g zdxsv -m 640 /home/zdxsv/zdxsv/zdxsv.db /var/lib/zdxsv/zdxsv.db
-sudo bash /opt/zdxsv/bin/zdxsv-db.sh migratedb    # when the release changed the schema
-sudo cp /etc/systemd/system/zdxsv.service /etc/systemd/system/zdxsv.service.home-bak
-sudo install -m 644 zdxsv.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl start zdxsv
-```
-
-The old files stay in `/home/zdxsv/zdxsv` untouched: to go back, restore `zdxsv.service.home-bak`,
-`daemon-reload` and start (the old database has no battles played since the move). Point backups at
-`/var/lib/zdxsv/zdxsv.db`.
+Back up the database from the host's own cron or timer. It is live: copy it with
+`sqlite3 <db> ".backup <file>"`, not `cp`.
 
 ## Clients
 
