@@ -448,6 +448,7 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		peer, ok := a.users[u.UserID]
 		if ok {
 			battle.Add(u)
+			battle.PlatformInfo[u.UserID] = battlePlatformInfo(peer)
 			peer.Battle = battle
 			err = db.DefaultDB.AddBattleRecord(&db.BattleRecord{
 				BattleCode: battle.BattleCode,

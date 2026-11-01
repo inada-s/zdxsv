@@ -24,19 +24,24 @@ type Battle struct {
 	// GgpoSession: the GGPO and live uplink session id (battle info ggpo_session), random per
 	// battle so that only its players know it (the battle code is public).
 	GgpoSession uint32
+	// PlatformInfo: each player's platform info when the battle was made, by user id.
+	// The battle info reads it: a player leaves the lobby when it gets the battle
+	// server address, before the others ask for theirs.
+	PlatformInfo map[string]map[string]string
 }
 
 func NewBattle(platform string, lobbyID uint16) *Battle {
 	return &Battle{
-		Users:       make([]User, 0),
-		AeugIDs:     make([]string, 0),
-		TitansIDs:   make([]string, 0),
-		UDPUsers:    map[string]bool{},
-		P2PMap:      map[string]map[string]struct{}{},
-		Rule:        NewRule(),
-		LobbyID:     lobbyID,
-		Platform:    platform,
-		GgpoSession: newGgpoSession(),
+		Users:        make([]User, 0),
+		AeugIDs:      make([]string, 0),
+		TitansIDs:    make([]string, 0),
+		UDPUsers:     map[string]bool{},
+		P2PMap:       map[string]map[string]struct{}{},
+		Rule:         NewRule(),
+		LobbyID:      lobbyID,
+		Platform:     platform,
+		GgpoSession:  newGgpoSession(),
+		PlatformInfo: map[string]map[string]string{},
 	}
 }
 

@@ -462,24 +462,25 @@ func p2pMatchingReportLine(report *proto.P2PMatchingReport) string {
 	return line
 }
 
+func battlePlatformInfo(peer *AppPeer) map[string]string {
+	pi := maps.Clone(peer.PlatformInfo)
+	if pi == nil {
+		pi = map[string]string{}
+	}
+	pi["tcp_ip"] = "" // the server's, never the client's
+	if peer.conn != nil {
+		if h, _, err := net.SplitHostPort(peer.conn.Address()); err == nil {
+			pi["tcp_ip"] = h
+		}
+	}
+	return pi
+}
+
 var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
-	info := func(userID string) map[string]string {
-		peer, ok := p.app.users[userID]
-		if !ok {
-			return nil
-		}
-		pi := maps.Clone(peer.PlatformInfo)
-		if pi == nil {
-			pi = map[string]string{}
-		}
-		pi["tcp_ip"] = "" // the server's, never the client's
-		if peer.conn != nil {
-			if h, _, err := net.SplitHostPort(peer.conn.Address()); err == nil {
-				pi["tcp_ip"] = h
-			}
-		}
-		return pi
+	var info func(userID string) map[string]string
+	if b := p.Battle; b != nil {
+		info = func(userID string) map[string]string { return b.PlatformInfo[userID] }
 	}
 	if n := battleInfoNotice(p, info); n != nil {
 		glog.Infoln("udp bridge battle info", p.UserID)
