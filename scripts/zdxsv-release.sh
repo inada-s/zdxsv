@@ -1,8 +1,7 @@
 #!/bin/bash
 # Installs a zdxsv server release from GitHub into the zdxsv home (default /opt/zdxsv, as
 # infra/systemd/zdxsv.service expects) and restarts the service when it is installed:
-#   releases/<tag>/zdxsv (with zdxsv.service and the scripts), bin/zdxsv -> releases/<tag>/zdxsv,
-#   bin/zdxsv-release.sh and bin/zdxsv-db.sh -> that release's scripts
+#   releases/<tag>/zdxsv, bin/zdxsv -> releases/<tag>/zdxsv
 # Usage: sudo zdxsv-release.sh [tag]      the latest release when no tag is given
 #        sudo ZDXSV_NO_RESTART=1 zdxsv-release.sh [tag]   installs only (to migrate the database first)
 # Run it as root (or as a user that owns ZDXSV_HOME): the service user must not be able to
@@ -36,11 +35,6 @@ fi
 
 mkdir -p "$home/bin"
 ln -sfn "$dir/zdxsv" "$home/bin/zdxsv"
-for f in zdxsv-release.sh zdxsv-db.sh; do
-	if [ -e "$dir/$f" ]; then
-		ln -sfn "$dir/$f" "$home/bin/$f"
-	fi
-done
 echo "bin/zdxsv -> releases/$tag/zdxsv: $("$home/bin/zdxsv" version)"
 if [ -z "${ZDXSV_NO_RESTART:-}" ] && systemctl is-enabled --quiet zdxsv 2>/dev/null; then
 	if [ "$(id -u)" = 0 ]; then
