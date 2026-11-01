@@ -36,8 +36,9 @@ With ufw, allow every port in the table, the UDP ones too (`sudo ufw allow 53/ud
 
 A `v*` tag makes `.github/workflows/release.yml` build and publish a GitHub release (`.goreleaser.yml`):
 the zproxy archives for every platform (`zdxsv_<ver>_<os>_<arch>.zip`, what zproxy's self-update looks
-for) and the server, `zdxsv-server_<ver>_linux-x86_64.tar.gz` (static linux/amd64 binary, `zdxsv.service`,
-`zdxsv-release.sh`, `zdxsv-db.sh`). The server binary passes `scripts/smoke.sh` on the runner before anything is published.
+for) and the server, `zdxsv-server_<ver>_linux-x86_64.tar.gz` (the static linux/amd64 binary and `LICENSE`;
+the unit and the deploy scripts are installed from the repository, see below). The server binary passes
+`scripts/smoke.sh` on the runner before anything is published.
 
 ```sh
 git tag v1.2.0 && git push origin v1.2.0
@@ -59,6 +60,8 @@ Layout (`infra/systemd/zdxsv.service` has these paths):
 | Path | Owner | What |
 |---|---|---|
 | `/opt/zdxsv/releases/<tag>/`, `/opt/zdxsv/bin/zdxsv` | root | the releases and a symlink to the running one |
+| `/opt/zdxsv/bin/zdxsv-release.sh`, `zdxsv-db.sh` | root | the deploy scripts, copied from `scripts/` |
+| `/etc/systemd/system/zdxsv.service` | root | the unit, copied from `infra/systemd/` |
 | `/etc/zdxsv/zdxsv.env` | root:zdxsv 640 | the environment (one `NAME=value` per line, no quotes needed) |
 | `/etc/zdxsv/tls/` | root:zdxsv | the TLS keys ([TLS.md](TLS.md)) |
 | `/var/lib/zdxsv/` | zdxsv 750 | the database, the only place the service can write |
@@ -67,13 +70,24 @@ The service runs as the `zdxsv` user with `CAP_NET_BIND_SERVICE` for ports 53 an
 write its own binary (root-owned) nor see `/home` (`ProtectHome`): files the environment names
 (credentials, `ZDXSV_LOBBY_RELAY_START_COMMAND`) go under `/etc/zdxsv` or `/opt/zdxsv`.
 `zdxsv-release.sh` downloads a release into `/opt/zdxsv/releases/<tag>/`, checks it against
-`checksums.txt`, points `/opt/zdxsv/bin/zdxsv` (and `bin/zdxsv-release.sh`, `bin/zdxsv-db.sh`) at it and
-restarts the service if it is installed.
+`checksums.txt`, points `/opt/zdxsv/bin/zdxsv` at it and restarts the service if it is installed.
+The unit and the scripts are not in the release: install them from the repository (`ref`: `master` or a tag),
+and again the same way when they change.
+
+```sh
+ref=master
+for f in infra/systemd/zdxsv.service scripts/zdxsv-release.sh scripts/zdxsv-db.sh; do
+  curl -fsSLO "https://raw.githubusercontent.com/inada-s/zdxsv/$ref/$f"
+done
+sudo install -D -m 755 -t /opt/zdxsv/bin zdxsv-release.sh zdxsv-db.sh
+sudo install -m 644 zdxsv.service /etc/systemd/system/
+```
+
+Then:
 
 ```sh
 sudo useradd --system --home-dir /var/lib/zdxsv --shell /usr/sbin/nologin zdxsv   # if there is no zdxsv user yet
-curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/zdxsv-release.sh
-sudo bash zdxsv-release.sh      # latest release; `sudo bash zdxsv-release.sh v1.3.0` for one in particular
+sudo bash /opt/zdxsv/bin/zdxsv-release.sh   # latest release; `... zdxsv-release.sh v1.3.0` for one in particular
 # the environment: yours, with your public IP in the *_PUBLIC_ADDR lines
 IP=203.0.113.10
 sudo install -d -o root -g root -m 755 /etc/zdxsv
@@ -92,7 +106,6 @@ EOS
 sudo install -d -o zdxsv -g zdxsv -m 750 /var/lib/zdxsv
 # initdb wipes the tables: run it on the first deploy only.
 sudo bash /opt/zdxsv/bin/zdxsv-db.sh initdb
-sudo cp /opt/zdxsv/releases/*/zdxsv.service /etc/systemd/system/   # or infra/systemd/zdxsv.service from a checkout
 sudo systemctl daemon-reload && sudo systemctl enable --now zdxsv
 journalctl -u zdxsv -f
 ```
@@ -216,14 +229,21 @@ sudo systemctl start zdxsv
 Old releases stay under `/opt/zdxsv/releases/`; to roll back, run `zdxsv-release.sh` with an older tag
 (v1.2.0 is the first with a server tarball).
 
+Back up `/var/lib/zdxsv/zdxsv.db` from the host's own cron or timer. The database is live: copy it with
+`sqlite3 /var/lib/zdxsv/zdxsv.db ".backup <file>"`, not `cp`.
+
 ### Moving from ~/zdxsv
 
 Releases before this layout ran from the service user's home (`/home/zdxsv/zdxsv`: `bin/zdxsv`, `.env`,
-`zdxsv.db`). To move, with the new release's `zdxsv.service` and scripts:
+`zdxsv.db`). To move, with the unit and scripts of the release's tag:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/inada-s/zdxsv/<tag>/scripts/zdxsv-release.sh
-sudo ZDXSV_NO_RESTART=1 bash zdxsv-release.sh <tag>    # into /opt/zdxsv; the old service keeps running
+ref=<tag>
+for f in infra/systemd/zdxsv.service scripts/zdxsv-release.sh scripts/zdxsv-db.sh; do
+  curl -fsSLO "https://raw.githubusercontent.com/inada-s/zdxsv/$ref/$f"
+done
+sudo install -D -m 755 -t /opt/zdxsv/bin zdxsv-release.sh zdxsv-db.sh
+sudo ZDXSV_NO_RESTART=1 bash /opt/zdxsv/bin/zdxsv-release.sh <tag>    # the old service keeps running
 sudo install -d -o root -g root -m 755 /etc/zdxsv
 sudo install -o root -g zdxsv -m 640 /home/zdxsv/zdxsv/.env /etc/zdxsv/zdxsv.env
 sudo sed -i 's|^ZDXSV_DB_NAME=.*|ZDXSV_DB_NAME=/var/lib/zdxsv/zdxsv.db|' /etc/zdxsv/zdxsv.env
@@ -232,14 +252,13 @@ sudo install -d -o zdxsv -g zdxsv -m 750 /var/lib/zdxsv
 sudo install -o zdxsv -g zdxsv -m 640 /home/zdxsv/zdxsv/zdxsv.db /var/lib/zdxsv/zdxsv.db
 sudo bash /opt/zdxsv/bin/zdxsv-db.sh migratedb    # when the release changed the schema
 sudo cp /etc/systemd/system/zdxsv.service /etc/systemd/system/zdxsv.service.home-bak
-sudo cp /opt/zdxsv/releases/<tag>/zdxsv.service /etc/systemd/system/
+sudo install -m 644 zdxsv.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl start zdxsv
 ```
 
 The old files stay in `/home/zdxsv/zdxsv` untouched: to go back, restore `zdxsv.service.home-bak`,
 `daemon-reload` and start (the old database has no battles played since the move). Point backups at
-`/var/lib/zdxsv/zdxsv.db`; it is live, so copy it with `sqlite3 /var/lib/zdxsv/zdxsv.db ".backup <file>"`
-rather than `cp`.
+`/var/lib/zdxsv/zdxsv.db`.
 
 ## Clients
 
