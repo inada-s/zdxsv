@@ -25,7 +25,11 @@ StateDirectory=zdxsv
 StateDirectoryMode=0750
 WorkingDirectory=/var/lib/zdxsv
 EnvironmentFile=/etc/zdxsv/zdxsv.env
+# Every start first installs the latest GitHub release and migrates the database for it, as root
+# ("+"); when that fails ("-": GitHub unreachable, ...) the installed release starts as it is.
+ExecStartPre=-+/usr/bin/env ZDXSV_NO_RESTART=1 /opt/zdxsv/bin/zdxsv-release.sh
 ExecStart=/opt/zdxsv/bin/zdxsv
+TimeoutStartSec=10min
 Restart=always
 RestartSec=5
 # Ports 53 and 443 without root.

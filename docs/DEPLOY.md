@@ -70,7 +70,8 @@ The service runs as the `zdxsv` user with `CAP_NET_BIND_SERVICE` for ports 53 an
 write its own binary (root-owned) nor see `/home` (`ProtectHome`): files the environment names
 (credentials, `ZDXSV_LOBBY_RELAY_START_COMMAND`) go under `/etc/zdxsv` or `/opt/zdxsv`.
 `zdxsv-release.sh` downloads a release into `/opt/zdxsv/releases/<tag>/`, checks it against
-`checksums.txt`, points `/opt/zdxsv/bin/zdxsv` at it and restarts the service if it is installed.
+`checksums.txt`, points `/opt/zdxsv/bin/zdxsv` at it and migrates the database for an upgrade; the
+service runs it before every start (see Update).
 The unit and the scripts are not in the release: install them from the repository (`ref`: `master` or a tag),
 and again the same way when they change.
 
@@ -207,27 +208,26 @@ an enabled unit as well. After a change, `systemctl is-enabled zdxsv caddy` and 
 
 ## Update
 
+Publishing a GitHub release is the whole deploy: every start of `zdxsv.service` first runs
+`zdxsv-release.sh` (`ExecStartPre`), which installs the latest release when it is not the installed
+one, migrates the database for an upgrade (a copy stays as `zdxsv.db.pre-update`) and starts it. The
+host reboots every morning, so a release is live by the next day; to take it now:
+
 ```sh
-sudo bash /opt/zdxsv/bin/zdxsv-release.sh   # downloads the latest release and restarts the service
+sudo systemctl restart zdxsv
 /opt/zdxsv/bin/zdxsv version
 ```
 
-When a release says the schema changed, install it without the restart, back up and migrate with the
-service stopped:
-
-```sh
-sudo systemctl stop zdxsv
-sudo cp -p /var/lib/zdxsv/zdxsv.db /var/lib/zdxsv/zdxsv.db.bak
-sudo ZDXSV_NO_RESTART=1 bash /opt/zdxsv/bin/zdxsv-release.sh
-sudo bash /opt/zdxsv/bin/zdxsv-db.sh migratedb
-sudo systemctl start zdxsv
-```
+When GitHub cannot be reached the installed release starts as it is. A failed migration puts the
+previous release back. Prereleases (`v1.4.0-rc1`) are never installed this way.
 
 `zdxsv-db.sh <command>` runs `/opt/zdxsv/bin/zdxsv <command>` as the `zdxsv` user with
 `/etc/zdxsv/zdxsv.env`, for `initdb` and `migratedb` (both refuse while the service runs).
 
-Old releases stay under `/opt/zdxsv/releases/`; to roll back, run `zdxsv-release.sh` with an older tag
-(v1.2.0 is the first with a server tarball).
+Old releases stay under `/opt/zdxsv/releases/`. To roll back, first mark the bad release as a
+prerelease on GitHub (or delete it), or the next start installs it again, then
+`sudo bash /opt/zdxsv/bin/zdxsv-release.sh <older tag>` (it stops, switches and starts the service;
+a downgrade does not migrate). v1.2.0 is the first with a server tarball.
 
 Back up `/var/lib/zdxsv/zdxsv.db` from the host's own cron or timer. The database is live: copy it with
 `sqlite3 /var/lib/zdxsv/zdxsv.db ".backup <file>"`, not `cp`.

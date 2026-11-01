@@ -16,4 +16,4 @@ initdb | migratedb)
 	;;
 esac
 cd /var/lib/zdxsv
-exec sudo -u zdxsv bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' _ "$env" "$bin" "$@"
+exec runuser -u zdxsv -- bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' _ "$env" "$bin" "$@"
