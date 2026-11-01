@@ -23,8 +23,12 @@ func printReleaseInfo() {
 	log.Println("releaseDate", releaseDate)
 }
 
+// updatedEnv is set for the process restarted after an update: it skips the check, so a
+// release whose archive does not carry its own version cannot restart forever.
+const updatedEnv = "ZPROXY_UPDATED"
+
 func doSelfUpdate() {
-	if releaseVersion == "local" {
+	if releaseVersion == "local" || os.Getenv(updatedEnv) != "" {
 		return
 	}
 	log.Println("アップデートチェックを行います")
@@ -39,12 +43,17 @@ func doSelfUpdate() {
 	latest, found, err := up.DetectLatest("inada-s/zdxsv")
 	if err != nil {
 		log.Println("アップデートチェックに失敗しました", err)
+		return
+	}
+	if !found {
+		log.Println("既に最新版です")
+		return
 	}
 
 	log.Println("最新版>", latest.Version)
 
 	v := semver.MustParse(releaseVersion)
-	if !found || latest.Version.LTE(v) {
+	if latest.Version.LTE(v) {
 		log.Println("既に最新版です")
 		return
 	}
@@ -62,7 +71,11 @@ func doSelfUpdate() {
 	}
 
 	log.Println("アップデートに成功しました")
-	log.Println("再起動してください")
-	time.Sleep(time.Second)
-	os.Exit(0)
+	log.Println("新しいバージョンで再起動します")
+	os.Setenv(updatedEnv, "1")
+	err = restart(exe)
+	log.Println("再起動に失敗しました", err)
+	log.Println("手動で再起動してください")
+	time.Sleep(5 * time.Second)
+	os.Exit(1)
 }
