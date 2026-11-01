@@ -22,7 +22,7 @@ Releases (the server for linux/amd64, and zproxy for every platform when its cod
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 
-To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md) (one binary as a systemd service).
+To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Commands
 - `./bin/zdxsv initdb` initializes database file.

@@ -60,8 +60,7 @@ archives:
     formats:
       - tar.gz
     name_template: "zdxsv-server_{{ .Version }}_linux-x86_64"
-    # The binary and its license only: the unit and the deploy scripts are installed from the
-    # repository (docs/DEPLOY.md), so fixing them needs no release.
+    # The binary and its license only: how a host installs and runs it is the host's business.
     files:
       - LICENSE
 
@@ -69,8 +68,8 @@ checksum:
   name_template: 'checksums.txt'
 
 release:
-  # A tag like v1.2.0-rc1 becomes a prerelease: zproxy's self-update and zdxsv-release.sh
-  # (releases/latest) both ignore those, so it is a safe end-to-end test of this pipeline.
+  # A tag like v1.2.0-rc1 becomes a prerelease: zproxy's self-update and GitHub's
+  # "latest release" both ignore those, so it is a safe end-to-end test of this pipeline.
   prerelease: auto
   footer: |
     {{- if eq (envOrDefault "ZDXSV_SKIP_ZPROXY" "false") "true" }}
