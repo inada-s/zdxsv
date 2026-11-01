@@ -60,14 +60,10 @@ archives:
     formats:
       - tar.gz
     name_template: "zdxsv-server_{{ .Version }}_linux-x86_64"
+    # The binary and its license only: the unit and the deploy scripts are installed from the
+    # repository (docs/DEPLOY.md), so fixing them needs no release.
     files:
       - LICENSE
-      - src: infra/systemd/zdxsv.service
-        strip_parent: true
-      - src: scripts/zdxsv-release.sh
-        strip_parent: true
-      - src: scripts/zdxsv-db.sh
-        strip_parent: true
 
 checksum:
   name_template: 'checksums.txt'
