@@ -2,6 +2,7 @@ package login
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,23 +100,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := db.DefaultDB.GetAccountByLoginKey(loginKey)
-	if err == sql.ErrNoRows && len(loginKey) == 10 {
-		// Since this login key seems to have been registered on another server,
-		// new registration is performed.
-		a, err = db.DefaultDB.RegisterAccountWithLoginKey(r.RemoteAddr, loginKey)
-	}
-
-	if err != nil {
-		glog.Errorln(err)
-		w.Header().Set("Content-Type", "text/html; charset=cp932")
-		w.WriteHeader(200)
-		writeMessagePage(w, r, messageLoginFail)
-		return
-	}
-
-	err = db.DefaultDB.LoginAccount(a)
-
+	a, err := loginAccount(r.RemoteAddr, loginKey)
 	if err != nil {
 		glog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -133,6 +118,59 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplLogin.Execute(sw, p)
+}
+
+func loginAccount(remoteAddr, loginKey string) (*db.Account, error) {
+	a, err := db.DefaultDB.GetAccountByLoginKey(loginKey)
+	if err == sql.ErrNoRows && len(loginKey) == 10 {
+		// Since this login key seems to have been registered on another server,
+		// new registration is performed.
+		a, err = db.DefaultDB.RegisterAccountWithLoginKey(remoteAddr, loginKey)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := db.DefaultDB.LoginAccount(a); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// LbsInfo must match the CRS-LBS-INFO-GET entry in assets/login.tpl.
+const LbsInfo = "0ad601082008,ZDX BETA SERVER"
+
+type APILoginResponse struct {
+	LoginKey  string `json:"login_key"`
+	SessionID string `json:"session_id"`
+	LobbyAddr string `json:"lobby_addr"`
+	LbsInfo   string `json:"lbs_info"`
+}
+
+// HandleAPILogin answers the login result in JSON, for clients that skip the
+// in-game browser.
+func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	loginKey := r.FormValue("login_key")
+	if loginKey == "" {
+		http.Error(w, "login_key required", http.StatusBadRequest)
+		return
+	}
+	a, err := loginAccount(r.RemoteAddr, loginKey)
+	if err != nil {
+		glog.Errorln(err)
+		http.Error(w, "login failed", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(APILoginResponse{
+		LoginKey:  a.LoginKey,
+		SessionID: a.SessionID,
+		LobbyAddr: config.Conf.Lobby.PublicAddr,
+		LbsInfo:   LbsInfo,
+	})
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {

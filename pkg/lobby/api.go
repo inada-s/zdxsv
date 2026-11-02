@@ -10,6 +10,7 @@ import (
 
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/login"
 
 	"github.com/golang/glog"
 )
@@ -31,6 +32,7 @@ const (
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
+//	POST /lbs/login (form login_key): logs in like the login server's /login, as JSON (login.HandleAPILogin).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
 type APIHandler struct {
@@ -64,6 +66,10 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/lbs/replay_upload" {
 		h.serveReplayUpload(w, r)
+		return
+	}
+	if r.URL.Path == "/lbs/login" {
+		login.HandleAPILogin(w, r)
 		return
 	}
 	if r.URL.Path == "/lbs/replay_played" {
