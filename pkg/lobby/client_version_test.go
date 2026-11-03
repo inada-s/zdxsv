@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 )
@@ -12,22 +13,23 @@ import (
 func TestLobbyOutdatedClient(t *testing.T) {
 	conn := dbtest.Use(t)
 	addr := startLobby(t, battlerpc.NewBattleRpc())
-	setMin := func(v string) {
+	set := func(key, v string) {
 		t.Helper()
-		if _, err := conn.Exec(`INSERT OR REPLACE INTO m_server_setting (key, value) VALUES ('min_pcsx2_version', ?)`, v); err != nil {
+		if _, err := conn.Exec(`INSERT OR REPLACE INTO m_server_setting (key, value) VALUES (?, ?)`, key, v); err != nil {
 			t.Fatal(err)
 		}
 	}
 	dial := func(info string) *testClient {
 		c := dialLobby(t, addr)
-		n := NewClientNotice(0x9950)
-		n.Writer().Write([]byte("emulator=pcsx2\n" + info))
-		c.send(n)
+		if info != "" {
+			n := NewClientNotice(0x9950)
+			n.Writer().Write([]byte(info))
+			c.send(n)
+		}
 		return c
 	}
-	refused := func(info string) {
+	refusedAs := func(ac *db.Account, info string) {
 		t.Helper()
-		ac := registerAccount(t)
 		c := dial(info)
 		kp := c.expect(0x6101, CategoryQuestion)
 		a := NewClientAnswer(kp)
@@ -43,20 +45,38 @@ func TestLobbyOutdatedClient(t *testing.T) {
 			}
 		}
 	}
-	allowed := func(info string) {
+	refused := func(info string) { t.Helper(); refusedAs(registerAccount(t), info) }
+	allowedAs := func(ac *db.Account, info string) {
 		t.Helper()
-		dial(info).login(registerAccount(t), "******", "p")
+		dial(info).login(ac, "******", "p")
 	}
+	allowed := func(info string) { t.Helper(); allowedAs(registerAccount(t), info) }
+	const emu = "emulator=pcsx2\n"
 
-	allowed("pcsx2=zdxsv-0.0.1\n")
-	setMin("zdxsv-1.2.0")
-	refused("pcsx2=zdxsv-1.1.9\n")
-	refused("pcsx2=zdxsv-1.2.0-dev.3\n")
-	refused("pcsx2=garbage\n")
-	allowed("pcsx2=zdxsv-1.2.0\n")
-	allowed("pcsx2=zdxsv-1.2.1-dev.1\n")
-	allowed("pcsx2=zdxsv-1.10.0\n")
-	allowed("version=abc\n")
-	setMin("1.3")
-	allowed("pcsx2=zdxsv-1.1.9\n")
+	allowed(emu + "pcsx2=zdxsv-0.0.1\n")
+	allowed(emu + "pcsx2=zdxsv-1.2.1-dev.1\n")
+	allowed(emu + "version=abc\n")
+	set("min_pcsx2_version", "zdxsv-1.2.0")
+	refused(emu + "pcsx2=zdxsv-1.1.9\n")
+	refused(emu + "pcsx2=zdxsv-1.2.0-dev.3\n")
+	refused(emu + "pcsx2=garbage\n")
+	refused(emu + "pcsx2=zdxsv-1.2.1-dev.1\n")
+	refused(emu + "version=abc\n")
+	refused("emulator=other\n")
+	allowed(emu + "pcsx2=zdxsv-1.2.0\n")
+	allowed(emu + "pcsx2=zdxsv-1.10.0\n")
+	allowed("")
+	allowed("os=windows\n")
+
+	dev, other := registerAccount(t), registerAccount(t)
+	refusedAs(dev, emu+"version=abc\n")
+	set("pcsx2_allow", "x, "+dev.LoginKey+",mach-1")
+	allowedAs(dev, emu+"version=abc\n")
+	allowedAs(dev, emu+"pcsx2=zdxsv-1.1.9\n")
+	refusedAs(other, emu+"version=abc\n")
+	allowed(emu + "machine_id=mach-1\nversion=abc\n")
+	refused(emu + "machine_id=mach-2\nversion=abc\n")
+
+	set("min_pcsx2_version", "1.3")
+	allowed(emu + "pcsx2=zdxsv-1.1.9\n")
 }
