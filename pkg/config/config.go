@@ -103,6 +103,9 @@ type LobbyConfig struct {
 	BattleGauge uint16 `env:"ZDXSV_LOBBY_BATTLE_GAUGE"`
 	// 作戦時間 in seconds of battles started in a lobby: a value of the rule menu (90, 120, ...); default when 0.
 	BattleTime uint16 `env:"ZDXSV_LOBBY_BATTLE_TIME"`
+	// 連続対戦数 of battles started in a lobby: a value of the rule menu (1, 3, 5, 10); default (任意: rematch
+	// picked by the players) when 0.
+	BattleCount uint16 `env:"ZDXSV_LOBBY_BATTLE_COUNT"`
 }
 
 type BattleConfig struct {
