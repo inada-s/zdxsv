@@ -132,6 +132,23 @@ func (r *Rule) Set(ruleID, elemID byte) {
 	}
 }
 
+// SetBattleGauge selects the 戦力ゲージ element whose value is v; a value not in the menu is ignored.
+func (r *Rule) SetBattleGauge(v uint16) { r.setValue(ruleBattleGauge, v) }
+
+// SetBattleTime selects the 作戦時間 element of v seconds; a value not in the menu is ignored.
+func (r *Rule) SetBattleTime(v uint16) { r.setValue(ruleBattleTime, v) }
+
+// SetBattleCount selects the 連続対戦数 element of v battles; a value not in the menu is ignored.
+func (r *Rule) SetBattleCount(v uint16) { r.setValue(ruleBattleCount, v) }
+
+func (r *Rule) setValue(ruleID byte, v uint16) {
+	for i, e := range ruleList[ruleID].List {
+		if e.Value == v {
+			r.Set(ruleID, byte(i))
+		}
+	}
+}
+
 func (r *Rule) Get(ruleID byte) byte {
 	v, ok := r.selected[ruleID]
 	if ok {
