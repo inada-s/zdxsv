@@ -584,9 +584,10 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 		} else if lobby.CanBattleStart() {
 			users := lobby.StartBattleUsers()
 			var rule *model.Rule
-			if g := config.Conf.Lobby.BattleGauge; g != 0 {
+			if c := config.Conf.Lobby; c.BattleGauge != 0 || c.BattleTime != 0 {
 				rule = model.NewRule()
-				rule.SetBattleGauge(g)
+				rule.SetBattleGauge(c.BattleGauge)
+				rule.SetBattleTime(c.BattleTime)
 			}
 			result := a.startBattle(lobby.Platform, lobby.ID, users, rule)
 			if result {
