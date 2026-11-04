@@ -34,6 +34,14 @@ To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md).
 - `./bin/zdxsv battle` serves battle.
 
 
+## Run on this machine
+
+```
+scripts/run-local.sh
+```
+Builds and runs the whole server with `.env`, this machine's LAN address (`IP=<address>` overrides it) and the test TLS certificate.
+Emulator clients must trust the test CA; on the PCSX2 side that is `ZDXSV_TLS_TEST_PIN=1`.
+
 ## Run a server
 
 ### Initialize database
