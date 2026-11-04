@@ -98,6 +98,9 @@ type LobbyConfig struct {
 	// API (local tests, urls http://<APIAddr>/lbs/replays/); upload off when both are empty.
 	ReplayBucket string `env:"ZDXSV_LOBBY_REPLAY_BUCKET"`
 	ReplayDir    string `env:"ZDXSV_LOBBY_REPLAY_DIR"`
+	// 戦力ゲージ of battles started in a lobby (not a room): a value of the rule menu (1, 300, 600, ...);
+	// the default rule when 0. 1 ends a battle at the first shoot-down (short test battles).
+	BattleGauge uint16 `env:"ZDXSV_LOBBY_BATTLE_GAUGE"`
 }
 
 type BattleConfig struct {

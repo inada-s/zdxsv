@@ -132,6 +132,15 @@ func (r *Rule) Set(ruleID, elemID byte) {
 	}
 }
 
+// SetBattleGauge selects the 戦力ゲージ element whose value is v; a value not in the menu is ignored.
+func (r *Rule) SetBattleGauge(v uint16) {
+	for i, e := range ruleList[ruleBattleGauge].List {
+		if e.Value == v {
+			r.Set(ruleBattleGauge, byte(i))
+		}
+	}
+}
+
 func (r *Rule) Get(ruleID byte) byte {
 	v, ok := r.selected[ruleID]
 	if ok {

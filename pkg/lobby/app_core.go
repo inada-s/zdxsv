@@ -583,7 +583,12 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 			}
 		} else if lobby.CanBattleStart() {
 			users := lobby.StartBattleUsers()
-			result := a.startBattle(lobby.Platform, lobby.ID, users, nil)
+			var rule *model.Rule
+			if g := config.Conf.Lobby.BattleGauge; g != 0 {
+				rule = model.NewRule()
+				rule.SetBattleGauge(g)
+			}
+			result := a.startBattle(lobby.Platform, lobby.ID, users, rule)
 			if result {
 				for _, u := range users {
 					u.Entry = model.EntryNone
