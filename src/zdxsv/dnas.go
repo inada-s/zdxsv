@@ -38,9 +38,6 @@ func mainDNAS() {
 		glog.Fatalln(err)
 	}
 	glog.Infoln("dnas listen", config.Conf.DNAS.Addr, "login", config.Conf.Login.Addr, "https backend", config.Conf.DNAS.HTTPSBackend)
-	if l := tlsListen("dnas", config.Conf.TLS.DNASAddr); l != nil {
-		go func() { glog.Fatalln("dnas tls:", r.Serve(l)) }()
-	}
 	glog.Fatalln(r.ListenAndServe(config.Conf.DNAS.Addr))
 }
 

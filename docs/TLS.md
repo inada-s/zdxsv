@@ -1,11 +1,10 @@
 # TLS for the emulators
 
-Emulators (pcsx2) reach dnas, lobby and battle through TLS ports beside the plain ones. Real PS2
+Emulators (pcsx2) reach lobby and battle through TLS ports beside the plain ones. Real PS2
 consoles cannot do TLS and keep the plain ports.
 
 | plain port | TLS port | env (TLS address) |
 |---|---|---|
-| 443 (dnas, login pages) | 8220 | `ZDXSV_DNAS_TLS_ADDR` |
 | 8200 (lobby) | 8221 | `ZDXSV_LOBBY_TLS_ADDR` |
 | 8210 (battle, TCP) | 8222 | `ZDXSV_BATTLE_TLS_ADDR` |
 
@@ -58,8 +57,7 @@ ZDXSV_TLS_KEY_FILE=/etc/zdxsv/tls/server.key
 Keep `ca.key` and `backup-ca.key` on separate offline media; never copy them to the server.
 `scripts/tls-keys.sh pin <pem>` prints the pin of each certificate in a file.
 
-Check from anywhere: `zdxsv tlscheck <host>:8221 <CA pin>` (lobby, prints the chain) and
-`zdxsv dnascheck <host>:8220 <CA pin>` (DNAS through TLS).
+Check from anywhere: `zdxsv tlscheck <host>:8221 <CA pin>` (lobby, prints the chain).
 
 ## Rotation and recovery
 
