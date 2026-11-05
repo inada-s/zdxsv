@@ -41,7 +41,7 @@ export ZDXSV_DB_NAME=smoke.db
 # and the TLS ports on the test keys (pkg/tlsconf/testdata), never the real one
 td=pkg/tlsconf/testdata
 export ZDXSV_TLS_CERT_FILE=$td/server.crt ZDXSV_TLS_KEY_FILE=$td/server.key
-unset ZDXSV_DNAS_TLS_ADDR ZDXSV_LOBBY_TLS_ADDR ZDXSV_BATTLE_TLS_ADDR
+unset ZDXSV_LOBBY_TLS_ADDR ZDXSV_BATTLE_TLS_ADDR
 pin() { bash scripts/tls-keys.sh pin "$1" | head -1 | cut -d" " -f1; }
 ca_pin=$(pin $td/ca.crt) backup_pin=$(pin $td/backup-ca.crt) server_pin=$(pin $td/server.crt)
 dns_addr=${ZDXSV_DNS_ADDR:-:53}
@@ -66,7 +66,6 @@ for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
 check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.0.0.1:443
-check "dnas on tls 8220 (CA pin)" "$bin" -profile=0 dnascheck 127.0.0.1:8220 "$ca_pin"
 check "lobby on tls 8221 (CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8221 "$ca_pin"
 check "lobby on tls 8221 (server key pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8221 "$server_pin"
 check "battle on tls 8222 (backup CA pin, CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8222 "$backup_pin" "$ca_pin"

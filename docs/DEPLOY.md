@@ -19,7 +19,7 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 | 8202 | udp | connectivity test |
 | 8204 | udp | GGPO relay |
 | 8210 | tcp, udp | battle |
-| 8220-8222 | tcp | TLS for emulators ([TLS.md](TLS.md)) |
+| 8221-8222 | tcp | TLS for emulators ([TLS.md](TLS.md)) |
 
 The HTTP API (8203) is for the host only; put a reverse proxy in front to publish it.
 If systemd-resolved holds port 53, set `DNSStubListener=no` in `/etc/systemd/resolved.conf`.
