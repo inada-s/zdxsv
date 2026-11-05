@@ -182,8 +182,6 @@ type DB interface {
 	Migrate() error
 	RegisterAccount(ip string) (*Account, error)
 
-	// RegisterAccountWithLoginKey lets users share a login key among servers.
-	RegisterAccountWithLoginKey(ip string, loginKey string) (*Account, error)
 	GetAccountByLoginKey(key string) (*Account, error)
 	LoginAccount(*Account) error
 

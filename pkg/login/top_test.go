@@ -125,18 +125,7 @@ func TestLoginUnknownKey(t *testing.T) {
 	dbtest.Use(t)
 	ts := startLoginServer(t)
 
-	// A 10 char key from another server is registered on first use.
-	const foreign = "AbCdE12345"
-	body := postLogin(t, ts, foreign)
-	a, err := db.DefaultDB.GetAccountByLoginKey(foreign)
-	if err != nil {
-		t.Fatalf("foreign key not registered: %v", err)
-	}
-	if !strings.Contains(body, `"`+a.SessionID+`"`) {
-		t.Errorf("login page lacks session id %s: %q", a.SessionID, body)
-	}
-
-	for _, key := range []string{"", "short", "ElevenChars"} {
+	for _, key := range []string{"", "short", "AbCdE12345", "ElevenChars"} {
 		body := postLogin(t, ts, key)
 		if !strings.Contains(body, "ログインに失敗しました") {
 			t.Errorf("key %q: want the login failure page, got %q", key, body)

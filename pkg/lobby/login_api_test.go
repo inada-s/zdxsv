@@ -22,7 +22,11 @@ func TestAPILogin(t *testing.T) {
 	ts := httptest.NewServer(&APIHandler{})
 	t.Cleanup(ts.Close)
 
-	resp, err := http.PostForm(ts.URL+"/lbs/login", url.Values{"login_key": {"apiKey0001"}})
+	registered, err := db.DefaultDB.RegisterAccount("198.51.100.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.PostForm(ts.URL+"/lbs/login", url.Values{"login_key": {registered.LoginKey}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +38,11 @@ func TestAPILogin(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	a, err := db.DefaultDB.GetAccountByLoginKey("apiKey0001")
+	a, err := db.DefaultDB.GetAccountByLoginKey(registered.LoginKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := login.APILoginResponse{LoginKey: "apiKey0001", SessionID: a.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo}
+	want := login.APILoginResponse{LoginKey: registered.LoginKey, SessionID: a.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo}
 	if a.SessionID == "" || got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -51,6 +55,7 @@ func TestAPILogin(t *testing.T) {
 		{http.MethodGet, nil, http.StatusMethodNotAllowed},
 		{http.MethodPost, url.Values{}, http.StatusBadRequest},
 		{http.MethodPost, url.Values{"login_key": {"short"}}, http.StatusForbidden},
+		{http.MethodPost, url.Values{"login_key": {"unknownKey"}}, http.StatusForbidden},
 	} {
 		req, _ := http.NewRequest(c.method, ts.URL+"/lbs/login", strings.NewReader(c.form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -62,5 +67,8 @@ func TestAPILogin(t *testing.T) {
 		if resp.StatusCode != c.code {
 			t.Errorf("%s %v: status %d, want %d", c.method, c.form, resp.StatusCode, c.code)
 		}
+	}
+	if _, err := db.DefaultDB.GetAccountByLoginKey("unknownKey"); err == nil {
+		t.Error("unknown key was registered")
 	}
 }
