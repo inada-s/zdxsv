@@ -106,6 +106,13 @@ type LobbyConfig struct {
 	// 連続対戦数 of battles started in a lobby: a value of the rule menu (1, 3, 5, 10); default (任意: rematch
 	// picked by the players) when 0.
 	BattleCount uint16 `env:"ZDXSV_LOBBY_BATTLE_COUNT"`
+	// Emulator sign-in through Discord (pkg/auth, /auth/* on APIAddr), off when DiscordClientID is
+	// empty. AuthPublicURL is where players reach /auth/ (https://host). AuthProviderURL replaces
+	// https://discord.com, for tests only.
+	DiscordClientID     string `env:"ZDXSV_DISCORD_CLIENT_ID"`
+	DiscordClientSecret Secret `env:"ZDXSV_DISCORD_CLIENT_SECRET"`
+	AuthPublicURL       string `env:"ZDXSV_AUTH_PUBLIC_URL"`
+	AuthProviderURL     string `env:"ZDXSV_AUTH_PROVIDER_URL"`
 }
 
 type BattleConfig struct {

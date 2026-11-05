@@ -2,6 +2,7 @@ package db
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"math/big"
 	"time"
@@ -40,15 +41,16 @@ func GenBattleCode() string {
 }
 
 type Account struct {
-	LoginKey           string    `db:"login_key" json:"login_key,omitempty"`
-	SessionID          string    `db:"session_id" json:"session_id,omitempty"`
-	LastUserID         string    `db:"last_user_id" json:"last_user_id,omitempty"`
-	Created            time.Time `db:"created" json:"created,omitempty"`
-	CreatedIP          string    `db:"created_ip" json:"created_ip,omitempty"`
-	LastLogin          time.Time `db:"last_login" json:"last_login,omitempty"`
-	LastLoginIP        string    `db:"last_login_ip" json:"last_login_ip,omitempty"`
-	LastLoginMachineID string    `db:"last_login_machine_id" json:"last_login_machine_id,omitempty"`
-	System             byte      `db:"system" json:"system,omitempty"`
+	LoginKey           string         `db:"login_key" json:"login_key,omitempty"`
+	SessionID          string         `db:"session_id" json:"session_id,omitempty"`
+	LastUserID         string         `db:"last_user_id" json:"last_user_id,omitempty"`
+	Created            time.Time      `db:"created" json:"created,omitempty"`
+	CreatedIP          string         `db:"created_ip" json:"created_ip,omitempty"`
+	LastLogin          time.Time      `db:"last_login" json:"last_login,omitempty"`
+	LastLoginIP        string         `db:"last_login_ip" json:"last_login_ip,omitempty"`
+	LastLoginMachineID string         `db:"last_login_machine_id" json:"last_login_machine_id,omitempty"`
+	System             byte           `db:"system" json:"system,omitempty"`
+	TempKey            sql.NullString `db:"temp_key" json:"-"`
 }
 
 // Ban refuses a login whose user (any user of the account), machine id or ip is Value.
@@ -183,6 +185,22 @@ type DB interface {
 	RegisterAccount(ip string) (*Account, error)
 
 	GetAccountByLoginKey(key string) (*Account, error)
+	// GetAccountByLoginOrTempKey finds the account whose login key or temporary key is key.
+	GetAccountByLoginOrTempKey(key string) (*Account, error)
+	// IdentityLoginKey returns the login key linked to a provider identity, "" when none.
+	IdentityLoginKey(provider, providerUserID string) (string, error)
+	// RegisterIdentityAccount creates an account linked to a provider identity.
+	RegisterIdentityAccount(provider, providerUserID, ip string) (*Account, error)
+	// LinkIdentity links a provider identity to an existing account; ErrIdentityTaken or
+	// ErrAccountLinked when either side already has a link.
+	LinkIdentity(provider, providerUserID, loginKey string) error
+	// IssueAuthToken stores a new emulator token for the account and returns it.
+	IssueAuthToken(loginKey string) (string, error)
+	// AuthTokenLoginKey returns the login key of a token, "" when unknown or revoked.
+	AuthTokenLoginKey(token string) (string, error)
+	RevokeAuthToken(token string) error
+	// RotateTempKey replaces the account's temporary key and returns the new one.
+	RotateTempKey(loginKey string) (string, error)
 	LoginAccount(*Account) error
 
 	// SetLoginEndpoint records where the account last logged in to the lobby from.

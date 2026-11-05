@@ -48,7 +48,21 @@ CREATE TABLE IF NOT EXISTS account (
 	last_login_ip text default '',
 	last_login_machine_id text default '',
 	system integer default 0,
+	temp_key text UNIQUE,
 	PRIMARY KEY (login_key)
+);
+CREATE TABLE IF NOT EXISTS auth_identity (
+	provider text,
+	provider_user_id text,
+	login_key text,
+	created timestamp,
+	PRIMARY KEY (provider, provider_user_id)
+);
+CREATE TABLE IF NOT EXISTS auth_token (
+	token_hash text,
+	login_key text,
+	created timestamp,
+	PRIMARY KEY (token_hash)
 );
 CREATE TABLE IF NOT EXISTS user (
 	user_id text,
@@ -122,6 +136,8 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
 CREATE INDEX IF NOT EXISTS ACCOUNT_LAST_LOGIN_MACHINE_ID ON account(last_login_machine_id);
+CREATE INDEX IF NOT EXISTS AUTH_IDENTITY_LOGIN_KEY ON auth_identity(login_key);
+CREATE INDEX IF NOT EXISTS AUTH_TOKEN_LOGIN_KEY ON auth_token(login_key);
 `
 
 func (db SQLiteDB) Init() error {
@@ -131,7 +147,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting"}
+	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {

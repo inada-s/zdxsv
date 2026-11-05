@@ -32,7 +32,7 @@ func (a *App) OnClose(p *AppPeer) {
 }
 
 func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
-	ac, err := db.DefaultDB.GetAccountByLoginKey(loginKey)
+	ac, err := db.DefaultDB.GetAccountByLoginOrTempKey(loginKey)
 	if err != nil {
 		glog.Errorln(err)
 		return

@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"zdxsv/pkg/auth"
 	"zdxsv/pkg/config"
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby"
 
 	"github.com/golang/glog"
@@ -33,6 +35,10 @@ func serveLobby(app *lobby.App) {
 			}
 		}
 		app.SetRelayProvisioning(regions, lobby.CommandProvisioner{Command: c.RelayStartCommand})
+	}
+	authServer := newAuthServer()
+	if authServer != nil {
+		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
 	go app.Serve()
 	sv := lobby.NewServer(app)
@@ -80,6 +86,9 @@ func serveLobby(app *lobby.App) {
 		go func() {
 			glog.Infoln("Start public api", c.APIAddr)
 			api := &lobby.APIHandler{Status: app.Status}
+			if authServer != nil {
+				api.Auth = authServer
+			}
 			if c.ReplayBucket != "" {
 				store, err := lobby.NewGCSReplayStore(context.Background(), c.ReplayBucket)
 				if err != nil {
@@ -100,6 +109,25 @@ func serveLobby(app *lobby.App) {
 	s := <-c
 	fmt.Println("Got signal:", s)
 	app.Quit()
+}
+
+func newAuthServer() *auth.Server {
+	c := config.Conf.Lobby
+	if c.DiscordClientID == "" {
+		return nil
+	}
+	if c.APIAddr == "" || c.AuthPublicURL == "" || c.DiscordClientSecret == "" {
+		glog.Fatalln("ZDXSV_DISCORD_CLIENT_ID needs ZDXSV_LOBBY_API_ADDR, ZDXSV_AUTH_PUBLIC_URL and ZDXSV_DISCORD_CLIENT_SECRET")
+	}
+	p := auth.Discord(c.DiscordClientID, string(c.DiscordClientSecret))
+	if base := strings.TrimSuffix(c.AuthProviderURL, "/"); base != "" {
+		glog.Warningln("ZDXSV_AUTH_PROVIDER_URL set: sign-in goes to", base, "instead of Discord")
+		for _, u := range []*string{&p.AuthURL, &p.TokenURL, &p.UserURL} {
+			*u = strings.Replace(*u, "https://discord.com", base, 1)
+		}
+	}
+	glog.Infoln("Start auth", c.AuthPublicURL+"/auth/")
+	return &auth.Server{Provider: p, PublicURL: c.AuthPublicURL, Store: db.DefaultDB}
 }
 
 // mainRelayTest: `zdxsv relay <session id> <hex token>` runs only the GGPO relay on
