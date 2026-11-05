@@ -147,20 +147,20 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	loginKey := r.FormValue("login_key")
 	token := r.FormValue("token")
-	if (loginKey == "") == (token == "") {
-		http.Error(w, "login_key or token required", http.StatusBadRequest)
-		return
-	}
-	if token != "" {
-		key, err := db.DefaultDB.AuthTokenLoginKey(token)
-		if err != nil || key == "" {
-			glog.Errorln("token login refused", err)
-			http.Error(w, "login failed", http.StatusForbidden)
+	if token == "" {
+		if r.FormValue("login_key") != "" {
+			http.Error(w, "login by token only", http.StatusForbidden)
 			return
 		}
-		loginKey = key
+		http.Error(w, "token required", http.StatusBadRequest)
+		return
+	}
+	loginKey, err := db.DefaultDB.AuthTokenLoginKey(token)
+	if err != nil || loginKey == "" {
+		glog.Errorln("token login refused", err)
+		http.Error(w, "login failed", http.StatusForbidden)
+		return
 	}
 	a, err := loginAccount(loginKey)
 	if err != nil {
@@ -168,14 +168,12 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
-	gameKey := a.LoginKey
-	if token != "" {
-		// The emulator gets a key that the next token login replaces, never the account's own.
-		if gameKey, err = db.DefaultDB.RotateTempKey(a.LoginKey); err != nil {
-			glog.Errorln(err)
-			http.Error(w, "login failed", http.StatusInternalServerError)
-			return
-		}
+	// The emulator gets a key that the next token login replaces, never the account's own.
+	gameKey, err := db.DefaultDB.RotateTempKey(a.LoginKey)
+	if err != nil {
+		glog.Errorln(err)
+		http.Error(w, "login failed", http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(APILoginResponse{

@@ -32,8 +32,8 @@ const (
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
-//	POST /lbs/login (form login_key or token): logs in like the login server's /login, as JSON
-//	  (login.HandleAPILogin); a token login answers a temporary key that the next one replaces.
+//	POST /lbs/login (form token): logs in like the login server's /login, as JSON
+//	  (login.HandleAPILogin) and answers a temporary key that the next one replaces.
 //	/auth/*: emulator sign-in (Auth).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
