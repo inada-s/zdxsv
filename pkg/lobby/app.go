@@ -129,6 +129,7 @@ type App struct {
 
 	aliveCheckInterval time.Duration
 	relayProv          *relayProvisioning
+	carryCode          func(loginKey string) string
 }
 
 const (

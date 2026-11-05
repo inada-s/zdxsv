@@ -49,6 +49,12 @@ Optional:
   `GOOGLE_APPLICATION_CREDENTIALS`)
 - `ZDXSV_LOBBY_OPS_ADDR`: the private API for bans (`/ops/ban`, `/ops/unban`, `/ops/bans`,
   `/ops/accounts`); keep it on 127.0.0.1
+- Emulator sign-in with Discord: `ZDXSV_DISCORD_CLIENT_ID`, `ZDXSV_DISCORD_CLIENT_SECRET`,
+  `ZDXSV_AUTH_PUBLIC_URL` (e.g. `https://lbs.zdxsv.net:8443`; register
+  `<ZDXSV_AUTH_PUBLIC_URL>/auth/discord/callback` as the Discord app's redirect). Serves `/auth/*`
+  on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
+  `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (10 min, single
+  use) that links an existing account at sign-in.
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

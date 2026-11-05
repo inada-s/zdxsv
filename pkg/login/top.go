@@ -148,9 +148,19 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loginKey := r.FormValue("login_key")
-	if loginKey == "" {
-		http.Error(w, "login_key required", http.StatusBadRequest)
+	token := r.FormValue("token")
+	if (loginKey == "") == (token == "") {
+		http.Error(w, "login_key or token required", http.StatusBadRequest)
 		return
+	}
+	if token != "" {
+		key, err := db.DefaultDB.AuthTokenLoginKey(token)
+		if err != nil || key == "" {
+			glog.Errorln("token login refused", err)
+			http.Error(w, "login failed", http.StatusForbidden)
+			return
+		}
+		loginKey = key
 	}
 	a, err := loginAccount(loginKey)
 	if err != nil {
@@ -158,9 +168,18 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
+	gameKey := a.LoginKey
+	if token != "" {
+		// The emulator gets a key that the next token login replaces, never the account's own.
+		if gameKey, err = db.DefaultDB.RotateTempKey(a.LoginKey); err != nil {
+			glog.Errorln(err)
+			http.Error(w, "login failed", http.StatusInternalServerError)
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(APILoginResponse{
-		LoginKey:  a.LoginKey,
+		LoginKey:  gameKey,
 		SessionID: a.SessionID,
 		LobbyAddr: config.Conf.Lobby.PublicAddr,
 		LbsInfo:   LbsInfo,

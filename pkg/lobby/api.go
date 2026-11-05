@@ -32,7 +32,9 @@ const (
 //	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
-//	POST /lbs/login (form login_key): logs in like the login server's /login, as JSON (login.HandleAPILogin).
+//	POST /lbs/login (form login_key or token): logs in like the login server's /login, as JSON
+//	  (login.HandleAPILogin); a token login answers a temporary key that the next one replaces.
+//	/auth/*: emulator sign-in (Auth).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
 type APIHandler struct {
@@ -49,6 +51,8 @@ type APIHandler struct {
 	SetReplayURL func(battleCode, url string) error
 	// ReplayPlayed counts a play (db.DefaultDB.IncrementReplayPlayCount when nil).
 	ReplayPlayed func(battleCode string) error
+	// Auth serves /auth/ (emulator sign-in, auth.Server), off when nil.
+	Auth http.Handler
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -56,6 +60,10 @@ type APIHandler struct {
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
+		h.Auth.ServeHTTP(w, r)
+		return
+	}
 	if r.URL.Path == "/lbs/live" {
 		h.serveLive(w)
 		return
