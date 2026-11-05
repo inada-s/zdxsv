@@ -12,9 +12,12 @@ import (
 )
 
 var (
-	ErrIdentityTaken = errors.New("the identity already has an account")
+	ErrIdentityFull  = errors.New("the identity has the most accounts")
 	ErrAccountLinked = errors.New("the account is already linked")
 )
+
+// MaxIdentityAccounts is how many accounts one provider identity can hold.
+const MaxIdentityAccounts = 5
 
 const tempKeyTries = 8
 
@@ -41,13 +44,65 @@ func (db SQLiteDB) GetAccountByLoginOrTempKey(key string) (*Account, error) {
 }
 
 func (db SQLiteDB) IdentityLoginKey(provider, providerUserID string) (string, error) {
-	var key string
-	err := db.QueryRow("SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ?",
-		provider, providerUserID).Scan(&key)
-	if err == sql.ErrNoRows {
-		return "", nil
+	keys, err := identityKeys(db.DB, provider, providerUserID)
+	if err != nil || len(keys) == 0 {
+		return "", err
 	}
-	return key, err
+	return keys[0], nil
+}
+
+type querier interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+}
+
+func identityKeys(q querier, provider, providerUserID string) ([]string, error) {
+	rows, err := q.Query("SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ? ORDER BY created, rowid",
+		provider, providerUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+func (db SQLiteDB) TokenAccounts(token string) (string, []string, error) {
+	key, err := db.AuthTokenLoginKey(token)
+	if err != nil || key == "" {
+		return "", nil, err
+	}
+	var provider, uid string
+	err = db.QueryRow("SELECT provider, provider_user_id FROM auth_identity WHERE login_key = ?", key).Scan(&provider, &uid)
+	if err == sql.ErrNoRows {
+		return key, []string{key}, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	keys, err := identityKeys(db.DB, provider, uid)
+	if err != nil {
+		return "", nil, err
+	}
+	return key, keys, nil
+}
+
+func (db SQLiteDB) AddTokenAccount(token, ip string) (*Account, error) {
+	key, err := db.AuthTokenLoginKey(token)
+	if err != nil {
+		return nil, err
+	}
+	var provider, uid string
+	if err := db.QueryRow("SELECT provider, provider_user_id FROM auth_identity WHERE login_key = ?", key).Scan(&provider, &uid); err != nil {
+		return nil, err
+	}
+	return db.RegisterIdentityAccount(provider, uid, ip)
 }
 
 func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) (*Account, error) {
@@ -61,8 +116,8 @@ func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) 
 		provider, providerUserID).Scan(&n); err != nil {
 		return nil, err
 	}
-	if n > 0 {
-		return nil, ErrIdentityTaken
+	if n >= MaxIdentityAccounts {
+		return nil, ErrIdentityFull
 	}
 	key := genLoginKey()
 	now := time.Now()
@@ -91,8 +146,8 @@ func (db SQLiteDB) LinkIdentity(provider, providerUserID, loginKey string) error
 		provider, providerUserID).Scan(&n); err != nil {
 		return err
 	}
-	if n > 0 {
-		return ErrIdentityTaken
+	if n >= MaxIdentityAccounts {
+		return ErrIdentityFull
 	}
 	if err := tx.QueryRow("SELECT COUNT(*) FROM auth_identity WHERE login_key = ?", loginKey).Scan(&n); err != nil {
 		return err

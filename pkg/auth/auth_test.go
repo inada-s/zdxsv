@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -132,7 +133,15 @@ func (r *rig) token(code, v string) (string, int) {
 }
 
 func (r *rig) lbsLogin(token string) (login.APILoginResponse, int) {
-	resp, err := http.PostForm(r.site.URL+"/lbs/login", url.Values{"token": {token}})
+	return r.lbsLoginAs(token, "")
+}
+
+func (r *rig) lbsLoginAs(token, account string) (login.APILoginResponse, int) {
+	v := url.Values{"token": {token}}
+	if account != "" {
+		v.Set("account", account)
+	}
+	resp, err := http.PostForm(r.site.URL+"/lbs/login", v)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -224,11 +233,103 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 		t.Fatal("linked account linked twice", st)
 	}
 	other, _ := db.DefaultDB.RegisterAccount("198.51.100.9")
-	if _, st := r.signIn("2222", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusForbidden {
-		t.Fatal("identity linked to a second account", st)
+	if _, st := r.signIn("2222", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusFound {
+		t.Fatal("identity refused a second account", st)
+	}
+	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got.LoginKey) != other.LoginKey {
+		t.Fatalf("carried second account %d %+v", st, got)
 	}
 	if k, _ := db.DefaultDB.IdentityLoginKey("discord", "4444"); k != "" {
 		t.Fatal("failed carry registered an account", k)
+	}
+}
+
+func mustAccount(t *testing.T, gameKey string) string {
+	a, err := db.DefaultDB.GetAccountByLoginOrTempKey(gameKey)
+	if err != nil {
+		t.Fatal("no account for", gameKey, err)
+	}
+	return a.LoginKey
+}
+
+type accountList struct {
+	Accounts []struct {
+		Account int
+		Users   []string
+	}
+	Default, Max, Added int
+}
+
+func (r *rig) accounts(path, token string) (accountList, int) {
+	resp, err := http.PostForm(r.site.URL+path, url.Values{"token": {token}})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got accountList
+	json.NewDecoder(resp.Body).Decode(&got)
+	return got, resp.StatusCode
+}
+
+func TestAccountsUpToMax(t *testing.T) {
+	r := newRig(t)
+	code, _ := r.signIn("5555", "")
+	token, _ := r.token(code, verifier)
+	list, st := r.accounts("/auth/accounts", token)
+	if st != 200 || len(list.Accounts) != 1 || list.Default != 1 || list.Max != db.MaxIdentityAccounts {
+		t.Fatalf("list %d %+v", st, list)
+	}
+	keys := map[string]int{}
+	for n := 2; n <= db.MaxIdentityAccounts; n++ {
+		list, st = r.accounts("/auth/accounts/add", token)
+		if st != 200 || list.Added != n || len(list.Accounts) != n || list.Default != 1 {
+			t.Fatalf("add %d: %d %+v", n, st, list)
+		}
+	}
+	if _, st := r.accounts("/auth/accounts/add", token); st != http.StatusConflict {
+		t.Fatal("account past the cap", st)
+	}
+	code, _ = r.signIn("5555", "")
+	if _, st := r.token(code, verifier); st != 200 {
+		t.Fatal("full identity cannot sign in", st)
+	}
+	for n := 1; n <= db.MaxIdentityAccounts; n++ {
+		got, st := r.lbsLoginAs(token, strconv.Itoa(n))
+		a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(got.LoginKey)
+		if st != 200 || a == nil {
+			t.Fatalf("login account %d: %d", n, st)
+		}
+		keys[a.LoginKey] = n
+	}
+	if len(keys) != db.MaxIdentityAccounts {
+		t.Fatal("accounts not distinct", keys)
+	}
+	first, _ := r.lbsLogin(token)
+	if a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(first.LoginKey); a == nil || keys[a.LoginKey] != 1 {
+		t.Fatal("no account given: not the default one")
+	}
+	for _, bad := range []string{"0", "6", "x", "-1"} {
+		if _, st := r.lbsLoginAs(token, bad); st != http.StatusForbidden {
+			t.Fatal("account", bad, st)
+		}
+	}
+	if _, st := r.accounts("/auth/accounts", "nope"); st != http.StatusForbidden {
+		t.Fatal("unknown token listed", st)
+	}
+
+	code, _ = r.signIn("6666", "")
+	other, _ := r.token(code, verifier)
+	otherList, _ := r.accounts("/auth/accounts", other)
+	if len(otherList.Accounts) != 1 {
+		t.Fatal("identities share accounts", otherList)
+	}
+	key, _ := db.DefaultDB.IdentityLoginKey("discord", "6666")
+	u, _ := db.DefaultDB.RegisterUser(key)
+	if err := db.DefaultDB.AddBan(&db.Ban{Kind: db.BanUser, Value: u.UserID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, st := r.accounts("/auth/accounts/add", other); st != http.StatusForbidden {
+		t.Fatal("banned identity added an account", st)
 	}
 }
 

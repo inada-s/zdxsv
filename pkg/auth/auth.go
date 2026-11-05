@@ -6,6 +6,10 @@
 //	GET  /auth/discord/callback: the provider's redirect; ends at http://127.0.0.1:P/callback?code=X&state=S.
 //	POST /auth/token (form code, code_verifier): {"token": T}, the emulator's token for /lbs/login.
 //	POST /auth/revoke (form token): deletes the token.
+//	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...]}], "default": N, "max": M},
+//	     the accounts of the token's identity; /lbs/login takes account=N, without it "default".
+//	POST /auth/accounts/add (form token): creates another account of the identity, answers the same
+//	     with "added": N; 409 when it holds max, 403 when one of them is banned.
 package auth
 
 import (
@@ -68,6 +72,10 @@ type Store interface {
 	LinkIdentity(provider, providerUserID, loginKey string) error
 	IssueAuthToken(loginKey string) (string, error)
 	RevokeAuthToken(token string) error
+	TokenAccounts(token string) (string, []string, error)
+	AddTokenAccount(token, ip string) (*db.Account, error)
+	GetUserList(loginKey string) ([]*db.User, error)
+	FindBan(loginKey, ip, machineID string) (*db.Ban, error)
 }
 
 type flow struct {
@@ -182,6 +190,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveToken(w, r)
 	case "/auth/revoke":
 		s.serveRevoke(w, r)
+	case "/auth/accounts":
+		s.serveAccounts(w, r, false)
+	case "/auth/accounts/add":
+		s.serveAccounts(w, r, true)
 	default:
 		http.NotFound(w, r)
 	}
@@ -314,8 +326,8 @@ func (s *Server) account(f *flow, userID, ip string) (string, func(*page) string
 		case err == nil:
 			glog.Infoln("auth: linked", s.Provider.Name, userID, c.loginKey)
 			return c.loginKey, nil
-		case errors.Is(err, db.ErrIdentityTaken):
-			return "", func(p *page) string { return p.IdentityTaken }
+		case errors.Is(err, db.ErrIdentityFull):
+			return "", func(p *page) string { return p.IdentityFull }
 		case errors.Is(err, db.ErrAccountLinked):
 			return "", func(p *page) string { return p.AccountLinked }
 		}
@@ -424,4 +436,71 @@ func (s *Server) serveRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type accountEntry struct {
+	Account int      `json:"account"`
+	Users   []string `json:"users"`
+}
+
+func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, add bool) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token := r.FormValue("token")
+	key, keys, err := s.Store.TokenAccounts(token)
+	if err != nil || key == "" {
+		http.Error(w, "unknown token", http.StatusForbidden)
+		return
+	}
+	added := 0
+	if add {
+		for _, k := range keys {
+			if ban, err := s.Store.FindBan(k, "", ""); err != nil || ban != nil {
+				http.Error(w, "banned", http.StatusForbidden)
+				return
+			}
+		}
+		a, err := s.Store.AddTokenAccount(token, clientIP(r))
+		switch {
+		case errors.Is(err, db.ErrIdentityFull):
+			http.Error(w, "too many accounts", http.StatusConflict)
+			return
+		case err != nil:
+			glog.Errorln("auth add account:", err)
+			http.Error(w, "", http.StatusForbidden)
+			return
+		}
+		glog.Infoln("auth: added account", a.LoginKey)
+		if key, keys, err = s.Store.TokenAccounts(token); err != nil {
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+		for i, k := range keys {
+			if k == a.LoginKey {
+				added = i + 1
+			}
+		}
+	}
+	res := struct {
+		Accounts []accountEntry `json:"accounts"`
+		Default  int            `json:"default"`
+		Max      int            `json:"max"`
+		Added    int            `json:"added,omitempty"`
+	}{Accounts: []accountEntry{}, Max: db.MaxIdentityAccounts, Added: added}
+	for i, k := range keys {
+		e := accountEntry{Account: i + 1, Users: []string{}}
+		users, _ := s.Store.GetUserList(k)
+		for _, u := range users {
+			e.Users = append(e.Users, u.Name)
+		}
+		res.Accounts = append(res.Accounts, e)
+		if k == key {
+			res.Default = i + 1
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(res)
 }

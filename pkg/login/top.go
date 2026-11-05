@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"text/template"
 
 	"zdxsv/pkg/assets"
@@ -156,7 +157,14 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token required", http.StatusBadRequest)
 		return
 	}
-	loginKey, err := db.DefaultDB.AuthTokenLoginKey(token)
+	loginKey, keys, err := db.DefaultDB.TokenAccounts(token)
+	if n := r.FormValue("account"); err == nil && n != "" {
+		if i, e := strconv.Atoi(n); e == nil && 1 <= i && i <= len(keys) {
+			loginKey = keys[i-1]
+		} else {
+			loginKey = ""
+		}
+	}
 	if err != nil || loginKey == "" {
 		glog.Errorln("token login refused", err)
 		http.Error(w, "login failed", http.StatusForbidden)
