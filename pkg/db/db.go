@@ -190,20 +190,25 @@ type DB interface {
 	// IdentityLoginKey returns the first login key linked to a provider identity, "" when none.
 	IdentityLoginKey(provider, providerUserID string) (string, error)
 	// RegisterIdentityAccount creates an account linked to a provider identity;
-	// ErrIdentityFull when it holds MaxIdentityAccounts.
+	// ErrIdentityFull when it made MaxIdentityNewAccounts.
 	RegisterIdentityAccount(provider, providerUserID, ip string) (*Account, error)
-	// LinkIdentity links a provider identity to an existing account; ErrIdentityFull when the
-	// identity holds MaxIdentityAccounts, ErrAccountLinked when the account has a link.
+	// LinkIdentity links a provider identity to an existing account (carried over); ErrCarryFull when
+	// the identity carried MaxIdentityCarriedAccounts, ErrAccountLinked when the account has a link.
 	LinkIdentity(provider, providerUserID, loginKey string) error
-	// TokenAccounts returns the token's login key ("" when unknown or revoked) and the keys of
-	// its identity in the order they were linked; just the token's key when it has none.
+	// AccountCarried tells whether the account was carried over to its identity.
+	AccountCarried(loginKey string) (bool, error)
+	// AccountBattleCount is the battle count summed over the account's users.
+	AccountBattleCount(loginKey string) (int, error)
+	// TokenAccounts returns the token's default login key and the keys of its identity in the
+	// order they were linked. The default is the account the token was issued for, else the first;
+	// "" when the identity has none. ErrUnknownToken when unknown or revoked.
 	TokenAccounts(token string) (string, []string, error)
-	// AddTokenAccount creates another account for the identity of the token's account.
+	// AddTokenAccount creates another account for the token's identity.
 	AddTokenAccount(token, ip string) (*Account, error)
-	// IssueAuthToken stores a new emulator token for the account and returns it.
-	IssueAuthToken(loginKey string) (string, error)
-	// AuthTokenLoginKey returns the login key of a token, "" when unknown or revoked.
-	AuthTokenLoginKey(token string) (string, error)
+	// CarryTokenAccount links an existing account to the token's identity (see LinkIdentity).
+	CarryTokenAccount(token, loginKey string) error
+	// IssueAuthToken stores a new emulator token for a provider identity and returns it.
+	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
 	// RotateTempKey replaces the account's temporary key and returns the new one.
 	RotateTempKey(loginKey string) (string, error)

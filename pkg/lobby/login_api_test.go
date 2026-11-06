@@ -22,11 +22,11 @@ func TestAPILogin(t *testing.T) {
 	ts := httptest.NewServer(&APIHandler{})
 	t.Cleanup(ts.Close)
 
-	registered, err := db.DefaultDB.RegisterAccount("198.51.100.8")
+	registered, err := db.DefaultDB.RegisterIdentityAccount("discord", "7777", "198.51.100.8")
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := db.DefaultDB.IssueAuthToken(registered.LoginKey)
+	token, err := db.DefaultDB.IssueAuthToken("discord", "7777")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestAPILogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := login.APILoginResponse{LoginKey: a.TempKey.String, SessionID: a.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo}
+	want := login.APILoginResponse{LoginKey: a.TempKey.String, SessionID: a.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo, Account: 1}
 	if a.SessionID == "" || a.TempKey.String == "" || got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

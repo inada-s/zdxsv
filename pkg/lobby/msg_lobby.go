@@ -147,10 +147,10 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 
 var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	str := m.Reader().ReadEncryptedString()
-	if p.Lobby != nil && lobbyChatCarry(p, str) {
-		return
-	}
 	if p.Lobby != nil && p.Lobby.ID == 1 {
+		if lobbyChatCarry(p, str) {
+			return
+		}
 		LobbyChatHack(p, str)
 	}
 	p.app.OnSendChatMessage(p, str)

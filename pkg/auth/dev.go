@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -48,4 +49,20 @@ func (s *Server) serveDevAuthorize(w http.ResponseWriter, r *http.Request) {
 		State:    state,
 		Deny:     s.redirectURI() + "?" + url.Values{"error": {"access_denied"}, "state": {state}}.Encode(),
 	})
+}
+
+// serveDevCarry (POST) stands in for the lobby chat ｄｃ of a PS2: it makes a new account, as a PS2
+// registration does, and answers {"code": C, "login_key": K} with a carry-over code for it.
+func (s *Server) serveDevCarry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a, err := s.Store.RegisterAccount(clientIP(r))
+	if err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"code": s.IssueCarryCode(a.LoginKey), "login_key": a.LoginKey})
 }

@@ -1,15 +1,21 @@
 // Package auth signs emulators in through an OAuth provider (Discord).
 //
-//	GET  /auth/start?redirect_port=P&state=S&code_challenge=C[&carry=K][&lang=ja|en|zh-TW]:
-//	     a notice page with the provider button. C is the PKCE S256 challenge; K a carry-over
-//	     code that links the provider identity to the account that asked for it.
+//	GET  /auth/start?redirect_port=P&state=S&code_challenge=C[&lang=ja|en|zh-TW]:
+//	     a notice page with the provider button. C is the PKCE S256 challenge.
 //	GET  /auth/discord/callback: the provider's redirect; ends at http://127.0.0.1:P/callback?code=X&state=S.
-//	POST /auth/token (form code, code_verifier): {"token": T}, the emulator's token for /lbs/login.
+//	POST /auth/token (form code, code_verifier): {"token": T}, the emulator's token of the provider
+//	     identity, for /lbs/login. A sign-in creates no account: the identity may hold none.
 //	POST /auth/revoke (form token): deletes the token.
-//	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...]}], "default": N, "max": M},
-//	     the accounts of the token's identity; /lbs/login takes account=N, without it "default".
-//	POST /auth/accounts/add (form token): creates another account of the identity, answers the same
-//	     with "added": N; 409 when it holds max, 403 when one of them is banned.
+//	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...], "carried": B}], "default": N,
+//	     "max_new": A, "max_carried": C},
+//	     the accounts of the token's identity; /lbs/login takes account=N, without it "default", and
+//	     account=new makes the identity's account at that login (409 past max_new, 403 banned);
+//	     the identity's first login with no account makes one too.
+//	     "default" is 0 while the identity holds no account.
+//	POST /auth/accounts/carry (form token, code): links the account of a carry-over code (lobby chat
+//	     ｄｃ on a PS2) to the identity, answers the same with "added": N; 400 a wrong or expired
+//	     code, 429 after too many wrong codes, 409 the identity carried max_carried, 422 the account is
+//	     linked already, 403 banned.
 package auth
 
 import (
@@ -37,7 +43,7 @@ import (
 const (
 	flowTTL        = 10 * time.Minute
 	codeTTL        = 2 * time.Minute
-	carryTTL       = 10 * time.Minute
+	carryTTL       = 3 * time.Minute
 	carryMaxMisses = 5
 	maxPending     = 10000
 )
@@ -68,13 +74,12 @@ func Discord(clientID, clientSecret string) Provider {
 
 // Store is the part of db.DB the sign-in uses.
 type Store interface {
-	IdentityLoginKey(provider, providerUserID string) (string, error)
-	RegisterIdentityAccount(provider, providerUserID, ip string) (*db.Account, error)
-	LinkIdentity(provider, providerUserID, loginKey string) error
-	IssueAuthToken(loginKey string) (string, error)
+	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
 	TokenAccounts(token string) (string, []string, error)
-	AddTokenAccount(token, ip string) (*db.Account, error)
+	CarryTokenAccount(token, loginKey string) error
+	RegisterAccount(ip string) (*db.Account, error)
+	AccountCarried(loginKey string) (bool, error)
 	GetUserList(loginKey string) ([]*db.User, error)
 	FindBan(loginKey string) (*db.MasterBan, error)
 }
@@ -83,12 +88,11 @@ type flow struct {
 	port      int
 	state     string
 	challenge string
-	carry     string
 	expires   time.Time
 }
 
 type issued struct {
-	loginKey  string
+	userID    string
 	challenge string
 	expires   time.Time
 }
@@ -137,7 +141,7 @@ func randomString(n int) string {
 
 const carryAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-// IssueCarryCode returns a single use code that links the next sign-in to loginKey.
+// IssueCarryCode returns a single use code that links loginKey to a signed-in identity.
 func (s *Server) IssueCarryCode(loginKey string) string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
@@ -192,15 +196,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/auth/revoke":
 		s.serveRevoke(w, r)
 	case "/auth/accounts":
-		s.serveAccounts(w, r, false)
-	case "/auth/accounts/add":
-		s.serveAccounts(w, r, true)
+		s.serveAccounts(w, r, accountsList)
+	case "/auth/accounts/carry":
+		s.serveAccounts(w, r, accountsCarry)
 	case "/auth/dev/authorize":
 		if !s.Provider.dev {
 			http.NotFound(w, r)
 			return
 		}
 		s.serveDevAuthorize(w, r)
+	case "/auth/dev/carry":
+		if !s.Provider.dev {
+			http.NotFound(w, r)
+			return
+		}
+		s.serveDevCarry(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -223,8 +233,7 @@ func (s *Server) serveStart(w http.ResponseWriter, r *http.Request) {
 	port, err := strconv.Atoi(q.Get("redirect_port"))
 	state := q.Get("state")
 	challenge := q.Get("code_challenge")
-	carry := strings.ToUpper(strings.TrimSpace(q.Get("carry")))
-	if err != nil || port < 1024 || port > 65535 || state == "" || len(state) > 128 || !validChallenge(challenge) || len(carry) > 16 {
+	if err != nil || port < 1024 || port > 65535 || state == "" || len(state) > 128 || !validChallenge(challenge) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -239,7 +248,7 @@ func (s *Server) serveStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "busy", http.StatusServiceUnavailable)
 		return
 	}
-	s.flows[id] = &flow{port: port, state: state, challenge: challenge, carry: carry, expires: s.now().Add(flowTTL)}
+	s.flows[id] = &flow{port: port, state: state, challenge: challenge, expires: s.now().Add(flowTTL)}
 	s.mu.Unlock()
 
 	v := url.Values{
@@ -252,7 +261,6 @@ func (s *Server) serveStart(w http.ResponseWriter, r *http.Request) {
 	}
 	p := pageText(pickLang(r))
 	p.ProviderURL = s.Provider.AuthURL + "?" + v.Encode()
-	p.Carry = carry != ""
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	tplStart.Execute(w, p)
@@ -294,68 +302,15 @@ func (s *Server) serveCallback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, func(p *page) string { return p.ProviderError })
 		return
 	}
-	loginKey, msg := s.account(f, userID, clientIP(r))
-	if msg != nil {
-		s.fail(w, r, msg)
-		return
-	}
 	code := randomString(24)
 	s.mu.Lock()
 	if s.codes == nil {
 		s.codes = map[string]*issued{}
 	}
-	s.codes[code] = &issued{loginKey: loginKey, challenge: f.challenge, expires: s.now().Add(codeTTL)}
+	s.codes[code] = &issued{userID: userID, challenge: f.challenge, expires: s.now().Add(codeTTL)}
 	s.mu.Unlock()
 	back := url.Values{"code": {code}, "state": {f.state}}
 	http.Redirect(w, r, fmt.Sprintf("http://127.0.0.1:%d/callback?%s", f.port, back.Encode()), http.StatusFound)
-}
-
-func (s *Server) account(f *flow, userID, ip string) (string, func(*page) string) {
-	if f.carry != "" {
-		s.mu.Lock()
-		if s.misses[ip] >= carryMaxMisses {
-			s.mu.Unlock()
-			return "", func(p *page) string { return p.CarryLocked }
-		}
-		c := s.carry[f.carry]
-		delete(s.carry, f.carry)
-		if c == nil || s.now().After(c.expires) {
-			if s.misses == nil {
-				s.misses = map[string]int{}
-			}
-			s.misses[ip]++
-			s.mu.Unlock()
-			return "", func(p *page) string { return p.CarryBad }
-		}
-		s.mu.Unlock()
-		err := s.Store.LinkIdentity(s.Provider.Name, userID, c.loginKey)
-		switch {
-		case err == nil:
-			glog.Infoln("auth: linked", s.Provider.Name, userID, c.loginKey)
-			return c.loginKey, nil
-		case errors.Is(err, db.ErrIdentityFull):
-			return "", func(p *page) string { return p.IdentityFull }
-		case errors.Is(err, db.ErrAccountLinked):
-			return "", func(p *page) string { return p.AccountLinked }
-		}
-		glog.Errorln("auth link:", err)
-		return "", func(p *page) string { return p.ProviderError }
-	}
-	key, err := s.Store.IdentityLoginKey(s.Provider.Name, userID)
-	if err != nil {
-		glog.Errorln("auth identity:", err)
-		return "", func(p *page) string { return p.ProviderError }
-	}
-	if key != "" {
-		return key, nil
-	}
-	a, err := s.Store.RegisterIdentityAccount(s.Provider.Name, userID, ip)
-	if err != nil {
-		glog.Errorln("auth register:", err)
-		return "", func(p *page) string { return p.ProviderError }
-	}
-	glog.Infoln("auth: registered", s.Provider.Name, userID, a.LoginKey)
-	return a.LoginKey, nil
 }
 
 func (s *Server) providerUser(code string) (string, error) {
@@ -422,7 +377,7 @@ func (s *Server) serveToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid_grant", http.StatusBadRequest)
 		return
 	}
-	token, err := s.Store.IssueAuthToken(c.loginKey)
+	token, err := s.Store.IssueAuthToken(s.Provider.Name, c.userID)
 	if err != nil {
 		glog.Errorln("auth token:", err)
 		http.Error(w, "", http.StatusInternalServerError)
@@ -454,56 +409,54 @@ func (s *Server) serveRevoke(w http.ResponseWriter, r *http.Request) {
 type accountEntry struct {
 	Account int      `json:"account"`
 	Users   []string `json:"users"`
+	Carried bool     `json:"carried"`
 }
 
-func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, add bool) {
+type accountsOp int
+
+const (
+	accountsList accountsOp = iota
+	accountsCarry
+)
+
+func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, op accountsOp) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	token := r.FormValue("token")
 	key, keys, err := s.Store.TokenAccounts(token)
-	if err != nil || key == "" {
+	if err != nil {
 		http.Error(w, "unknown token", http.StatusForbidden)
 		return
 	}
-	added := 0
-	if add {
+	added := ""
+	if op != accountsList {
 		for _, k := range keys {
 			if ban, err := s.Store.FindBan(k); err != nil || ban != nil {
 				http.Error(w, "banned", http.StatusForbidden)
 				return
 			}
 		}
-		a, err := s.Store.AddTokenAccount(token, clientIP(r))
-		switch {
-		case errors.Is(err, db.ErrIdentityFull):
-			http.Error(w, "too many accounts", http.StatusConflict)
-			return
-		case err != nil:
-			glog.Errorln("auth add account:", err)
-			http.Error(w, "", http.StatusForbidden)
+		added = s.carryAccount(w, r, token)
+		if added == "" {
 			return
 		}
-		glog.Infoln("auth: added account", a.LoginKey)
 		if key, keys, err = s.Store.TokenAccounts(token); err != nil {
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		for i, k := range keys {
-			if k == a.LoginKey {
-				added = i + 1
-			}
-		}
 	}
 	res := struct {
-		Accounts []accountEntry `json:"accounts"`
-		Default  int            `json:"default"`
-		Max      int            `json:"max"`
-		Added    int            `json:"added,omitempty"`
-	}{Accounts: []accountEntry{}, Max: db.MaxIdentityAccounts, Added: added}
+		Accounts   []accountEntry `json:"accounts"`
+		Default    int            `json:"default"`
+		MaxNew     int            `json:"max_new"`
+		MaxCarried int            `json:"max_carried"`
+		Added      int            `json:"added,omitempty"`
+	}{Accounts: []accountEntry{}, MaxNew: db.MaxIdentityNewAccounts, MaxCarried: db.MaxIdentityCarriedAccounts}
 	for i, k := range keys {
 		e := accountEntry{Account: i + 1, Users: []string{}}
+		e.Carried, _ = s.Store.AccountCarried(k)
 		users, _ := s.Store.GetUserList(k)
 		for _, u := range users {
 			e.Users = append(e.Users, u.Name)
@@ -512,8 +465,53 @@ func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, add bool)
 		if k == key {
 			res.Default = i + 1
 		}
+		if k == added {
+			res.Added = i + 1
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(res)
+}
+
+// carryAccount returns the carried account's login key, or "" after answering the error.
+func (s *Server) carryAccount(w http.ResponseWriter, r *http.Request, token string) string {
+	ip := clientIP(r)
+	code := strings.ToUpper(strings.TrimSpace(r.FormValue("code")))
+	s.mu.Lock()
+	if s.misses[ip] >= carryMaxMisses {
+		s.mu.Unlock()
+		http.Error(w, "too many wrong codes", http.StatusTooManyRequests)
+		return ""
+	}
+	c := s.carry[code]
+	delete(s.carry, code)
+	if c == nil || s.now().After(c.expires) {
+		if s.misses == nil {
+			s.misses = map[string]int{}
+		}
+		s.misses[ip]++
+		s.mu.Unlock()
+		http.Error(w, "wrong or expired code", http.StatusBadRequest)
+		return ""
+	}
+	s.mu.Unlock()
+	if ban, err := s.Store.FindBan(c.loginKey); err != nil || ban != nil {
+		http.Error(w, "banned", http.StatusForbidden)
+		return ""
+	}
+	switch err := s.Store.CarryTokenAccount(token, c.loginKey); {
+	case errors.Is(err, db.ErrCarryFull):
+		http.Error(w, "too many carried accounts", http.StatusConflict)
+		return ""
+	case errors.Is(err, db.ErrAccountLinked):
+		http.Error(w, "account linked already", http.StatusUnprocessableEntity)
+		return ""
+	case err != nil:
+		glog.Errorln("auth carry:", err)
+		http.Error(w, "", http.StatusForbidden)
+		return ""
+	}
+	glog.Infoln("auth: carried account", c.loginKey)
+	return c.loginKey
 }

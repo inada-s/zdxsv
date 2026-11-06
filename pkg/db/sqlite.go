@@ -55,12 +55,15 @@ CREATE TABLE IF NOT EXISTS auth_identity (
 	provider text,
 	provider_user_id text,
 	login_key text,
+	carried integer default 0,
 	created timestamp,
 	PRIMARY KEY (login_key)
 );
 CREATE TABLE IF NOT EXISTS auth_token (
 	token_hash text,
-	login_key text,
+	login_key text default '',
+	provider text default '',
+	provider_user_id text default '',
 	created timestamp,
 	PRIMARY KEY (token_hash)
 );
