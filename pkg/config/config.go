@@ -125,14 +125,13 @@ type DBConfig struct {
 	Name string `env:"ZDXSV_DB_NAME"`
 }
 
-// TLSConfig is the emulators' TLS ports, one beside each plain TCP port (the client maps
-// 8200 and 8210 to them). CertFile holds the server certificate, then the CA
-// certificate (PEM); KeyFile the server key. Both empty: no TLS ports.
+// TLSConfig is the emulators' TLS lobby port, beside the plain one (the client maps
+// 8200 to it). CertFile holds the server certificate, then the CA
+// certificate (PEM); KeyFile the server key. Both empty: no TLS port.
 type TLSConfig struct {
-	CertFile   string `env:"ZDXSV_TLS_CERT_FILE"`
-	KeyFile    string `env:"ZDXSV_TLS_KEY_FILE"`
-	LobbyAddr  string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8221"`
-	BattleAddr string `env:"ZDXSV_BATTLE_TLS_ADDR" envDefault:":8222"`
+	CertFile  string `env:"ZDXSV_TLS_CERT_FILE"`
+	KeyFile   string `env:"ZDXSV_TLS_KEY_FILE"`
+	LobbyAddr string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8221"`
 }
 
 // RelayConfig is a regional relay (`zdxsv relay`): it relays on Addr, offered to players at
