@@ -20,7 +20,7 @@ type page struct {
 	ProviderError string
 	CarryBad      string
 	CarryLocked   string
-	IdentityTaken string
+	IdentityFull  string
 	AccountLinked string
 }
 
@@ -40,7 +40,7 @@ var pages = map[string]page{
 		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
 		CarryBad:      "引き継ぎコードが正しくないか、期限切れです。ロビーで新しいコードを発行してください。",
 		CarryLocked:   "引き継ぎコードの失敗が多すぎます。しばらくしてからやり直してください。",
-		IdentityTaken: "この Discord アカウントには別の ZDXSV アカウントが結び付いています。",
+		IdentityFull:  "この Discord アカウントにはすでに 5 つの ZDXSV アカウントが結び付いています。",
 		AccountLinked: "このアカウントはすでに Discord アカウントに結び付いています。",
 	},
 	"en": {
@@ -58,7 +58,7 @@ var pages = map[string]page{
 		ProviderError: "The sign-in failed. Try again later.",
 		CarryBad:      "The carry-over code is wrong or expired. Get a new one in the lobby.",
 		CarryLocked:   "Too many wrong carry-over codes. Try again later.",
-		IdentityTaken: "This Discord account already has another ZDXSV account.",
+		IdentityFull:  "This Discord account already has 5 ZDXSV accounts.",
 		AccountLinked: "This account is already linked to a Discord account.",
 	},
 	"zh-TW": {
@@ -76,7 +76,7 @@ var pages = map[string]page{
 		ProviderError: "登入失敗，請稍後再試。",
 		CarryBad:      "引繼碼錯誤或已過期，請在大廳重新取得。",
 		CarryLocked:   "引繼碼錯誤次數過多，請稍後再試。",
-		IdentityTaken: "此 Discord 帳號已連結其他 ZDXSV 帳號。",
+		IdentityFull:  "此 Discord 帳號已連結 5 個 ZDXSV 帳號。",
 		AccountLinked: "此帳號已連結 Discord 帳號。",
 	},
 }

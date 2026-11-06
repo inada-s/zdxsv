@@ -69,6 +69,39 @@ func TestMigrateAddsReplayURL(t *testing.T) {
 	}
 }
 
+func TestMigrateIdentityHoldsManyKeys(t *testing.T) {
+	oldSchema := strings.Replace(schema, "PRIMARY KEY (login_key)\n);\nCREATE TABLE IF NOT EXISTS auth_token",
+		"PRIMARY KEY (provider, provider_user_id)\n);\nCREATE TABLE IF NOT EXISTS auth_token", 1)
+	oldIndexes := strings.Replace(indexes, "AUTH_IDENTITY_PROVIDER ON auth_identity(provider, provider_user_id)",
+		"AUTH_IDENTITY_LOGIN_KEY ON auth_identity(login_key)", 1)
+	if oldSchema == schema || oldIndexes == indexes {
+		t.Fatal("old auth_identity schema not rebuilt")
+	}
+	db := openSchemaDB(t, oldSchema+oldIndexes)
+	first, err := db.RegisterIdentityAccount("discord", "d1", "1.2.3.4")
+	must(t, err)
+	if _, err := db.Exec(`INSERT INTO auth_identity (provider, provider_user_id, login_key) VALUES ('discord', 'd1', 'x')`); err == nil {
+		t.Fatal("old schema took a second key")
+	}
+
+	must(t, db.Migrate())
+	assertIndexes(t, db)
+	key, err := db.IdentityLoginKey("discord", "d1")
+	must(t, err)
+	assertEq(t, first.LoginKey, key)
+	for i := 2; i <= MaxIdentityAccounts; i++ {
+		_, err := db.RegisterIdentityAccount("discord", "d1", "1.2.3.4")
+		must(t, err)
+	}
+	if _, err := db.RegisterIdentityAccount("discord", "d1", "1.2.3.4"); err != ErrIdentityFull {
+		t.Fatal("account past the cap", err)
+	}
+	keys, err := identityKeys(db.DB, "discord", "d1")
+	must(t, err)
+	assertEq(t, MaxIdentityAccounts, len(keys))
+	assertEq(t, first.LoginKey, keys[0])
+}
+
 func TestMigrateEmptyDB(t *testing.T) {
 	db := openSchemaDB(t, schemaBeforeReplayURL+indexes)
 	must(t, db.Migrate())
@@ -81,5 +114,5 @@ func assertIndexes(t *testing.T, db SQLiteDB) {
 	t.Helper()
 	var names []string
 	must(t, db.Select(&names, `SELECT name FROM sqlite_master WHERE name LIKE '%_tmp' OR type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name`))
-	assertEq(t, []string{"ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_LOGIN_KEY", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
+	assertEq(t, []string{"ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_PROVIDER", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
 }

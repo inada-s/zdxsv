@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS auth_identity (
 	provider_user_id text,
 	login_key text,
 	created timestamp,
-	PRIMARY KEY (provider, provider_user_id)
+	PRIMARY KEY (login_key)
 );
 CREATE TABLE IF NOT EXISTS auth_token (
 	token_hash text,
@@ -136,7 +136,7 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
 CREATE INDEX IF NOT EXISTS ACCOUNT_LAST_LOGIN_MACHINE_ID ON account(last_login_machine_id);
-CREATE INDEX IF NOT EXISTS AUTH_IDENTITY_LOGIN_KEY ON auth_identity(login_key);
+CREATE INDEX IF NOT EXISTS AUTH_IDENTITY_PROVIDER ON auth_identity(provider, provider_user_id);
 CREATE INDEX IF NOT EXISTS AUTH_TOKEN_LOGIN_KEY ON auth_token(login_key);
 `
 
