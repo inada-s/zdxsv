@@ -1,18 +1,17 @@
 # TLS for the emulators
 
-Emulators (pcsx2) reach lobby and battle through TLS ports beside the plain ones. Real PS2
-consoles cannot do TLS and keep the plain ports.
+Emulators (pcsx2) reach the lobby through a TLS port beside the plain one; the battle server has
+no TLS port. Real PS2 consoles cannot do TLS and keep the plain ports.
 
 | plain port | TLS port | env (TLS address) |
 |---|---|---|
 | 8200 (lobby) | 8221 | `ZDXSV_LOBBY_TLS_ADDR` |
-| 8210 (battle, TCP) | 8222 | `ZDXSV_BATTLE_TLS_ADDR` |
 
 The client maps the plain port to the TLS port itself, so a TLS port the client does not know is
 unreachable for it: change the defaults together with pcsx2's table.
 
-The ports open when `ZDXSV_TLS_CERT_FILE` (PEM: the server certificate, then the CA certificate)
-and `ZDXSV_TLS_KEY_FILE` (the server key) are set. Open the three ports in the firewall.
+The port opens when `ZDXSV_TLS_CERT_FILE` (PEM: the server certificate, then the CA certificate)
+and `ZDXSV_TLS_KEY_FILE` (the server key) are set. Open it in the firewall.
 
 ## Trust
 
@@ -73,4 +72,4 @@ Check from anywhere: `zdxsv tlscheck <host>:8221 <CA pin>` (lobby, prints the ch
 
 `pkg/tlsconf/testdata` holds a test CA, backup CA and two server keys (`server` signed by the CA,
 `server-backup` by the backup CA), made with `TLS_KEYS_NOPASS=1 scripts/tls-keys.sh`. They are
-public: nothing in production may trust them. `scripts/smoke.sh` runs the TLS ports on them.
+public: nothing in production may trust them. `scripts/smoke.sh` runs the TLS port on them.

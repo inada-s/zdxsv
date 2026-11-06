@@ -26,7 +26,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		DNS:   DNSConfig{Addr: ":53"},
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
 		Lobby: LobbyConfig{ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
-		TLS:   TLSConfig{LobbyAddr: ":8221", BattleAddr: ":8222"},
+		TLS:   TLSConfig{LobbyAddr: ":8221"},
 		Relay: RelayConfig{Addr: ":8204"},
 	}
 	if Conf != want {
@@ -67,7 +67,6 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_TLS_CERT_FILE":            "/etc/zdxsv/server.crt",
 		"ZDXSV_TLS_KEY_FILE":             "/etc/zdxsv/server.key",
 		"ZDXSV_LOBBY_TLS_ADDR":           ":9221",
-		"ZDXSV_BATTLE_TLS_ADDR":          ":9222",
 	}
 	for k, v := range env {
 		t.Setenv(k, v)
@@ -94,7 +93,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		},
 		Battle: BattleConfig{Addr: ":8210", RPCAddr: ":8211", PublicAddr: "1.2.3.4:8210"},
 		DB:     DBConfig{Name: "/tmp/zdxsv.db"},
-		TLS:    TLSConfig{CertFile: "/etc/zdxsv/server.crt", KeyFile: "/etc/zdxsv/server.key", LobbyAddr: ":9221", BattleAddr: ":9222"},
+		TLS:    TLSConfig{CertFile: "/etc/zdxsv/server.crt", KeyFile: "/etc/zdxsv/server.key", LobbyAddr: ":9221"},
 		Relay:  RelayConfig{Region: "asia-northeast1", Addr: ":9204", PublicAddr: "9.9.9.9:9204", LobbyAddr: "1.2.3.4:8205"},
 	}
 	if Conf != want {

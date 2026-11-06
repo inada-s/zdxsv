@@ -40,9 +40,6 @@ func mainAll() {
 	glog.Infoln("battle listen", battleAddr)
 	serve("battle udp", func() error { return battle.NewUDPServer(logic).ListenAndServe(battleAddr) })
 	serve("battle tcp", func() error { return battle.NewTCPServer(logic).ListenAndServe(battleAddr) })
-	if l := tlsListen("battle", config.Conf.TLS.BattleAddr); l != nil {
-		serve("battle tls", func() error { return battle.NewTCPServer(logic).Serve(l) })
-	}
 
 	app := lobby.NewApp()
 	app.SetBattleServer(logic.BattleRpc)
