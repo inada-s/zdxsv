@@ -51,6 +51,7 @@ type Provider struct {
 	Scope        string
 	ClientID     string
 	ClientSecret string
+	dev          bool
 }
 
 func Discord(clientID, clientSecret string) Provider {
@@ -194,6 +195,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveAccounts(w, r, false)
 	case "/auth/accounts/add":
 		s.serveAccounts(w, r, true)
+	case "/auth/dev/authorize":
+		if !s.Provider.dev {
+			http.NotFound(w, r)
+			return
+		}
+		s.serveDevAuthorize(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -352,6 +359,12 @@ func (s *Server) account(f *flow, userID, ip string) (string, func(*page) string
 }
 
 func (s *Server) providerUser(code string) (string, error) {
+	if s.Provider.dev {
+		if !validDevUserID(code) {
+			return "", fmt.Errorf("dev: bad user id %q", code)
+		}
+		return code, nil
+	}
 	resp, err := s.client().PostForm(s.Provider.TokenURL, url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},

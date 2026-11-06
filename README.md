@@ -41,6 +41,7 @@ scripts/run-local.sh
 ```
 Builds and runs the whole server with `.env`, this machine's LAN address (`IP=<address>` overrides it) and the test TLS certificate.
 Emulator clients must trust the test CA; on the PCSX2 side that is `ZDXSV_TLS_TEST_PIN=1`.
+`ZDXSV_AUTH_DEV=1 scripts/run-local.sh` adds the emulator sign-in without Discord: `http://127.0.0.1:8203/auth/` (`ZDXSV_LOBBY_API_ADDR`) asks the browser for any user ID; never set it on a public server.
 
 ## Run a server
 

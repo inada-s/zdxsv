@@ -112,6 +112,9 @@ type LobbyConfig struct {
 	DiscordClientSecret Secret `env:"ZDXSV_DISCORD_CLIENT_SECRET"`
 	AuthPublicURL       string `env:"ZDXSV_AUTH_PUBLIC_URL"`
 	AuthProviderURL     string `env:"ZDXSV_AUTH_PROVIDER_URL"`
+	// Local development sign-in (auth.DevProvider): any user ID typed in the browser signs in.
+	// Refused together with DiscordClientID; AuthPublicURL defaults to http://<APIAddr>.
+	AuthDev bool `env:"ZDXSV_AUTH_DEV"`
 	// Discord slash commands (pkg/chatops, POST /discord/interactions on APIAddr), off when
 	// DiscordPublicKey (the application's public key, hex) is empty. DiscordCommandAllow: the
 	// comma separated user and role ids that may run them. /op master-up reads
