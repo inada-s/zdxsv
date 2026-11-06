@@ -116,6 +116,13 @@ type LobbyConfig struct {
 	DiscordClientSecret Secret `env:"ZDXSV_DISCORD_CLIENT_SECRET"`
 	AuthPublicURL       string `env:"ZDXSV_AUTH_PUBLIC_URL"`
 	AuthProviderURL     string `env:"ZDXSV_AUTH_PROVIDER_URL"`
+	// Discord slash commands (pkg/chatops, POST /discord/interactions on APIAddr), off when
+	// DiscordPublicKey (the application's public key, hex) is empty. DiscordCommandAllow: the
+	// comma separated user and role ids that may run them. /reload-lobby-setting reads
+	// MasterSpreadsheetID with the Application Default Credentials into m_lobby_setting.
+	DiscordPublicKey    string `env:"ZDXSV_DISCORD_PUBLIC_KEY"`
+	DiscordCommandAllow string `env:"ZDXSV_DISCORD_COMMAND_ALLOW"`
+	MasterSpreadsheetID string `env:"ZDXSV_MASTER_SPREADSHEET_ID"`
 }
 
 // BattleConfig: `zdxsv battle` serves the lobby on RPCAddr, binding its host part (127.0.0.1 stays on loopback).

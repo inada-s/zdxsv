@@ -141,6 +141,24 @@ func (r *Rule) SetBattleTime(v uint16) { r.setValue(ruleBattleTime, v) }
 // SetBattleCount selects the 連続対戦数 element of v battles; a value not in the menu is ignored.
 func (r *Rule) SetBattleCount(v uint16) { r.setValue(ruleBattleCount, v) }
 
+// ValidBattleGauge reports whether SetBattleGauge selects v.
+func ValidBattleGauge(v uint16) bool { return validValue(ruleBattleGauge, v) }
+
+// ValidBattleTime reports whether SetBattleTime selects v.
+func ValidBattleTime(v uint16) bool { return validValue(ruleBattleTime, v) }
+
+// ValidBattleCount reports whether SetBattleCount selects v.
+func ValidBattleCount(v uint16) bool { return validValue(ruleBattleCount, v) }
+
+func validValue(ruleID byte, v uint16) bool {
+	for _, e := range ruleList[ruleID].List {
+		if e.Value == v {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Rule) setValue(ruleID byte, v uint16) {
 	for i, e := range ruleList[ruleID].List {
 		if e.Value == v {

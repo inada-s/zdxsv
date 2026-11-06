@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS m_server_setting (
 	key text PRIMARY KEY,
 	value text default ''
 );
+CREATE TABLE IF NOT EXISTS m_lobby_setting (
+	platform text,
+	lobby_id integer,
+	battle_gauge integer default 0,
+	battle_time integer default 0,
+	battle_count integer default 0,
+	PRIMARY KEY (platform, lobby_id)
+);
 `
 
 const indexes = `
@@ -147,7 +155,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "m_lobby_setting", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -690,4 +698,29 @@ func (db SQLiteDB) GetKillCountRanking(side byte) ([]*RankingRecord, error) {
 	db.mtx.Unlock()
 
 	return ranking, nil
+}
+
+func (db SQLiteDB) ReplaceLobbySettings(settings []*LobbySetting) error {
+	tx, err := db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM m_lobby_setting`); err != nil {
+		return err
+	}
+	for _, s := range settings {
+		_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, lobby_id, battle_gauge, battle_time, battle_count)
+			VALUES (:platform, :lobby_id, :battle_gauge, :battle_time, :battle_count)`, s)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db SQLiteDB) GetLobbySettings() ([]*LobbySetting, error) {
+	settings := []*LobbySetting{}
+	err := db.Select(&settings, `SELECT platform, lobby_id, battle_gauge, battle_time, battle_count FROM m_lobby_setting ORDER BY platform, lobby_id`)
+	return settings, err
 }

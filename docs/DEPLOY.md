@@ -57,6 +57,17 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (10 min, single
   use) that links an existing account at sign-in.
+- Lobby settings from a Google Spreadsheet by a Discord slash command: `ZDXSV_DISCORD_PUBLIC_KEY`
+  (the Discord app's public key), `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and
+  role ids that may run it), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket,
+  the spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint
+  URL to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register
+  the command once with the bot token:
+  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"reload-lobby-setting","description":"Reload the lobby settings from the spreadsheet","default_member_permissions":"0"}' https://discord.com/api/v10/applications/<app id>/commands`.
+  `/reload-lobby-setting` reads the table under a cell `@m_lobby_setting` (any sheet): header
+  row `platform` (`console`/`emu`), `lobby_id` (0-25), `battle_gauge`, `battle_time`,
+  `battle_count` (rule menu values, empty for the default), data rows down to the first empty
+  row. It replaces `m_lobby_setting` only when every row is valid, else answers the errors.
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

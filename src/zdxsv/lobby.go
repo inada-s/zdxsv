@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,11 +13,13 @@ import (
 	"strings"
 	"syscall"
 	"zdxsv/pkg/auth"
+	"zdxsv/pkg/chatops"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby"
 
 	"github.com/golang/glog"
+	"golang.org/x/oauth2/google"
 )
 
 func mainLobby() {
@@ -37,6 +41,7 @@ func serveLobby(app *lobby.App) {
 		app.SetRelayProvisioning(regions, lobby.CommandProvisioner{Command: c.RelayStartCommand})
 	}
 	authServer := newAuthServer()
+	discord := newDiscord()
 	if authServer != nil {
 		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
@@ -90,6 +95,9 @@ func serveLobby(app *lobby.App) {
 			api := &lobby.APIHandler{Status: app.Status}
 			if authServer != nil {
 				api.Auth = authServer
+			}
+			if discord != nil {
+				api.Discord = discord
 			}
 			if c.ReplayBucket != "" {
 				store, err := lobby.NewGCSReplayStore(context.Background(), c.ReplayBucket)
@@ -175,4 +183,34 @@ func mainRelay() {
 		Region: c.Region, PublicAddr: c.PublicAddr, PublicAddr6: c.PublicAddr6, Secret: string(config.Conf.Lobby.RelaySecret),
 	})
 	glog.Infoln("relay stopped:", err)
+}
+
+func newDiscord() *chatops.Discord {
+	c := config.Conf.Lobby
+	if c.DiscordPublicKey == "" {
+		return nil
+	}
+	key, err := hex.DecodeString(c.DiscordPublicKey)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		glog.Fatalln("ZDXSV_DISCORD_PUBLIC_KEY is not an ed25519 public key in hex")
+	}
+	if c.APIAddr == "" || c.MasterSpreadsheetID == "" {
+		glog.Fatalln("ZDXSV_DISCORD_PUBLIC_KEY needs ZDXSV_LOBBY_API_ADDR and ZDXSV_MASTER_SPREADSHEET_ID")
+	}
+	client, err := google.DefaultClient(context.Background(), "https://www.googleapis.com/auth/spreadsheets.readonly")
+	if err != nil {
+		glog.Fatalln("google credentials for the spreadsheet:", err)
+	}
+	allow := map[string]bool{}
+	for _, id := range strings.Split(c.DiscordCommandAllow, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			allow[id] = true
+		}
+	}
+	updater := &chatops.LobbySettingUpdater{Sheet: &chatops.Spreadsheet{ID: c.MasterSpreadsheetID, Client: client}}
+	return &chatops.Discord{
+		PublicKey: ed25519.PublicKey(key),
+		Allow:     allow,
+		Commands:  map[string]func(context.Context) (string, error){"reload-lobby-setting": updater.Update},
+	}
 }

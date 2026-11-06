@@ -179,6 +179,16 @@ type RankingRecord struct {
 	User
 }
 
+// LobbySetting is a row of m_lobby_setting: the rule of the battles started in a lobby.
+// A rule value of 0 keeps the default.
+type LobbySetting struct {
+	Platform    string `db:"platform" json:"platform"`
+	LobbyID     uint16 `db:"lobby_id" json:"lobby_id"`
+	BattleGauge uint16 `db:"battle_gauge" json:"battle_gauge"`
+	BattleTime  uint16 `db:"battle_time" json:"battle_time"`
+	BattleCount uint16 `db:"battle_count" json:"battle_count"`
+}
+
 type DB interface {
 	Init() error
 	Migrate() error
@@ -221,6 +231,9 @@ type DB interface {
 	FindBan(loginKey, ip, machineID string) (*Ban, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
+	// ReplaceLobbySettings replaces all of m_lobby_setting at once.
+	ReplaceLobbySettings(settings []*LobbySetting) error
+	GetLobbySettings() ([]*LobbySetting, error)
 
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)
