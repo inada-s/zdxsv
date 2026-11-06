@@ -11,5 +11,5 @@ func mainBattle() {
 	udpsv := battle.NewUDPServer(logic)
 	go udpsv.ListenAndServe(stripHost(config.Conf.Battle.Addr))
 	go tcpsv.ListenAndServe(stripHost(config.Conf.Battle.Addr))
-	logic.ServeRpc(stripHost(config.Conf.Battle.RPCAddr))
+	logic.ServeRpc(config.Conf.Battle.RPCAddr)
 }

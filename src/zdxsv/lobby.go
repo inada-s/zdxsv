@@ -46,7 +46,8 @@ func serveLobby(app *lobby.App) {
 	if l := tlsListen("lobby", config.Conf.TLS.LobbyAddr); l != nil {
 		go sv.Serve(l)
 	}
-	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.RPCAddr))
+	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.StunAddr))
+	go sv.ServeUDPStun(stripHost(config.Conf.Lobby.RPCAddr))
 	if c := config.Conf.Lobby; c.RelayAddr != "" {
 		public := c.RelayPublicAddr
 		if public == "" {
@@ -131,7 +132,7 @@ func newAuthServer() *auth.Server {
 }
 
 // mainRelayTest: `zdxsv relay <session id> <hex token>` runs only the GGPO relay on
-// ZDXSV_LOBBY_RELAY_ADDR (default :8203) with one session, for rigs without a lobby.
+// ZDXSV_LOBBY_RELAY_ADDR (default :8223) with one session, for rigs without a lobby.
 func mainRelayTest(args []string) {
 	if len(args) != 2 {
 		glog.Fatalln("usage: zdxsv relay <session id> <hex token>")
@@ -146,7 +147,7 @@ func mainRelayTest(args []string) {
 	}
 	addr := config.Conf.Lobby.RelayAddr
 	if addr == "" {
-		addr = ":8203"
+		addr = ":8223"
 	}
 	glog.Fatalln(lobby.ServeTestRelay(addr, uint32(id), token))
 }
