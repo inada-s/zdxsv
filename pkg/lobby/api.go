@@ -29,7 +29,7 @@ const (
 //	  204 when none. user_id, user_name and pilot_name may repeat; names are LIKE patterns.
 //	  used_ms: an MS id + 1 that a player matching the player filters (any player without them) used.
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
-//	  a spectator watches one at udp://<lobby host>:<STUN port>/<battle_code>.
+//	/lbs/live_stream: a battle's live stream, POST from its uplink, GET to watch (spectator.go).
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
 //	POST /lbs/login (form token): logs in like the login server's /login, as JSON
@@ -40,7 +40,7 @@ const (
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
-	// Live serves /lbs/live_push and /lbs/live_pull (Spectators when nil).
+	// Live serves /lbs/live_stream (Spectators when nil).
 	Live *SpectatorRegistry
 	// LiveList lists the live battles (Live.List when nil).
 	LiveList func() []*LiveBattle
@@ -66,12 +66,8 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.Auth.ServeHTTP(w, r)
 		return
 	}
-	if r.URL.Path == "/lbs/live_push" {
-		h.serveLivePush(w, r)
-		return
-	}
-	if r.URL.Path == "/lbs/live_pull" {
-		h.serveLivePull(w, r)
+	if r.URL.Path == "/lbs/live_stream" {
+		h.serveLiveStream(w, r)
 		return
 	}
 	if r.URL.Path == "/lbs/live" {

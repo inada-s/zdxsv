@@ -74,7 +74,7 @@ type LobbyConfig struct {
 	Addr       string `env:"ZDXSV_LOBBY_ADDR"`
 	RPCAddr    string `env:"ZDXSV_LOBBY_RPC_ADDR"`
 	PublicAddr string `env:"ZDXSV_LOBBY_PUBLIC_ADDR"`
-	// Emulators' UDP: STUN and live spectating on StunAddr, the connectivity test on its port + 1.
+	// Emulators' UDP: STUN on StunAddr, the connectivity test on its port + 1.
 	// RPCAddr's UDP port answers STUN only.
 	StunAddr string `env:"ZDXSV_LOBBY_STUN_ADDR" envDefault:":8221"`
 	// GGPO relay server (UDP) for lobby GGPO battles, off when empty. Offered to players at

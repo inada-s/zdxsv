@@ -217,7 +217,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	}
 	if ggpo {
 		// The session id is random, not derived from the battle code: the code is
-		// public (live list, replays), and the first push with the session becomes the battle's live uplink.
+		// public (live list, replays), and the session authorizes the battle's live upload.
 		m.SessionId = pb.Uint32(b.GgpoSession)
 		m.PingTestDuration = pb.Int32(7500)
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
@@ -385,7 +385,6 @@ var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 		return
 	}
 	glog.Infoln(p2pMatchingReportLine(report))
-	Spectators.End(report.GetBattleCode(), p.UserID, time.Now())
 	sender := p.UserID
 	if sender == "" { // the report comes before the user login
 		sender = report.GetUserId()
