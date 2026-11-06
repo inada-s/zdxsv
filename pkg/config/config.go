@@ -74,6 +74,9 @@ type LobbyConfig struct {
 	Addr       string `env:"ZDXSV_LOBBY_ADDR"`
 	RPCAddr    string `env:"ZDXSV_LOBBY_RPC_ADDR"`
 	PublicAddr string `env:"ZDXSV_LOBBY_PUBLIC_ADDR"`
+	// Emulators' UDP: STUN and live spectating on StunAddr, the connectivity test on its port + 1.
+	// RPCAddr's UDP port answers STUN only.
+	StunAddr string `env:"ZDXSV_LOBBY_STUN_ADDR" envDefault:":8221"`
 	// GGPO relay server (UDP) for lobby GGPO battles, off when empty. Offered to players at
 	// RelayPublicAddr (default: PublicAddr's host, RelayAddr's port) and RelayPublicAddr6.
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
@@ -115,6 +118,7 @@ type LobbyConfig struct {
 	AuthProviderURL     string `env:"ZDXSV_AUTH_PROVIDER_URL"`
 }
 
+// BattleConfig: `zdxsv battle` serves the lobby on RPCAddr, binding its host part (127.0.0.1 stays on loopback).
 type BattleConfig struct {
 	Addr       string `env:"ZDXSV_BATTLE_ADDR"`
 	RPCAddr    string `env:"ZDXSV_BATTLE_RPC_ADDR"`
@@ -131,7 +135,7 @@ type DBConfig struct {
 type TLSConfig struct {
 	CertFile  string `env:"ZDXSV_TLS_CERT_FILE"`
 	KeyFile   string `env:"ZDXSV_TLS_KEY_FILE"`
-	LobbyAddr string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8221"`
+	LobbyAddr string `env:"ZDXSV_LOBBY_TLS_ADDR" envDefault:":8220"`
 }
 
 // RelayConfig is a regional relay (`zdxsv relay`): it relays on Addr, offered to players at
@@ -139,7 +143,7 @@ type TLSConfig struct {
 // registered with the lobby's LobbyConfig.RelayControlAddr at LobbyAddr with Lobby.RelaySecret.
 type RelayConfig struct {
 	Region      string `env:"ZDXSV_RELAY_REGION"`
-	Addr        string `env:"ZDXSV_RELAY_ADDR" envDefault:":8204"`
+	Addr        string `env:"ZDXSV_RELAY_ADDR" envDefault:":8223"`
 	PublicAddr  string `env:"ZDXSV_RELAY_PUBLIC_ADDR"`
 	PublicAddr6 string `env:"ZDXSV_RELAY_PUBLIC_ADDR6"`
 	LobbyAddr   string `env:"ZDXSV_RELAY_LOBBY_ADDR"`

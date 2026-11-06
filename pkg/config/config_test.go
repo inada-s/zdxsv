@@ -25,9 +25,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	want := Config{
 		DNS:   DNSConfig{Addr: ":53"},
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
-		Lobby: LobbyConfig{ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
-		TLS:   TLSConfig{LobbyAddr: ":8221"},
-		Relay: RelayConfig{Addr: ":8204"},
+		Lobby: LobbyConfig{StunAddr: ":8221", ReplayURLPrefix: "https://storage.googleapis.com/zdxsv/"},
+		TLS:   TLSConfig{LobbyAddr: ":8220"},
+		Relay: RelayConfig{Addr: ":8223"},
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v, want %+v", Conf, want)
@@ -48,6 +48,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_LOBBY_ADDR":               ":8200",
 		"ZDXSV_LOBBY_RPC_ADDR":           ":8201",
 		"ZDXSV_LOBBY_PUBLIC_ADDR":        "1.2.3.4:8200",
+		"ZDXSV_LOBBY_STUN_ADDR":          ":18221",
 		"ZDXSV_LOBBY_RELAY_ADDR":         ":8202",
 		"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR":  "5.6.7.8:8202",
 		"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6": "[::1]:8202",
@@ -82,6 +83,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 			Addr:             ":8200",
 			RPCAddr:          ":8201",
 			PublicAddr:       "1.2.3.4:8200",
+			StunAddr:         ":18221",
 			RelayAddr:        ":8202",
 			RelayPublicAddr:  "5.6.7.8:8202",
 			RelayPublicAddr6: "[::1]:8202",

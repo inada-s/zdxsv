@@ -5,7 +5,7 @@ no TLS port. Real PS2 consoles cannot do TLS and keep the plain ports.
 
 | plain port | TLS port | env (TLS address) |
 |---|---|---|
-| 8200 (lobby) | 8221 | `ZDXSV_LOBBY_TLS_ADDR` |
+| 8200 (lobby) | 8220 | `ZDXSV_LOBBY_TLS_ADDR` |
 
 The client maps the plain port to the TLS port itself, so a TLS port the client does not know is
 unreachable for it: change the defaults together with pcsx2's table.
@@ -56,7 +56,7 @@ ZDXSV_TLS_KEY_FILE=/etc/zdxsv/tls/server.key
 Keep `ca.key` and `backup-ca.key` on separate offline media; never copy them to the server.
 `scripts/tls-keys.sh pin <pem>` prints the pin of each certificate in a file.
 
-Check from anywhere: `zdxsv tlscheck <host>:8221 <CA pin>` (lobby, prints the chain).
+Check from anywhere: `zdxsv tlscheck <host>:8220 <CA pin>` (lobby, prints the chain).
 
 ## Rotation and recovery
 

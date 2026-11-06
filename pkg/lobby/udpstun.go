@@ -40,7 +40,24 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 		defer test.Close()
 		go serveUDPStun(test, nil)
 	}
+
 	serveUDPStun(conn, test)
+	return nil
+}
+
+// ServeUDPStun answers Ping with Pong on addr, without the test socket.
+func (s *Server) ServeUDPStun(addr string) error {
+	glog.Infoln("Start UDPStun", addr)
+	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp4", udpAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	serveUDPStun(conn, nil)
 	return nil
 }
 
