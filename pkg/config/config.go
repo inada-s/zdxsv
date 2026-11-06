@@ -116,6 +116,9 @@ type LobbyConfig struct {
 	DiscordClientSecret Secret `env:"ZDXSV_DISCORD_CLIENT_SECRET"`
 	AuthPublicURL       string `env:"ZDXSV_AUTH_PUBLIC_URL"`
 	AuthProviderURL     string `env:"ZDXSV_AUTH_PROVIDER_URL"`
+	// Local development sign-in (auth.DevProvider): any user ID typed in the browser signs in.
+	// Refused together with DiscordClientID; AuthPublicURL defaults to http://<APIAddr>.
+	AuthDev bool `env:"ZDXSV_AUTH_DEV"`
 }
 
 // BattleConfig: `zdxsv battle` serves the lobby on RPCAddr, binding its host part (127.0.0.1 stays on loopback).

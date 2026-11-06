@@ -115,6 +115,17 @@ func serveLobby(app *lobby.App) {
 
 func newAuthServer() *auth.Server {
 	c := config.Conf.Lobby
+	if c.AuthDev {
+		if c.DiscordClientID != "" || c.APIAddr == "" {
+			glog.Fatalln("ZDXSV_AUTH_DEV needs ZDXSV_LOBBY_API_ADDR and no ZDXSV_DISCORD_CLIENT_ID")
+		}
+		public := c.AuthPublicURL
+		if public == "" {
+			public = "http://" + c.APIAddr
+		}
+		glog.Warningln("ZDXSV_AUTH_DEV set: any user ID signs in at", public+"/auth/; local development only")
+		return &auth.Server{Provider: auth.DevProvider(), PublicURL: public, Store: db.DefaultDB}
+	}
 	if c.DiscordClientID == "" {
 		return nil
 	}
