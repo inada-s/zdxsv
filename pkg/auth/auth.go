@@ -76,7 +76,7 @@ type Store interface {
 	TokenAccounts(token string) (string, []string, error)
 	AddTokenAccount(token, ip string) (*db.Account, error)
 	GetUserList(loginKey string) ([]*db.User, error)
-	FindBan(loginKey, ip, machineID string) (*db.Ban, error)
+	FindBan(loginKey string) (*db.MasterBan, error)
 }
 
 type flow struct {
@@ -470,7 +470,7 @@ func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, add bool)
 	added := 0
 	if add {
 		for _, k := range keys {
-			if ban, err := s.Store.FindBan(k, "", ""); err != nil || ban != nil {
+			if ban, err := s.Store.FindBan(k); err != nil || ban != nil {
 				http.Error(w, "banned", http.StatusForbidden)
 				return
 			}

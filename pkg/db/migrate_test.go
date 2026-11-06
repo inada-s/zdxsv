@@ -102,6 +102,16 @@ func TestMigrateIdentityHoldsManyKeys(t *testing.T) {
 	assertEq(t, first.LoginKey, keys[0])
 }
 
+func TestMigrateDropsBan(t *testing.T) {
+	db := openSchemaDB(t, schema+indexes+`CREATE TABLE ban (kind text, value text, reason text default '', created timestamp, PRIMARY KEY (kind, value));
+INSERT INTO ban (kind, value) VALUES ('ip', '1.2.3.4');`)
+	must(t, db.Migrate())
+	assertIndexes(t, db)
+	var n int
+	must(t, db.Get(&n, `SELECT count(*) FROM sqlite_master WHERE name = 'ban'`))
+	assertEq(t, 0, n)
+}
+
 func TestMigrateEmptyDB(t *testing.T) {
 	db := openSchemaDB(t, schemaBeforeReplayURL+indexes)
 	must(t, db.Migrate())

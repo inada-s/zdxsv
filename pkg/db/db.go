@@ -53,19 +53,19 @@ type Account struct {
 	TempKey            sql.NullString `db:"temp_key" json:"-"`
 }
 
-// Ban refuses a login whose user (any user of the account), machine id or ip is Value.
-type Ban struct {
-	Kind    string    `db:"kind" json:"kind"`
-	Value   string    `db:"value" json:"value"`
+// MasterBan is a row of m_ban, the spreadsheet's bans: every user of the account of user Key
+// is refused until Until.
+type MasterBan struct {
+	Key     string    `db:"key" json:"key"`
+	Until   time.Time `db:"until" json:"until"`
 	Reason  string    `db:"reason" json:"reason,omitempty"`
 	Created time.Time `db:"created" json:"created"`
 }
 
-const (
-	BanUser    = "user"
-	BanMachine = "machine"
-	BanIP      = "ip"
-)
+// Master is the master data loaded from the spreadsheet; ReplaceMaster replaces all of it.
+type Master struct {
+	Bans []*MasterBan
+}
 
 type User struct {
 	LoginKey  string `db:"login_key" json:"login_key,omitempty"`
@@ -211,16 +211,14 @@ type DB interface {
 
 	// SetLoginEndpoint records where the account last logged in to the lobby from.
 	SetLoginEndpoint(loginKey, ip, machineID string) error
-	GetAccountsByMachineID(machineID string) ([]*Account, error)
 
-	AddBan(ban *Ban) error
-	// DeleteBan returns false when there was no such ban.
-	DeleteBan(kind, value string) (bool, error)
-	GetBanList() ([]*Ban, error)
-	// FindBan returns the ban matching the login, nil if none.
-	FindBan(loginKey, ip, machineID string) (*Ban, error)
+	// FindBan returns an unexpired m_ban of a user of the account, nil if none.
+	FindBan(loginKey string) (*MasterBan, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
+	// ReplaceMaster replaces every m_ table of m in one transaction.
+	ReplaceMaster(m *Master) error
+	GetMasterBans() ([]*MasterBan, error)
 
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)

@@ -90,10 +90,6 @@ type LobbyConfig struct {
 	// empty: RelayStartCommand is run with a region as its argument to start a relay there.
 	RelayRegions      string `env:"ZDXSV_LOBBY_RELAY_REGIONS"`
 	RelayStartCommand string `env:"ZDXSV_LOBBY_RELAY_START_COMMAND"`
-	// Private HTTP API (lobby.OpsHandler: /ops/replay_uploaded for an external uploader, bans), off when empty.
-	// Uploaded replay urls must start with ReplayURLPrefix.
-	OpsAddr         string `env:"ZDXSV_LOBBY_OPS_ADDR"`
-	ReplayURLPrefix string `env:"ZDXSV_LOBBY_REPLAY_URL_PREFIX" envDefault:"https://storage.googleapis.com/zdxsv/"`
 	// Public HTTP API (lobby.APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
 	// Unlike the game ports, the host part is bound (127.0.0.1:8203 stays on loopback).
 	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
@@ -119,6 +115,13 @@ type LobbyConfig struct {
 	// Local development sign-in (auth.DevProvider): any user ID typed in the browser signs in.
 	// Refused together with DiscordClientID; AuthPublicURL defaults to http://<APIAddr>.
 	AuthDev bool `env:"ZDXSV_AUTH_DEV"`
+	// Discord slash commands (pkg/chatops, POST /discord/interactions on APIAddr), off when
+	// DiscordPublicKey (the application's public key, hex) is empty. DiscordCommandAllow: the
+	// comma separated user and role ids that may run them. /op master-up reads
+	// MasterSpreadsheetID with the Application Default Credentials into the m_ tables.
+	DiscordPublicKey    string `env:"ZDXSV_DISCORD_PUBLIC_KEY"`
+	DiscordCommandAllow string `env:"ZDXSV_DISCORD_COMMAND_ALLOW"`
+	MasterSpreadsheetID string `env:"ZDXSV_MASTER_SPREADSHEET_ID"`
 }
 
 // BattleConfig: `zdxsv battle` serves the lobby on RPCAddr, binding its host part (127.0.0.1 stays on loopback).

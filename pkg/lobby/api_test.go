@@ -58,11 +58,6 @@ func TestAPIReplay(t *testing.T) {
 			t.Fatalf("%.40s: code %d, searched %v", q, w.Code, got != nil)
 		}
 	}
-	w = httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("GET", "/ops/replay_uploaded?battle_code=1&url=x", nil))
-	if w.Code != 404 {
-		t.Fatalf("ops path on the public api: code %d", w.Code)
-	}
 }
 
 func TestAPILive(t *testing.T) {
