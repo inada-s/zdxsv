@@ -56,12 +56,12 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 	if err := db.DefaultDB.SetLoginEndpoint(ac.LoginKey, ip, machineID); err != nil {
 		glog.Errorln("SetLoginEndpoint failure", err)
 	}
-	ban, err := db.DefaultDB.FindBan(ac.LoginKey, ip, machineID)
+	ban, err := db.DefaultDB.FindBan(ac.LoginKey)
 	if err != nil {
 		glog.Errorln("FindBan failure", err)
 	}
 	if ban != nil {
-		glog.Infoln("banned login refused", ac.LoginKey, ip, machineID, ban.Kind, ban.Value)
+		glog.Infoln("banned login refused", ac.LoginKey, ip, machineID, ban.Key, ban.Until)
 		SendBanned(p)
 		return
 	}

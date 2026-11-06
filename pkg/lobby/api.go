@@ -35,6 +35,7 @@ const (
 //	POST /lbs/login (form token): logs in like the login server's /login, as JSON
 //	  (login.HandleAPILogin) and answers a temporary key that the next one replaces.
 //	/auth/*: emulator sign-in (Auth).
+//	POST /discord/interactions: Discord slash commands (Discord).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
 type APIHandler struct {
@@ -55,6 +56,8 @@ type APIHandler struct {
 	ReplayPlayed func(battleCode string) error
 	// Auth serves /auth/ (emulator sign-in, auth.Server), off when nil.
 	Auth http.Handler
+	// Discord serves POST /discord/interactions (chatops.Discord), off when nil.
+	Discord http.Handler
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -64,6 +67,10 @@ type APIHandler struct {
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
 		h.Auth.ServeHTTP(w, r)
+		return
+	}
+	if h.Discord != nil && r.URL.Path == "/discord/interactions" {
+		h.Discord.ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/lbs/live_stream" {

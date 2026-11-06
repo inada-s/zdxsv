@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
@@ -325,7 +326,7 @@ func TestAccountsUpToMax(t *testing.T) {
 	}
 	key, _ := db.DefaultDB.IdentityLoginKey("discord", "6666")
 	u, _ := db.DefaultDB.RegisterUser(key)
-	if err := db.DefaultDB.AddBan(&db.Ban{Kind: db.BanUser, Value: u.UserID}); err != nil {
+	if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: []*db.MasterBan{{Key: u.UserID, Until: time.Now().Add(time.Hour)}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, st := r.accounts("/auth/accounts/add", other); st != http.StatusForbidden {
