@@ -49,8 +49,6 @@ Optional:
 - `ZDXSV_DNAS_HTTPS_BACKEND`: where other TLS on 443 goes (e.g. a web server); refused when unset
 - `ZDXSV_LOBBY_REPLAY_BUCKET`: a public GCS bucket for uploaded replays (credentials:
   `GOOGLE_APPLICATION_CREDENTIALS`)
-- `ZDXSV_LOBBY_OPS_ADDR`: the private API for bans (`/ops/ban`, `/ops/unban`, `/ops/bans`,
-  `/ops/accounts`); keep it on 127.0.0.1
 - Emulator sign-in with Discord: `ZDXSV_DISCORD_CLIENT_ID`, `ZDXSV_DISCORD_CLIENT_SECRET`,
   `ZDXSV_AUTH_PUBLIC_URL` (e.g. `https://lbs.zdxsv.net:8443`; register
   `<ZDXSV_AUTH_PUBLIC_URL>/auth/discord/callback` as the Discord app's redirect). Serves `/auth/*`
@@ -63,16 +61,16 @@ Optional:
   it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
   spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint URL
   to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register the
-  command once with the bot token (`default_member_permissions` 4: shown only to members who
+  command `/op` once with the bot token (`default_member_permissions` 4: shown only to members who
   can ban):
-  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"reload-master","description":"Reload the bans from the spreadsheet","default_member_permissions":"4"}' https://discord.com/api/v10/applications/<app id>/commands`.
-  `/reload-master` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
+  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' https://discord.com/api/v10/applications/<app id>/commands`.
+  `/op master` answers the spreadsheet link. `/op master-up` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
   `@m_` tables are ignored): header row `key` (a user id), `until`, optional `reason`,
   `created`; data rows down to the first empty row. Times like `2026/11/06 12:00:00` are UTC
   unless they carry an offset (`2026-11-06T21:00:00+09:00`). It replaces `m_ban` only when every
   row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
-  account is refused at its next login until `until`, with no restart; `ban` (`/ops/ban`) is
-  separate and unchanged.
+  account is refused at its next login until `until`, with no restart. `m_ban` is the only ban
+  list (the old `ban` table is dropped by `migratedb`).
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

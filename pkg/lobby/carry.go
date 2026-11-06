@@ -18,7 +18,7 @@ func lobbyChatCarry(p *AppPeer, str string) bool {
 	if str != carryCommand || p.app.carryCode == nil || p.LoginKey == "" {
 		return false
 	}
-	ban, err := db.DefaultDB.FindBan(p.LoginKey, p.IP(), p.PlatformInfo["machine_id"])
+	ban, err := db.DefaultDB.FindBan(p.LoginKey)
 	if err != nil || ban != nil {
 		glog.Infoln("carry code refused", p.LoginKey, err)
 		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードを発行できません")

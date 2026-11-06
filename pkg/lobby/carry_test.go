@@ -3,6 +3,7 @@ package lobby
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/db"
@@ -38,7 +39,8 @@ func TestCarryCodeCommand(t *testing.T) {
 		t.Fatalf("other player heard %q", other)
 	}
 
-	if err := db.DefaultDB.AddBan(&db.Ban{Kind: db.BanIP, Value: "127.0.0.1"}); err != nil {
+	users, _ := db.DefaultDB.GetUserList(keys[0])
+	if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: []*db.MasterBan{{Key: users[0].UserID, Until: time.Now().Add(time.Hour)}}}); err != nil {
 		t.Fatal(err)
 	}
 	cs[0].say(sjis(t, carryCommand))

@@ -2,7 +2,6 @@ package chatops
 
 import (
 	"bytes"
-	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -82,7 +81,7 @@ func newRig(t *testing.T) *rig {
 	d := &Discord{
 		PublicKey: pub,
 		Allow:     map[string]bool{"ops-role": true, "ops-user": true},
-		Commands:  map[string]func(context.Context) (string, error){"reload-master": updater.Update},
+		Commands:  MasterCommands(updater.Sheet.(*Spreadsheet), updater),
 		APIURL:    ds.URL,
 	}
 	api := httptest.NewServer(d)
@@ -112,17 +111,25 @@ func (r *rig) post(body string, sign bool) (int, map[string]interface{}) {
 }
 
 func command(name, user string, roles ...string) string {
+	data := map[string]interface{}{"name": name}
+	if cmd, sub, ok := strings.Cut(name, " "); ok {
+		data = map[string]interface{}{"name": cmd, "options": []map[string]interface{}{{"name": sub, "type": 1}}}
+	}
 	b, _ := json.Marshal(map[string]interface{}{
 		"type": 2, "application_id": "app-id", "token": "itoken",
-		"data":   map[string]string{"name": name},
+		"data":   data,
 		"member": map[string]interface{}{"user": map[string]string{"id": user}, "roles": roles},
 	})
 	return string(b)
 }
 
 func (r *rig) run(user string, roles ...string) string {
+	return r.runCommand("op master-up", user, roles...)
+}
+
+func (r *rig) runCommand(name, user string, roles ...string) string {
 	r.t.Helper()
-	code, m := r.post(command("reload-master", user, roles...), true)
+	code, m := r.post(command(name, user, roles...), true)
 	if code != http.StatusOK || m["type"] != float64(responseDeferredChannelMessage) {
 		r.t.Fatalf("answer %d %v, want deferred message", code, m)
 	}
@@ -160,7 +167,7 @@ func newUser(t *testing.T) *db.User {
 
 func banned(t *testing.T, u *db.User) bool {
 	t.Helper()
-	b, err := db.DefaultDB.FindBan(u.LoginKey, "5.6.7.8", "")
+	b, err := db.DefaultDB.FindBan(u.LoginKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,20 +259,28 @@ func TestReloadMasterBan(t *testing.T) {
 	}
 }
 
+func TestOpMaster(t *testing.T) {
+	r := newRig(t)
+	if got := r.runCommand("op master", "someone", "ops-role"); got != "https://docs.google.com/spreadsheets/d/sheet-id" {
+		t.Fatalf("op master: %q", got)
+	}
+}
+
 func TestDiscordRejects(t *testing.T) {
 	r := newRig(t)
 	u := newUser(t)
 	r.sheets.sheets = banSheets([]string{u.UserID, "2099-01-01"})
 
-	if code, _ := r.post(command("reload-master", "ops-user"), false); code != http.StatusUnauthorized {
+	if code, _ := r.post(command("op master-up", "ops-user"), false); code != http.StatusUnauthorized {
 		t.Errorf("bad signature: %d", code)
 	}
 	if code, m := r.post(`{"type":1}`, true); code != http.StatusOK || m["type"] != float64(responsePong) {
 		t.Errorf("ping: %d %v", code, m)
 	}
 	for _, c := range []struct{ body, msg string }{
-		{command("reload-master", "someone", "other-role"), "not allowed"},
-		{command("other", "ops-user"), "unknown command other"},
+		{command("op master-up", "someone", "other-role"), "not allowed"},
+		{command("op other", "ops-user"), "unknown command op other"},
+		{command("op", "ops-user"), "unknown command op"},
 	} {
 		code, m := r.post(c.body, true)
 		data, _ := m["data"].(map[string]interface{})

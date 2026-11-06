@@ -117,13 +117,6 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	system      integer default 0,
 	PRIMARY KEY (battle_code, user_id)
 );
-CREATE TABLE IF NOT EXISTS ban (
-	kind text,
-	value text,
-	reason text default '',
-	created timestamp,
-	PRIMARY KEY (kind, value)
-);
 CREATE TABLE IF NOT EXISTS m_server_setting (
 	key text PRIMARY KEY,
 	value text default ''
@@ -154,11 +147,17 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "m_ban", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_ban", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
 		return errors.Wrap(err, "Begin failed")
+	}
+
+	_, err = tx.Exec(`DROP TABLE IF EXISTS ban`)
+	if err != nil {
+		tx.Rollback()
+		return errors.Wrap(err, "DROP TABLE failed")
 	}
 
 	// create the tables that do not exist yet, so every one can be renamed
@@ -273,58 +272,16 @@ func (db SQLiteDB) SetLoginEndpoint(loginKey, ip, machineID string) error {
 	return err
 }
 
-func (db SQLiteDB) GetAccountsByMachineID(machineID string) ([]*Account, error) {
-	accounts := []*Account{}
-	err := db.Select(&accounts, `SELECT * FROM account WHERE last_login_machine_id = ? ORDER BY last_login DESC`, machineID)
-	return accounts, err
-}
-
-func (db SQLiteDB) AddBan(ban *Ban) error {
-	if ban.Created.IsZero() {
-		ban.Created = time.Now()
-	}
-	_, err := db.NamedExec(`INSERT OR REPLACE INTO ban (kind, value, reason, created) VALUES (:kind, :value, :reason, :created)`, ban)
-	return err
-}
-
-func (db SQLiteDB) DeleteBan(kind, value string) (bool, error) {
-	res, err := db.Exec(`DELETE FROM ban WHERE kind = ? AND value = ?`, kind, value)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n > 0, err
-}
-
-func (db SQLiteDB) GetBanList() ([]*Ban, error) {
-	bans := []*Ban{}
-	err := db.Select(&bans, `SELECT * FROM ban ORDER BY created`)
-	return bans, err
-}
-
-func (db SQLiteDB) FindBan(loginKey, ip, machineID string) (*Ban, error) {
-	ban := &Ban{}
-	err := db.QueryRowx(`
-SELECT * FROM ban WHERE
-	(kind = 'user' AND value IN (SELECT user_id FROM user WHERE login_key = ?)) OR
-	(kind = 'machine' AND value <> '' AND value = ?) OR
-	(kind = 'ip' AND value <> '' AND value = ?)
-LIMIT 1`, loginKey, machineID, ip).StructScan(ban)
-	if err == nil {
-		return ban, nil
-	}
-	if err != sql.ErrNoRows {
-		return nil, err
-	}
+func (db SQLiteDB) FindBan(loginKey string) (*MasterBan, error) {
 	bans := []*MasterBan{}
-	err = db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?)`, loginKey)
+	err := db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?)`, loginKey)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
 	for _, b := range bans {
 		if now.Before(b.Until) {
-			return &Ban{Kind: BanUser, Value: b.Key, Reason: b.Reason, Created: b.Created}, nil
+			return b, nil
 		}
 	}
 	return nil, nil

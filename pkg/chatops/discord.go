@@ -18,6 +18,7 @@ import (
 const (
 	interactionPing               = 1
 	interactionApplicationCommand = 2
+	optionSubCommand              = 1
 
 	responsePong                    = 1
 	responseChannelMessage          = 4
@@ -32,7 +33,7 @@ const (
 )
 
 // Discord serves a Discord application's interactions endpoint (POST). Each Commands entry is a
-// slash command: it answers at once with a deferred message, runs, and edits that message
+// slash command, "op master-up" for the subcommand master-up of /op: it answers at once with a deferred message, runs, and edits that message
 // to the result. One command runs at a time.
 type Discord struct {
 	PublicKey ed25519.PublicKey
@@ -52,7 +53,11 @@ type interaction struct {
 	ApplicationID string `json:"application_id"`
 	Token         string `json:"token"`
 	Data          struct {
-		Name string `json:"name"`
+		Name    string `json:"name"`
+		Options []struct {
+			Name string `json:"name"`
+			Type int    `json:"type"`
+		} `json:"options"`
 	} `json:"data"`
 	Member *struct {
 		User  struct{ ID string } `json:"user"`
@@ -92,9 +97,10 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run, ok := d.Commands[in.Data.Name]
+	name := in.commandName()
+	run, ok := d.Commands[name]
 	if !ok {
-		reply(w, "unknown command "+in.Data.Name)
+		reply(w, "unknown command "+name)
 		return
 	}
 	if !d.allowed(&in) {
@@ -105,7 +111,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, "another command is running")
 		return
 	}
-	glog.Infoln("discord command", in.Data.Name, "by", in.userID())
+	glog.Infoln("discord command", name, "by", in.userID())
 	answered := make(chan struct{})
 	defer close(answered)
 	d.wg.Add(1)
@@ -118,8 +124,8 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		msg, err := run(ctx)
 		if err != nil {
-			glog.Errorln("discord command", in.Data.Name, err)
-			msg = in.Data.Name + " failed, nothing changed:\n" + err.Error()
+			glog.Errorln("discord command", name, err)
+			msg = name + " failed, nothing changed:\n" + err.Error()
 		}
 		d.editOriginal(ctx, &in, msg)
 	}()
@@ -128,6 +134,14 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Wait returns when the commands started so far have finished.
 func (d *Discord) Wait() { d.wg.Wait() }
+
+// commandName is the command's name, followed by " " and the subcommand's for a subcommand.
+func (in *interaction) commandName() string {
+	if len(in.Data.Options) == 1 && in.Data.Options[0].Type == optionSubCommand {
+		return in.Data.Name + " " + in.Data.Options[0].Name
+	}
+	return in.Data.Name
+}
 
 func (in *interaction) userID() string {
 	if in.Member != nil {

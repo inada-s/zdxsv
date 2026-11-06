@@ -79,16 +79,8 @@ func serveLobby(app *lobby.App) {
 			glog.Errorln("relay control:", lobby.ServeRelayControl(l, string(c.RelaySecret)))
 		}()
 	}
-	// The HTTP APIs bind the host given in their address (127.0.0.1:8203 stays on loopback),
+	// The HTTP API binds the host given in its address,
 	// unlike the game ports, whose host part is only advertised.
-	if c := config.Conf.Lobby; c.OpsAddr != "" {
-		go func() {
-			glog.Infoln("Start ops api", c.OpsAddr)
-			if err := http.ListenAndServe(c.OpsAddr, &lobby.OpsHandler{ReplayURLPrefix: c.ReplayURLPrefix}); err != nil {
-				glog.Errorln("ops api:", err)
-			}
-		}()
-	}
 	if c := config.Conf.Lobby; c.APIAddr != "" {
 		go func() {
 			glog.Infoln("Start public api", c.APIAddr)
@@ -207,10 +199,10 @@ func newDiscord() *chatops.Discord {
 			allow[id] = true
 		}
 	}
-	updater := &chatops.MasterUpdater{Sheet: &chatops.Spreadsheet{ID: c.MasterSpreadsheetID, Client: client}}
+	sheet := &chatops.Spreadsheet{ID: c.MasterSpreadsheetID, Client: client}
 	return &chatops.Discord{
 		PublicKey: ed25519.PublicKey(key),
 		Allow:     allow,
-		Commands:  map[string]func(context.Context) (string, error){"reload-master": updater.Update},
+		Commands:  chatops.MasterCommands(sheet, &chatops.MasterUpdater{Sheet: sheet}),
 	}
 }

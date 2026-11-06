@@ -22,6 +22,16 @@ type MasterUpdater struct {
 	DB db.DB
 }
 
+// MasterCommands are /op master (the spreadsheet's link) and /op master-up (Update).
+func MasterCommands(s *Spreadsheet, u *MasterUpdater) map[string]func(context.Context) (string, error) {
+	return map[string]func(context.Context) (string, error){
+		"op master": func(context.Context) (string, error) {
+			return "https://docs.google.com/spreadsheets/d/" + s.ID, nil
+		},
+		"op master-up": u.Update,
+	}
+}
+
 func (u *MasterUpdater) Update(ctx context.Context) (string, error) {
 	sheets, err := u.Sheet.ReadAll(ctx)
 	if err != nil {
