@@ -2,7 +2,6 @@ package lobby
 
 import (
 	"net"
-	"time"
 
 	"zdxsv/pkg/proto"
 
@@ -39,14 +38,14 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 	} else {
 		glog.Infoln("Start UDPStun test", testAddr)
 		defer test.Close()
-		go serveUDPStun(test, nil, nil)
+		go serveUDPStun(test, nil)
 	}
-	go Spectators.Serve(conn)
-	serveUDPStun(conn, test, Spectators)
+
+	serveUDPStun(conn, test)
 	return nil
 }
 
-// ServeUDPStun answers Ping with Pong on addr, with neither the test socket nor live spectating.
+// ServeUDPStun answers Ping with Pong on addr, without the test socket.
 func (s *Server) ServeUDPStun(addr string) error {
 	glog.Infoln("Start UDPStun", addr)
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
@@ -58,12 +57,12 @@ func (s *Server) ServeUDPStun(addr string) error {
 		return err
 	}
 	defer conn.Close()
-	serveUDPStun(conn, nil, nil)
+	serveUDPStun(conn, nil)
 	return nil
 }
 
-// serveUDPStun answers Pings and hands spectator packets to live (nil: none).
-func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
+// serveUDPStun answers Pings.
+func serveUDPStun(conn, test *net.UDPConn) {
 	buf := make([]byte, 64<<10)
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
@@ -77,9 +76,6 @@ func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
 		req := new(proto.Packet)
 		if err := pb.Unmarshal(buf[:n], req); err != nil {
 			glog.Errorln(err)
-			continue
-		}
-		if live != nil && live.Handle(req, addr, time.Now()) {
 			continue
 		}
 		data, test2 := udpStunAnswer(req, addr)

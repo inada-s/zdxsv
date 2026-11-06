@@ -40,7 +40,9 @@ const (
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
-	// LiveList lists the live battles (Spectators.List when nil).
+	// Live serves /lbs/live_push and /lbs/live_pull (Spectators when nil).
+	Live *SpectatorRegistry
+	// LiveList lists the live battles (Live.List when nil).
 	LiveList func() []*LiveBattle
 	// Status reports the lobby's users and battles (an empty lobby when nil).
 	Status func() *lobbyrpc.StatusResponse
@@ -62,6 +64,14 @@ type APIHandler struct {
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
 		h.Auth.ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == "/lbs/live_push" {
+		h.serveLivePush(w, r)
+		return
+	}
+	if r.URL.Path == "/lbs/live_pull" {
+		h.serveLivePull(w, r)
 		return
 	}
 	if r.URL.Path == "/lbs/live" {
@@ -202,7 +212,7 @@ func (h *APIHandler) serveStatus(w http.ResponseWriter) {
 func (h *APIHandler) serveLive(w http.ResponseWriter) {
 	list := h.LiveList
 	if list == nil {
-		list = Spectators.List
+		list = h.live().List
 	}
 	battles := list()
 	if battles == nil {

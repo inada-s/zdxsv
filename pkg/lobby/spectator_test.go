@@ -3,7 +3,9 @@ package lobby
 import (
 	"bytes"
 	"fmt"
-	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -14,261 +16,211 @@ import (
 	pb "github.com/golang/protobuf/proto"
 )
 
-type liveSent struct {
-	pkt *proto.Packet
-	to  *net.UDPAddr
-}
-
-func newLiveTest(t *testing.T) (*SpectatorRegistry, *[]liveSent) {
-	r := NewSpectatorRegistry()
-	var out []liveSent
-	r.send = func(data []byte, to *net.UDPAddr) {
-		pkt := new(proto.Packet)
-		if err := pb.Unmarshal(data, pkt); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, liveSent{pkt, to})
-	}
-	return r, &out
-}
-
-func livePush(code string, session int32, m *proto.SpectatorInputPush) *proto.Packet {
+func livePush(code string, session int32, m *proto.SpectatorInputPush) *proto.SpectatorInputPush {
 	m.BattleCode = pb.String(code)
 	m.SessionId = pb.Int32(session)
-	return &proto.Packet{Type: proto.MessageType_SpectatorInputPushType.Enum(), SpectatorInputPushData: m}
+	return m
 }
 
-func lastAck(t *testing.T, out []liveSent) *proto.SpectatorInputAck {
-	if len(out) == 0 || out[len(out)-1].pkt.GetType() != proto.MessageType_SpectatorInputAckType {
-		t.Fatalf("no ack: %v", out)
-	}
-	return out[len(out)-1].pkt.GetSpectatorInputAckData()
+func liveInputs(code string, session int32, f int, data string) *proto.SpectatorInputPush {
+	return livePush(code, session, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(f)), FrameBytes: pb.Int32(2), InputData: []byte(data)})
 }
 
-var (
-	liveUp    = &net.UDPAddr{IP: net.IPv4(203, 0, 113, 5), Port: 40001}
-	liveOther = &net.UDPAddr{IP: net.IPv4(203, 0, 113, 6), Port: 40002}
-	liveSpec  = &net.UDPAddr{IP: net.IPv4(198, 51, 100, 9), Port: 50000}
-)
+func liveClose(code string, session int32, f int) *proto.SpectatorInputPush {
+	return livePush(code, session, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(f)), CloseReason: pb.String("end")})
+}
 
 func TestLiveUplinkPush(t *testing.T) {
-	r, out := newLiveTest(t)
+	r := NewSpectatorRegistry()
 	now := time.Unix(1700000000, 0)
-	// not opened: ignored, no ack
-	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
-	if len(*out) != 0 {
+	if r.Push(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("h")}), now) != nil {
 		t.Fatal("push to a battle that was not opened answered")
 	}
 	r.Open("B1", 7, nil, now)
-	r.Handle(livePush("B1", 8, &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
-	if len(*out) != 0 {
+	if r.Push(livePush("B1", 8, &proto.SpectatorInputPush{Header: []byte("h")}), now) != nil {
 		t.Fatal("push with a wrong session answered")
 	}
-	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("hdr")}), liveUp, now)
-	if a := lastAck(t, *out); !a.GetHeaderAck() || a.GetStateAck() != 0 || a.GetAckFrame() != 0 {
+	if a := r.Push(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("hdr")}), now); !a.GetHeaderAck() || a.GetAckFrame() != 0 {
 		t.Fatalf("ack %v", a)
 	}
-	// a start state (older uplinks) is neither kept nor acked
-	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{State: []byte("abcd"), StateOffset: pb.Int32(0), StateTotal: pb.Int32(8)}), liveUp, now)
-	if a := lastAck(t, *out); a.StateAck != nil {
+	if a := r.Push(livePush("B1", 7, &proto.SpectatorInputPush{State: []byte("abcd"), StateOffset: pb.Int32(0), StateTotal: pb.Int32(8)}), now); a.StateAck != nil {
 		t.Fatalf("state acked: %v", a)
 	}
-	// inputs: 2 bytes a frame
-	in := func(f int, data string) *proto.Packet {
-		return livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(f)), FrameBytes: pb.Int32(2), InputData: []byte(data)})
-	}
-	r.Handle(in(0, "a0a1"), liveUp, now)
-	r.Handle(in(3, "a3"), liveUp, now)
-	r.Handle(in(1, "a1a2"), liveUp, now)
-	if a := lastAck(t, *out); a.GetAckFrame() != 3 {
+	r.Push(liveInputs("B1", 7, 0, "a0a1"), now)
+	r.Push(liveInputs("B1", 7, 3, "a3"), now)
+	if a := r.Push(liveInputs("B1", 7, 1, "a1a2"), now); a.GetAckFrame() != 3 {
 		t.Fatalf("frame ack %v", a)
 	}
-	// another address is not the uplink
-	n := len(*out)
-	r.Handle(in(3, "b3"), liveOther, now)
-	if len(*out) != n {
-		t.Fatal("second uplink answered")
-	}
-	// close only once every frame up to it arrived
-	cl := func(f int) *proto.Packet {
-		return livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(f)), CloseReason: pb.String("end")})
-	}
-	r.Handle(cl(4), liveUp, now)
-	if a := lastAck(t, *out); a.GetCloseAck() {
+	if a := r.Push(liveClose("B1", 7, 4), now); a.GetCloseAck() {
 		t.Fatal("close with a missing frame")
 	}
-	r.Handle(cl(3), liveUp, now)
-	if a := lastAck(t, *out); !a.GetCloseAck() {
+	if a := r.Push(liveClose("B1", 7, 3), now); !a.GetCloseAck() {
 		t.Fatal("close not acked")
+	}
+	if a := r.Push(liveInputs("B1", 7, 3, "a3"), now); a.GetAckFrame() != 3 {
+		t.Fatalf("input after close kept: %v", a)
 	}
 	if s := r.sessions["B1"]; string(s.inputs) != "a0a1a2" || string(s.header) != "hdr" {
 		t.Fatalf("session %q %q", s.header, s.inputs)
 	}
 }
 
-// liveSpectator is a client that keeps contiguous data and acks every push.
-type liveSpectator struct {
-	code    string
-	cookie  []byte
-	header  []byte
-	state   []byte
-	inputs  []byte
-	rounds  []byte
-	closed  bool
-	pushes  int
-	dropped int
+type liveHTTP struct {
+	t  *testing.T
+	sv *httptest.Server
 }
 
-func (c *liveSpectator) subscribe() *proto.Packet {
-	cookie := c.cookie
-	if cookie == nil {
-		cookie = make([]byte, liveCookieBytes)
-	}
-	return &proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{BattleCode: pb.String(c.code), Cookie: cookie}}
+func newLiveHTTP(t *testing.T, r *SpectatorRegistry) *liveHTTP {
+	sv := httptest.NewServer(&APIHandler{Live: r})
+	t.Cleanup(sv.Close)
+	return &liveHTTP{t, sv}
 }
 
-func (c *liveSpectator) receive(pkt *proto.Packet) *proto.Packet {
-	if ch := pkt.GetSpectatorSubscribeChallengeData(); ch != nil {
-		c.code, c.cookie = ch.GetBattleCode(), ch.GetCookie()
-		return c.subscribe()
+func (c *liveHTTP) push(m *proto.SpectatorInputPush) (*proto.SpectatorInputAck, int) {
+	body, _ := pb.Marshal(m)
+	res, err := http.Post(c.sv.URL+"/lbs/live_push", "application/x-protobuf", bytes.NewReader(body))
+	if err != nil {
+		c.t.Fatal(err)
 	}
-	m := pkt.GetSpectatorInputPushData()
-	c.pushes++
-	if h := m.GetHeader(); h != nil && c.header == nil {
-		c.header = h
+	defer res.Body.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(res.Body)
+	a := new(proto.SpectatorInputAck)
+	if res.StatusCode == 200 {
+		if err := pb.Unmarshal(buf.Bytes(), a); err != nil {
+			c.t.Fatal(err)
+		}
 	}
-	if rd := m.GetRoundData(); len(rd) > len(c.rounds) {
-		c.rounds = rd
-	}
-	if st := m.GetState(); st != nil && int(m.GetStateOffset()) == len(c.state) {
-		c.state = append(c.state, st...)
-	}
-	fb := int(m.GetFrameBytes())
-	if in := m.GetInputData(); in != nil && int(m.GetStartFrame())*fb == len(c.inputs) {
-		c.inputs = append(c.inputs, in...)
-	}
-	if m.CloseReason != nil && int(m.GetStartFrame())*4 == len(c.inputs) {
-		c.closed = true
-	}
-	return &proto.Packet{Type: proto.MessageType_SpectatorInputAckType.Enum(), SpectatorInputAckData: &proto.SpectatorInputAck{
-		BattleCode: pb.String(c.code), HeaderAck: pb.Bool(c.header != nil), StateAck: pb.Int32(int32(len(c.state))),
-		AckFrame: pb.Int32(int32(len(c.inputs) / 4)), CloseAck: pb.Bool(c.closed), RoundAck: pb.Int32(int32(len(c.rounds)))}}
+	return a, res.StatusCode
 }
 
-func TestLiveFanoutLossy(t *testing.T) {
-	r, out := newLiveTest(t)
+func (c *liveHTTP) pull(q url.Values) (*proto.SpectatorInputPush, int, time.Duration) {
+	start := time.Now()
+	res, err := http.Get(c.sv.URL + "/lbs/live_pull?" + q.Encode())
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(res.Body)
+	m := new(proto.SpectatorInputPush)
+	if res.StatusCode == 200 {
+		if err := pb.Unmarshal(buf.Bytes(), m); err != nil {
+			c.t.Fatal(err)
+		}
+	}
+	return m, res.StatusCode, time.Since(start)
+}
+
+// A spectator that pulls with what it holds gets the header, rounds, every input and the close.
+func TestLiveHTTP(t *testing.T) {
+	r := NewSpectatorRegistry()
+	c := newLiveHTTP(t, r)
+	if _, code := c.push(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("h")})); code != 404 {
+		t.Fatalf("push to an unknown battle: %d", code)
+	}
+	if _, code, _ := c.pull(url.Values{"battle_code": {"B1"}}); code != 404 {
+		t.Fatalf("pull of an unknown battle: %d", code)
+	}
+	r.Open("B1", 7, nil, time.Now())
+	if a, code := c.push(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("hdr"), RoundData: []byte("r1")})); code != 200 || !a.GetHeaderAck() || a.GetRoundAck() != 2 {
+		t.Fatalf("push %d %v", code, a)
+	}
+	var in []byte
+	for f := 0; f < liveMaxPullFrames+5; f++ {
+		in = append(in, byte(f), byte(f>>8))
+	}
+	c.push(liveInputs("B1", 7, 0, string(in)))
+	c.push(liveClose("B1", 7, liveMaxPullFrames+5))
+
+	q := url.Values{"battle_code": {"B1"}, "id": {"s1"}}
+	m, code, _ := c.pull(q)
+	if code != 200 || string(m.GetHeader()) != "hdr" || m.InputData != nil || m.GetBattleCode() != "B1" {
+		t.Fatalf("first pull %d %v", code, m)
+	}
+	q.Set("header", "1")
+	var got []byte
+	closed := false
+	for i := 0; i < 5 && !closed; i++ {
+		q.Set("frame", fmt.Sprint(len(got)/2))
+		m, _, _ = c.pull(q)
+		if rd := m.GetRoundData(); rd != nil {
+			if string(rd) != "r1" {
+				t.Fatalf("rounds %q", rd)
+			}
+			q.Set("round", fmt.Sprint(len(rd)))
+		}
+		if m.InputData != nil && int(m.GetStartFrame()) == len(got)/2 {
+			got = append(got, m.GetInputData()...)
+		}
+		closed = m.CloseReason != nil && int(m.GetStartFrame()) == len(got)/2
+	}
+	if !closed || !bytes.Equal(got, in) || q.Get("round") != "2" {
+		t.Fatalf("closed %v, %d of %d input bytes, round %s", closed, len(got), len(in), q.Get("round"))
+	}
+	if l := r.List(); len(l) != 1 || l[0].Spectators != 1 {
+		t.Fatalf("list %v", l)
+	}
+}
+
+// A pull without news waits for the next push, at most liveWait.
+func TestLiveHTTPLongPoll(t *testing.T) {
+	r := NewSpectatorRegistry()
+	c := newLiveHTTP(t, r)
+	r.Open("B1", 7, nil, time.Now())
+	c.push(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("hdr")}))
+	q := url.Values{"battle_code": {"B1"}, "header": {"1"}, "frame": {"0"}}
+	m, code, took := c.pull(q)
+	if code != 200 || m.InputData != nil || took < liveWait-50*time.Millisecond || took > liveWait+500*time.Millisecond {
+		t.Fatalf("idle pull %d %v after %v", code, m, took)
+	}
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		r.Push(liveInputs("B1", 7, 0, "a0"), time.Now())
+	}()
+	m, _, took = c.pull(q)
+	if string(m.GetInputData()) != "a0" || took > liveWait/2 {
+		t.Fatalf("woken pull %v after %v", m, took)
+	}
+}
+
+func TestLiveEndGrace(t *testing.T) {
+	r := NewSpectatorRegistry()
 	now := time.Unix(1700000000, 0)
-	r.Open("OLD", 1, nil, now.Add(-time.Minute))
-	r.Handle(livePush("OLD", 1, &proto.SpectatorInputPush{Header: []byte("old")}), liveOther, now)
-	r.Open("B1", 7, nil, now)
-	state := make([]byte, 100000)
-	for i := range state {
-		state[i] = byte(i * 7)
+	r.Open("B1", 7, []*db.ReplayUser{{UserID: "u1"}}, now)
+	r.Push(liveInputs("B1", 7, 0, "a0a1"), now)
+	r.End("B1", "nobody", now)
+	r.End("B1", "u1", now)
+	r.Tick(now.Add(liveEndGrace - time.Second))
+	if !r.sessions["B1"].closed.IsZero() {
+		t.Fatal("closed before the grace")
 	}
-	inputs := make([]byte, 3000*4)
-	for i := range inputs {
-		inputs[i] = byte(i * 13)
+	r.Tick(now.Add(liveEndGrace))
+	m := r.Pull(&LivePull{Code: "B1", Header: true, Frame: 2}, 0, nil)
+	if m.GetCloseReason() != "battle end" || m.GetStartFrame() != 2 {
+		t.Fatalf("close %v", m)
 	}
-	r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{Header: []byte("header")}), liveUp, now)
-	// an older uplink also pushes a start state: not fanned out
-	for off := 0; off < len(state); off += liveChunkBytes {
-		end := off + liveChunkBytes
-		if end > len(state) {
-			end = len(state)
-		}
-		r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{State: state[off:end], StateOffset: pb.Int32(int32(off)), StateTotal: pb.Int32(int32(len(state)))}), liveUp, now)
-	}
-	// the battle goes on while the spectator joins: frames arrive over time
-	pushed := 0
-	var rounds []byte
-	pushFrames := func(n int) {
-		if pushed+n > 3000 {
-			n = 3000 - pushed
-		}
-		r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(int32(pushed)), FrameBytes: pb.Int32(4), InputData: inputs[pushed*4 : (pushed+n)*4]}), liveUp, now)
-		pushed += n
-		if pushed%1200 < n {
-			rounds = append(rounds, byte(pushed/1200), 1)
-			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{RoundData: rounds}), liveUp, now)
-			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{RoundData: rounds[:1]}), liveUp, now)
-		}
-		if pushed == 3000 {
-			r.Handle(livePush("B1", 7, &proto.SpectatorInputPush{StartFrame: pb.Int32(3000), CloseReason: pb.String("end")}), liveUp, now)
-		}
-	}
-	pushFrames(600)
-	*out = nil
-
-	// empty code: the newest battle with an uplink, then every 5th datagram to it is lost
-	c := &liveSpectator{}
-	r.Handle(c.subscribe(), liveSpec, now)
-	n := 0
-	for step := 0; step < 20000 && !c.closed; step++ {
-		q := *out
-		*out = nil
-		for _, s := range q {
-			if s.to != liveSpec {
-				continue
-			}
-			if n++; n%5 == 0 {
-				c.dropped++
-				continue
-			}
-			if reply := c.receive(s.pkt); reply != nil {
-				r.Handle(reply, liveSpec, now)
-			}
-		}
-		now = now.Add(10 * time.Millisecond)
-		if step%5 == 0 {
-			r.Fanout(now)
-			pushFrames(3)
-		}
-		if step%200 == 0 {
-			r.Handle(c.subscribe(), liveSpec, now)
-		}
-	}
-	if len(rounds) != 4 || !bytes.Equal(c.rounds, rounds) {
-		t.Fatalf("rounds %v, want %v", c.rounds, rounds)
-	}
-	if c.code != "B1" || !c.closed || string(c.header) != "header" || len(c.state) != 0 || !bytes.Equal(c.inputs, inputs) {
-		t.Fatalf("code %s closed %v header %q state %d/%d inputs %d/%d", c.code, c.closed, c.header, len(c.state), 0, len(c.inputs), len(inputs))
-	}
-	t.Logf("pushes %d, dropped %d, until %v", c.pushes, c.dropped, now.Sub(time.Unix(1700000000, 0)))
-
-	// silent subscribers are dropped, closed battles after the retention
-	r.Fanout(now.Add(liveSubscriberTimeout + time.Second))
-	if len(r.sessions["B1"].subs) != 0 || r.nsubs != 0 {
-		t.Fatal("silent subscriber kept")
-	}
-	r.Sweep(now.Add(liveRetention + time.Second))
-	if _, ok := r.sessions["B1"]; ok {
-		t.Fatal("closed battle kept")
+	r.Tick(now.Add(liveEndGrace + liveRetention + time.Second))
+	if r.Pull(&LivePull{Code: "B1"}, 0, nil) != nil || r.nsubs != 0 {
+		t.Fatalf("not dropped, %d subscribers", r.nsubs)
 	}
 }
 
-func TestLiveCookie(t *testing.T) {
-	r, out := newLiveTest(t)
-	now := time.Unix(1700000010, 0)
+func TestLiveSubscriberLimit(t *testing.T) {
+	r := NewSpectatorRegistry()
+	now := time.Now()
 	r.Open("B1", 7, nil, now)
-	sub := func(cookie []byte, from *net.UDPAddr, at time.Time) {
-		r.Handle(&proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{BattleCode: pb.String("B1"), Cookie: cookie}}, from, at)
+	for i := 0; i < liveMaxBattleSubscriber; i++ {
+		if r.Pull(&LivePull{Code: "B1", ID: fmt.Sprint(i)}, 0, nil) == nil {
+			t.Fatalf("subscriber %d refused", i)
+		}
 	}
-	sub(make([]byte, liveCookieBytes), liveSpec, now)
-	ch := (*out)[0].pkt.GetSpectatorSubscribeChallengeData()
-	if ch == nil || ch.GetBattleCode() != "B1" || len(ch.GetCookie()) != liveCookieBytes {
-		t.Fatalf("challenge %v", *out)
+	if r.Pull(&LivePull{Code: "B1", ID: "x"}, 0, nil) != nil || r.Pull(&LivePull{Code: "B1", ID: "0"}, 0, nil) == nil {
+		t.Fatal("limit")
 	}
-	sub(ch.GetCookie(), liveOther, now)
-	if len(r.sessions["B1"].subs) != 0 {
-		t.Fatal("cookie accepted from another address")
-	}
-	sub(ch.GetCookie(), liveSpec, now.Add(2*liveCookieWindow+time.Second))
-	if len(r.sessions["B1"].subs) != 0 {
-		t.Fatal("expired cookie accepted")
-	}
-	sub(ch.GetCookie(), liveSpec, now.Add(liveCookieWindow))
-	if len(r.sessions["B1"].subs) != 1 {
-		t.Fatal("cookie of the previous window refused")
+	r.Tick(now.Add(liveSubscriberTimeout + time.Second))
+	if r.nsubs != 0 || r.Pull(&LivePull{Code: "B1", ID: "x"}, 0, nil) == nil {
+		t.Fatalf("timed out subscribers kept: %d", r.nsubs)
 	}
 }
 
@@ -299,25 +251,21 @@ func TestLiveUplinkChoice(t *testing.T) {
 }
 
 func TestLiveAutoNextPick(t *testing.T) {
-	r, out := newLiveTest(t)
+	r := NewSpectatorRegistry()
 	now := time.Unix(1700000020, 0)
 	for i, code := range []string{"A", "B", "C"} {
 		r.Open(code, uint32(i+1), nil, now.Add(time.Duration(i-3)*time.Minute))
-		r.Handle(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
+		r.Push(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), now)
 	}
-	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("a0a1")}), liveUp, now)
-	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(1), CloseReason: pb.String("end")}), liveUp, now)
+	r.Push(liveInputs("C", 3, 0, "a0a1"), now)
+	r.Push(liveClose("C", 3, 2), now)
 	r.Open("D", 4, nil, now) // no uplink yet
 	pick := func(skip ...string) string {
-		*out = nil
-		r.Handle(&proto.Packet{Type: proto.MessageType_SpectatorSubscribeType.Enum(), SpectatorSubscribeData: &proto.SpectatorSubscribeRequest{
-			Cookie: make([]byte, liveCookieBytes), SkipCodes: skip}}, liveSpec, now)
-		for _, s := range *out {
-			if ch := s.pkt.GetSpectatorSubscribeChallengeData(); ch != nil {
-				return ch.GetBattleCode()
-			}
+		m := r.Pull(&LivePull{Skip: skip, ID: "s"}, 0, nil)
+		if m == nil {
+			return ""
 		}
-		return ""
+		return m.GetBattleCode()
 	}
 	// running before closed, latest opened first, never one without an uplink
 	for _, c := range []struct {
@@ -331,16 +279,16 @@ func TestLiveAutoNextPick(t *testing.T) {
 }
 
 func TestLiveList(t *testing.T) {
-	r, _ := newLiveTest(t)
+	r := NewSpectatorRegistry()
 	now := time.Unix(1700000030, 0)
 	users := []*db.ReplayUser{{UserID: "u1", UserName: "n1", Team: 1, Pos: 1}}
 	for i, code := range []string{"A", "B", "C"} {
 		r.Open(code, uint32(i+1), users, now.Add(time.Duration(i-3)*time.Minute))
-		r.Handle(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), liveUp, now)
+		r.Push(livePush(code, int32(i+1), &proto.SpectatorInputPush{Header: []byte("h")}), now)
 	}
-	r.Handle(livePush("A", 1, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("a0a1b0b1")}), liveUp, now)
-	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(0), FrameBytes: pb.Int32(4), InputData: []byte("c0c1")}), liveUp, now)
-	r.Handle(livePush("C", 3, &proto.SpectatorInputPush{StartFrame: pb.Int32(1), CloseReason: pb.String("end")}), liveUp, now)
+	r.Push(liveInputs("A", 1, 0, "a0a1"), now)
+	r.Push(liveInputs("C", 3, 0, "c0"), now)
+	r.Push(liveClose("C", 3, 1), now)
 	r.Open("D", 4, users, now) // no uplink yet
 	var got []string
 	for _, b := range r.List() {

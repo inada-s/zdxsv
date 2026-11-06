@@ -16,10 +16,10 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 | 443 | tcp | DNAS, login pages | public | PS2 |
 | 8200 | tcp | lobby | public | PS2 |
 | 8201 | tcp, udp | lobby RPC, STUN | public | zproxy |
-| 8203 | tcp | HTTP API (behind the reverse proxy) | internal | — |
+| 8203 | tcp | HTTP API, live spectating (behind the reverse proxy) | internal | — |
 | 8210 | tcp, udp | battle | public | PS2, zproxy |
 | 8220 | tcp | TLS lobby ([TLS.md](TLS.md)) | public | emulator |
-| 8221 | udp | STUN, live spectating | public | emulator |
+| 8221 | udp | STUN | public | emulator |
 | 8222 | udp | connectivity test | public | emulator |
 | 8223 | udp | GGPO relay | public | emulator |
 
