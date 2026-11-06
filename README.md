@@ -61,6 +61,6 @@ set -a; . ./.env; set +a
 ./bin/zdxsv           # every server in one process; ports 53 and 443 need root or cap_net_bind_service
 ```
 The server does not serve a website (`website/` is the zdxsv.net site, published to GitHub Pages).
-To see who is online, read the lobby's HTTP API: `curl http://<host>:8203/lbs/status`.
+To see who is online, read the lobby's HTTP API: `curl http://127.0.0.1:8203/lbs/status` on the host (the API listens on loopback; publish it through a reverse proxy).
 `make smoke` runs the whole thing on a throwaway database and checks each server.
 

@@ -10,18 +10,20 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 - `CAP_NET_BIND_SERVICE` (or root) for ports 53 and 443
 - Open ports:
 
-| port | proto | |
-|---|---|---|
-| 53 | udp | DNS |
-| 443 | tcp | DNAS, login pages |
-| 8200 | tcp | lobby |
-| 8201 | tcp, udp | lobby RPC, STUN |
-| 8202 | udp | connectivity test |
-| 8204 | udp | GGPO relay |
-| 8210 | tcp, udp | battle |
-| 8221 | tcp | TLS lobby for emulators ([TLS.md](TLS.md)) |
+| port | proto | use | public / internal | used by |
+|---|---|---|---|---|
+| 53 | udp | DNS | public | PS2 |
+| 443 | tcp | DNAS, login pages | public | PS2 |
+| 8200 | tcp | lobby | public | PS2 |
+| 8201 | tcp, udp | lobby RPC, STUN | public | zproxy |
+| 8203 | tcp | HTTP API (behind the reverse proxy) | internal | — |
+| 8210 | tcp, udp | battle | public | PS2, zproxy |
+| 8220 | tcp | TLS lobby ([TLS.md](TLS.md)) | public | emulator |
+| 8221 | udp | STUN, live spectating | public | emulator |
+| 8222 | udp | connectivity test | public | emulator |
+| 8223 | udp | GGPO relay | public | emulator |
 
-The HTTP API (8203) is for the host only; put a reverse proxy in front to publish it.
+Internal ports listen on `127.0.0.1` only (`ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203`); open only the public ones.
 If systemd-resolved holds port 53, set `DNSStubListener=no` in `/etc/systemd/resolved.conf`.
 
 ## Configuration
@@ -36,7 +38,7 @@ ZDXSV_LOBBY_RPC_ADDR=:8201
 ZDXSV_LOBBY_PUBLIC_ADDR=203.0.113.10:8200
 ZDXSV_BATTLE_ADDR=:8210
 ZDXSV_BATTLE_PUBLIC_ADDR=203.0.113.10:8210
-ZDXSV_LOBBY_RELAY_ADDR=:8204
+ZDXSV_LOBBY_RELAY_ADDR=:8223
 ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203
 ZDXSV_DB_NAME=/var/lib/zdxsv/zdxsv.db
 ```

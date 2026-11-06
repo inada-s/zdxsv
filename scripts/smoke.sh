@@ -21,7 +21,7 @@ ZDXSV_LOBBY_RPC_ADDR=:8201
 ZDXSV_LOBBY_PUBLIC_ADDR=$IP:8200
 ZDXSV_BATTLE_ADDR=:8210
 ZDXSV_BATTLE_PUBLIC_ADDR=$IP:8210
-ZDXSV_LOBBY_API_ADDR=:8203
+ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203
 ZDXSV_DB_NAME=zdxsv.db
 EOS
 fi
@@ -66,10 +66,10 @@ for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
 check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.0.0.1:443
-check "lobby on tls 8221 (CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8221 "$ca_pin"
-check "lobby on tls 8221 (server key pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8221 "$server_pin"
-check "lobby on tls 8221 (backup CA pin, CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8221 "$backup_pin" "$ca_pin"
-check "lobby on tls 8221 refuses a chain without the pin" sh -c "! \"$bin\" -profile=0 tlscheck 127.0.0.1:8221 $backup_pin"
+check "lobby on tls 8220 (CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$ca_pin"
+check "lobby on tls 8220 (server key pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$server_pin"
+check "lobby on tls 8220 (backup CA pin, CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$backup_pin" "$ca_pin"
+check "lobby on tls 8220 refuses a chain without the pin" sh -c "! \"$bin\" -profile=0 tlscheck 127.0.0.1:8220 $backup_pin"
 
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"

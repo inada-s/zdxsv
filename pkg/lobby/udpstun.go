@@ -46,6 +46,22 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 	return nil
 }
 
+// ServeUDPStun answers Ping with Pong on addr, with neither the test socket nor live spectating.
+func (s *Server) ServeUDPStun(addr string) error {
+	glog.Infoln("Start UDPStun", addr)
+	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
+	if err != nil {
+		return err
+	}
+	conn, err := net.ListenUDP("udp4", udpAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	serveUDPStun(conn, nil, nil)
+	return nil
+}
+
 // serveUDPStun answers Pings and hands spectator packets to live (nil: none).
 func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
 	buf := make([]byte, 64<<10)
