@@ -153,12 +153,14 @@ func NewApp() *App {
 	return app
 }
 
+const lobbyCount = 26
+
 // getLobby returns the lobby of the platform, creating the platform's lobbies on first use.
 func (a *App) getLobby(platform string, lobbyID uint16) (*model.Lobby, bool) {
 	lobbys, ok := a.lobbys[platform]
 	if !ok {
 		lobbys = make(map[uint16]*model.Lobby)
-		for i := 0; i < model.LobbyCount; i++ {
+		for i := 0; i < lobbyCount; i++ {
 			lobbys[uint16(i)] = model.NewLobby(platform, uint16(i))
 		}
 		a.lobbys[platform] = lobbys

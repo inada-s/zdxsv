@@ -57,17 +57,22 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (10 min, single
   use) that links an existing account at sign-in.
-- Lobby settings from a Google Spreadsheet by a Discord slash command: `ZDXSV_DISCORD_PUBLIC_KEY`
-  (the Discord app's public key), `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and
-  role ids that may run it), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket,
-  the spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint
-  URL to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register
-  the command once with the bot token:
-  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"reload-lobby-setting","description":"Reload the lobby settings from the spreadsheet","default_member_permissions":"0"}' https://discord.com/api/v10/applications/<app id>/commands`.
-  `/reload-lobby-setting` reads the table under a cell `@m_lobby_setting` (any sheet): header
-  row `platform` (`console`/`emu`), `lobby_id` (0-25), `battle_gauge`, `battle_time`,
-  `battle_count` (rule menu values, empty for the default), data rows down to the first empty
-  row. It replaces `m_lobby_setting` only when every row is valid, else answers the errors.
+- Master data (today only bans, `m_ban`) from a Google Spreadsheet by a Discord slash command
+  for moderators: `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key),
+  `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and moderator role ids that may run
+  it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
+  spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint URL
+  to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register the
+  command once with the bot token (`default_member_permissions` 4: shown only to members who
+  can ban):
+  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"reload-master","description":"Reload the bans from the spreadsheet","default_member_permissions":"4"}' https://discord.com/api/v10/applications/<app id>/commands`.
+  `/reload-master` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
+  `@m_` tables are ignored): header row `key` (a user id), `until`, optional `reason`,
+  `created`; data rows down to the first empty row. Times like `2026/11/06 12:00:00` are UTC
+  unless they carry an offset (`2026-11-06T21:00:00+09:00`). It replaces `m_ban` only when every
+  row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
+  account is refused at its next login until `until`, with no restart; `ban` (`/ops/ban`) is
+  separate and unchanged.
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

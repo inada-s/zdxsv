@@ -9,10 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
@@ -78,11 +78,11 @@ func newRig(t *testing.T) *rig {
 	dapi := &fakeDiscordAPI{edits: make(chan string, 4)}
 	ds := httptest.NewServer(dapi)
 	t.Cleanup(ds.Close)
-	updater := &LobbySettingUpdater{Sheet: &Spreadsheet{ID: "sheet-id", BaseURL: ss.URL}}
+	updater := &MasterUpdater{Sheet: &Spreadsheet{ID: "sheet-id", BaseURL: ss.URL}}
 	d := &Discord{
 		PublicKey: pub,
 		Allow:     map[string]bool{"ops-role": true, "ops-user": true},
-		Commands:  map[string]func(context.Context) (string, error){"reload-lobby-setting": updater.Update},
+		Commands:  map[string]func(context.Context) (string, error){"reload-master": updater.Update},
 		APIURL:    ds.URL,
 	}
 	api := httptest.NewServer(d)
@@ -122,7 +122,7 @@ func command(name, user string, roles ...string) string {
 
 func (r *rig) run(user string, roles ...string) string {
 	r.t.Helper()
-	code, m := r.post(command("reload-lobby-setting", user, roles...), true)
+	code, m := r.post(command("reload-master", user, roles...), true)
 	if code != http.StatusOK || m["type"] != float64(responseDeferredChannelMessage) {
 		r.t.Fatalf("answer %d %v, want deferred message", code, m)
 	}
@@ -136,92 +136,135 @@ func (r *rig) run(user string, roles ...string) string {
 	}
 }
 
-func lobbySettings(t *testing.T) []*db.LobbySetting {
+func masterBans(t *testing.T) []*db.MasterBan {
 	t.Helper()
-	s, err := db.DefaultDB.GetLobbySettings()
+	b, err := db.DefaultDB.GetMasterBans()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s
+	return b
 }
 
-var goodSheets = map[string][][]string{
-	"memo": {{"free text"}},
-	"lobby's settings": {
-		{"", "@m_lobby_setting"},
-		{"", "platform", "lobby_id", "battle_gauge", "battle_time", "battle_count", "", "note"},
-		{"", "console", "2", "600", "210", "3"},
-		{"", "emu", "2"},
-		{"", "emu", "5", "1", "", "1", "", "ignored"},
-		{},
-		{"", "trailing rows are not part of the table"},
-	},
+func newUser(t *testing.T) *db.User {
+	t.Helper()
+	a, err := db.DefaultDB.RegisterAccount("1.2.3.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := db.DefaultDB.RegisterUser(a.LoginKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }
 
-func TestReloadLobbySetting(t *testing.T) {
+func banned(t *testing.T, u *db.User) bool {
+	t.Helper()
+	b, err := db.DefaultDB.FindBan(u.LoginKey, "5.6.7.8", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b != nil
+}
+
+func banSheets(rows ...[]string) map[string][][]string {
+	table := [][]string{{"", "@m_ban"}, {"", "key", "until", "reason", "", "note"}}
+	for _, r := range rows {
+		table = append(table, append([]string{""}, r...))
+	}
+	return map[string][][]string{
+		"memo":       {{"free text"}},
+		"other game": {{"@m_rule"}, {"anything"}, {"1"}},
+		"ban":        append(table, []string{}, []string{"", "trailing rows are not part of the table"}),
+	}
+}
+
+func TestReloadMasterBan(t *testing.T) {
 	r := newRig(t)
-	r.sheets.sheets = goodSheets
+	a, b, c := newUser(t), newUser(t), newUser(t)
+	sibling, err := db.DefaultDB.RegisterUser(a.LoginKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.sheets.sheets = banSheets(
+		[]string{a.UserID, "2099/12/31 23:59:59", "cheat"},
+		[]string{b.UserID, "2000-01-01"},
+	)
 	msg := r.run("someone", "ops-role")
-	if msg != "m_lobby_setting updated: 3 rows" {
+	if msg != "m_ban updated: 2 rows" {
 		t.Fatalf("message %q", msg)
 	}
-	want := []*db.LobbySetting{
-		{Platform: "console", LobbyID: 2, BattleGauge: 600, BattleTime: 210, BattleCount: 3},
-		{Platform: "emu", LobbyID: 2},
-		{Platform: "emu", LobbyID: 5, BattleGauge: 1, BattleCount: 1},
+	got := masterBans(t)
+	if len(got) != 2 {
+		t.Fatalf("m_ban %+v", got)
 	}
-	if got := lobbySettings(t); !reflect.DeepEqual(got, want) {
-		t.Fatalf("m_lobby_setting %+v", got)
+	byKey := map[string]*db.MasterBan{got[0].Key: got[0], got[1].Key: got[1]}
+	if x := byKey[a.UserID]; x == nil || !x.Until.Equal(time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)) || x.Reason != "cheat" {
+		t.Errorf("row a %+v", x)
+	}
+	if !banned(t, a) || !banned(t, sibling) || banned(t, b) || banned(t, c) {
+		t.Errorf("after the first load: a %v sibling %v b(expired) %v c %v", banned(t, a), banned(t, sibling), banned(t, b), banned(t, c))
 	}
 
-	r.sheets.sheets = map[string][][]string{"s": {
-		{"@m_lobby_setting"},
-		{"platform", "lobby_id", "battle_gauge", "battle_time"},
-		{"console", "1", "600"},
-		{"ps2", "26", "123", "x"},
-		{"console", "1"},
-	}}
+	r.sheets.sheets = banSheets(
+		[]string{c.UserID, "2099-01-01 00:00"},
+		[]string{"NOSUCH", "2099-01-01"},
+		[]string{c.UserID, "tomorrow"},
+		[]string{"", "2099-01-01"},
+	)
 	msg = r.run("ops-user")
-	for _, s := range []string{"failed, nothing changed", `row 2: battle_gauge "123"`, `row 2: battle_time "x"`,
-		"row 2: lobby_id 26", `row 2: platform "ps2"`, "row 3: console lobby 1 is also on row 1"} {
+	for _, s := range []string{"failed, nothing changed", `row 2: key "NOSUCH" is no user`, `row 3: key "` + c.UserID + `" is also on row 1`,
+		`row 3: until "tomorrow" is not a time`, `row 4: key "" is no user`} {
 		if !strings.Contains(msg, s) {
 			t.Errorf("message %q lacks %q", msg, s)
 		}
 	}
-	if got := lobbySettings(t); !reflect.DeepEqual(got, want) {
-		t.Fatalf("an invalid sheet changed m_lobby_setting: %+v", got)
+	if len(masterBans(t)) != 2 || banned(t, c) || !banned(t, a) {
+		t.Fatalf("an invalid sheet changed m_ban: %+v", masterBans(t))
 	}
 
-	r.sheets.sheets = map[string][][]string{"s": {{"@m_lobby_setting"}, {"platform", "lobby", "battle_time"}}}
-	if msg = r.run("ops-user"); !strings.Contains(msg, `unknown column "lobby"`) || !strings.Contains(msg, "no column lobby_id") {
+	r.sheets.sheets = map[string][][]string{"s": {{"@m_ban"}, {"key", "until", "lift"}}}
+	if msg = r.run("ops-user"); !strings.Contains(msg, `unknown column "lift"`) {
+		t.Errorf("message %q", msg)
+	}
+	r.sheets.sheets = map[string][][]string{"s": {{"@m_ban"}, {"key", "reason"}}}
+	if msg = r.run("ops-user"); !strings.Contains(msg, "no column until") {
 		t.Errorf("message %q", msg)
 	}
 	r.sheets.sheets = map[string][][]string{"s": {{"x"}}}
-	if msg = r.run("ops-user"); !strings.Contains(msg, "no table @m_lobby_setting") {
+	if msg = r.run("ops-user"); !strings.Contains(msg, "no table @m_ban") {
 		t.Errorf("message %q", msg)
 	}
-	if got := lobbySettings(t); !reflect.DeepEqual(got, want) {
-		t.Fatalf("m_lobby_setting changed: %+v", got)
+	if len(masterBans(t)) != 2 {
+		t.Fatalf("m_ban changed: %+v", masterBans(t))
 	}
 
-	r.sheets.sheets = map[string][][]string{"s": {{"@m_lobby_setting"}, {"platform", "lobby_id"}}}
-	if msg = r.run("ops-user"); msg != "m_lobby_setting updated: 0 rows" || len(lobbySettings(t)) != 0 {
-		t.Errorf("empty table: %q %v", msg, lobbySettings(t))
+	r.sheets.sheets = banSheets([]string{c.UserID, "2099-01-01T09:00:00+09:00"})
+	if msg = r.run("ops-user"); msg != "m_ban updated: 1 rows" || banned(t, a) || !banned(t, c) {
+		t.Errorf("replace: %q a %v c %v", msg, banned(t, a), banned(t, c))
+	}
+	if got := masterBans(t); !got[0].Until.Equal(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("until with an offset: %v", got[0].Until)
+	}
+	r.sheets.sheets = banSheets()
+	if msg = r.run("ops-user"); msg != "m_ban updated: 0 rows" || banned(t, c) {
+		t.Errorf("empty table: %q %v", msg, masterBans(t))
 	}
 }
 
 func TestDiscordRejects(t *testing.T) {
 	r := newRig(t)
-	r.sheets.sheets = goodSheets
+	u := newUser(t)
+	r.sheets.sheets = banSheets([]string{u.UserID, "2099-01-01"})
 
-	if code, _ := r.post(command("reload-lobby-setting", "ops-user"), false); code != http.StatusUnauthorized {
+	if code, _ := r.post(command("reload-master", "ops-user"), false); code != http.StatusUnauthorized {
 		t.Errorf("bad signature: %d", code)
 	}
 	if code, m := r.post(`{"type":1}`, true); code != http.StatusOK || m["type"] != float64(responsePong) {
 		t.Errorf("ping: %d %v", code, m)
 	}
 	for _, c := range []struct{ body, msg string }{
-		{command("reload-lobby-setting", "someone", "other-role"), "not allowed"},
+		{command("reload-master", "someone", "other-role"), "not allowed"},
 		{command("other", "ops-user"), "unknown command other"},
 	} {
 		code, m := r.post(c.body, true)
@@ -231,7 +274,7 @@ func TestDiscordRejects(t *testing.T) {
 		}
 	}
 	r.d.Wait()
-	if len(r.edits) != 0 || len(lobbySettings(t)) != 0 {
+	if len(r.edits) != 0 || len(masterBans(t)) != 0 || banned(t, u) {
 		t.Errorf("a rejected command ran")
 	}
 }

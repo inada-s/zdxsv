@@ -128,13 +128,12 @@ CREATE TABLE IF NOT EXISTS m_server_setting (
 	key text PRIMARY KEY,
 	value text default ''
 );
-CREATE TABLE IF NOT EXISTS m_lobby_setting (
-	platform text,
-	lobby_id integer,
-	battle_gauge integer default 0,
-	battle_time integer default 0,
-	battle_count integer default 0,
-	PRIMARY KEY (platform, lobby_id)
+CREATE TABLE IF NOT EXISTS m_ban (
+	key text,
+	until timestamp,
+	reason text default '',
+	created timestamp,
+	PRIMARY KEY (key)
 );
 `
 
@@ -155,7 +154,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "m_lobby_setting", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "ban", "m_server_setting", "m_ban", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -311,13 +310,51 @@ SELECT * FROM ban WHERE
 	(kind = 'machine' AND value <> '' AND value = ?) OR
 	(kind = 'ip' AND value <> '' AND value = ?)
 LIMIT 1`, loginKey, machineID, ip).StructScan(ban)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	if err == nil {
+		return ban, nil
 	}
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+	bans := []*MasterBan{}
+	err = db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?)`, loginKey)
 	if err != nil {
 		return nil, err
 	}
-	return ban, nil
+	now := time.Now()
+	for _, b := range bans {
+		if now.Before(b.Until) {
+			return &Ban{Kind: BanUser, Value: b.Key, Reason: b.Reason, Created: b.Created}, nil
+		}
+	}
+	return nil, nil
+}
+
+func (db SQLiteDB) ReplaceMaster(m *Master) error {
+	tx, err := db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM m_ban`); err != nil {
+		return err
+	}
+	for _, b := range m.Bans {
+		if b.Created.IsZero() {
+			b.Created = time.Now()
+		}
+		_, err := tx.NamedExec(`INSERT INTO m_ban (key, until, reason, created) VALUES (:key, :until, :reason, :created)`, b)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db SQLiteDB) GetMasterBans() ([]*MasterBan, error) {
+	bans := []*MasterBan{}
+	err := db.Select(&bans, `SELECT * FROM m_ban ORDER BY key`)
+	return bans, err
 }
 
 func (db SQLiteDB) GetServerSetting(key string) (string, error) {
@@ -698,29 +735,4 @@ func (db SQLiteDB) GetKillCountRanking(side byte) ([]*RankingRecord, error) {
 	db.mtx.Unlock()
 
 	return ranking, nil
-}
-
-func (db SQLiteDB) ReplaceLobbySettings(settings []*LobbySetting) error {
-	tx, err := db.Beginx()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM m_lobby_setting`); err != nil {
-		return err
-	}
-	for _, s := range settings {
-		_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, lobby_id, battle_gauge, battle_time, battle_count)
-			VALUES (:platform, :lobby_id, :battle_gauge, :battle_time, :battle_count)`, s)
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-func (db SQLiteDB) GetLobbySettings() ([]*LobbySetting, error) {
-	settings := []*LobbySetting{}
-	err := db.Select(&settings, `SELECT platform, lobby_id, battle_gauge, battle_time, battle_count FROM m_lobby_setting ORDER BY platform, lobby_id`)
-	return settings, err
 }

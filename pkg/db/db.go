@@ -67,6 +67,20 @@ const (
 	BanIP      = "ip"
 )
 
+// MasterBan is a row of m_ban, the spreadsheet's bans: every user of the account of user Key
+// is refused until Until.
+type MasterBan struct {
+	Key     string    `db:"key" json:"key"`
+	Until   time.Time `db:"until" json:"until"`
+	Reason  string    `db:"reason" json:"reason,omitempty"`
+	Created time.Time `db:"created" json:"created"`
+}
+
+// Master is the master data loaded from the spreadsheet; ReplaceMaster replaces all of it.
+type Master struct {
+	Bans []*MasterBan
+}
+
 type User struct {
 	LoginKey  string `db:"login_key" json:"login_key,omitempty"`
 	SessionID string `db:"session_id" json:"session_id,omitempty"`
@@ -179,16 +193,6 @@ type RankingRecord struct {
 	User
 }
 
-// LobbySetting is a row of m_lobby_setting: the rule of the battles started in a lobby.
-// A rule value of 0 keeps the default.
-type LobbySetting struct {
-	Platform    string `db:"platform" json:"platform"`
-	LobbyID     uint16 `db:"lobby_id" json:"lobby_id"`
-	BattleGauge uint16 `db:"battle_gauge" json:"battle_gauge"`
-	BattleTime  uint16 `db:"battle_time" json:"battle_time"`
-	BattleCount uint16 `db:"battle_count" json:"battle_count"`
-}
-
 type DB interface {
 	Init() error
 	Migrate() error
@@ -227,13 +231,13 @@ type DB interface {
 	// DeleteBan returns false when there was no such ban.
 	DeleteBan(kind, value string) (bool, error)
 	GetBanList() ([]*Ban, error)
-	// FindBan returns the ban matching the login, nil if none.
+	// FindBan returns the ban (ban, or an unexpired m_ban as kind user) matching the login, nil if none.
 	FindBan(loginKey, ip, machineID string) (*Ban, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
-	// ReplaceLobbySettings replaces all of m_lobby_setting at once.
-	ReplaceLobbySettings(settings []*LobbySetting) error
-	GetLobbySettings() ([]*LobbySetting, error)
+	// ReplaceMaster replaces every m_ table of m in one transaction.
+	ReplaceMaster(m *Master) error
+	GetMasterBans() ([]*MasterBan, error)
 
 	// An account can hold three users.
 	RegisterUser(loginKey string) (*User, error)

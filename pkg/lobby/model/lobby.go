@@ -2,9 +2,6 @@ package model
 
 const roomCount = 5
 
-// LobbyCount is the number of lobbies of a platform, ids 0 to LobbyCount-1.
-const LobbyCount = 26
-
 type Lobby struct {
 	ID         uint16
 	Platform   string

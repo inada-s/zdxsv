@@ -207,10 +207,10 @@ func newDiscord() *chatops.Discord {
 			allow[id] = true
 		}
 	}
-	updater := &chatops.LobbySettingUpdater{Sheet: &chatops.Spreadsheet{ID: c.MasterSpreadsheetID, Client: client}}
+	updater := &chatops.MasterUpdater{Sheet: &chatops.Spreadsheet{ID: c.MasterSpreadsheetID, Client: client}}
 	return &chatops.Discord{
 		PublicKey: ed25519.PublicKey(key),
 		Allow:     allow,
-		Commands:  map[string]func(context.Context) (string, error){"reload-lobby-setting": updater.Update},
+		Commands:  map[string]func(context.Context) (string, error){"reload-master": updater.Update},
 	}
 }
