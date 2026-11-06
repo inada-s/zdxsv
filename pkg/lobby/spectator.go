@@ -1,13 +1,11 @@
 package lobby
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/binary"
-	"net"
+	"io"
+	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,47 +16,50 @@ import (
 	pb "github.com/golang/protobuf/proto"
 )
 
-// Live spectating over the lobby's UDP socket (ServeUDPStunServer): one GGPO participant
-// of a lobby battle (live_uplink=1 in the
-// battle info) pushes its replay as it records it, and the lobby fans it out to
-// spectators that subscribed with a cookie proving their address.
+// Live spectating over the lobby HTTP API: one GGPO participant of a lobby battle
+// (live_uplink=1 in the battle info) POSTs its replay to /lbs/live_push as it records
+// it, and spectators long-poll /lbs/live_pull.
 //
 // No start state: a spectator plays the battle start from the hosted common state
-// and the header's lobby answers. Every stream (header, inputs) is go-back-N: up
-// to liveWindow datagrams past the receiver's ack, back to the ack after
-// liveResend without progress. Receivers keep contiguous data only and ack every
-// push. Order to a spectator: header, inputs, close. The round results so far
-// (round_data, a few bytes per round) go whole after the header, resent until
-// the receiver acks their length.
+// and the header's lobby answers.
+//
+// /lbs/live_push: body a SpectatorInputPush (battle_code, session_id = the battle's
+// ggpo_session, and any of header, round_data, start_frame + frame_bytes + input_data,
+// close_reason with start_frame = the last frame); answer a SpectatorInputAck with
+// what the lobby holds. Inputs past the held frames are dropped: the uplink resends
+// from ack_frame.
+//
+// /lbs/live_pull?battle_code=&skip=&frame=&header=&round=&id=: battle_code empty picks
+// the newest battle, or with skip (comma-separated codes) the newest running one not in
+// skip. frame: the frames the spectator holds; header=1: it holds the header; round: the
+// round_data bytes it holds; id: a random spectator id (counts spectators). Answer a
+// SpectatorInputPush with battle_code and what is new: header, round_data (whole),
+// input_data from frame, close_reason once every frame was sent. Without news it waits
+// up to liveWait. 404: no such battle.
 const (
-	liveChunkBytes          = 1000
-	liveWindow              = 32
-	liveResend              = 200 * time.Millisecond
-	liveMaxFramesPerPush    = 128
+	liveMaxPushBytes        = 256 << 10
+	liveMaxPullFrames       = 600
+	liveWait                = time.Second
 	liveMaxHeaderBytes      = 16 << 10
 	liveMaxRoundBytes       = 4 << 10
 	liveMaxFrameBytes       = 4 * 64
 	liveMaxFrames           = 60 * 60 * 60 // an hour at 60 fps: a battle is shorter, the memory per session bounded
-	liveFanoutInterval      = 50 * time.Millisecond
 	liveSubscriberTimeout   = 10 * time.Second
 	liveRetention           = 10 * time.Minute // after close
 	liveIdle                = 10 * time.Minute // without a push
 	liveEndGrace            = 5 * time.Second  // after a player's battle end, without a push: the lobby closes
 	liveMaxSubscribers      = 4096
 	liveMaxBattleSubscriber = 512
-	liveCookieBytes         = 16
-	liveCookieWindow        = 30 * time.Second
+	liveMaxIDBytes          = 64
 )
 
 // Spectators is the lobby's registry; battleInfoNotice opens a session per GGPO battle.
 var Spectators = NewSpectatorRegistry()
 
 type SpectatorRegistry struct {
-	mu        sync.Mutex
-	cookieKey [32]byte
-	sessions  map[string]*liveSession
-	nsubs     int
-	send      func(data []byte, to *net.UDPAddr)
+	mu       sync.Mutex
+	sessions map[string]*liveSession
+	nsubs    int
 }
 
 type liveSession struct {
@@ -68,40 +69,19 @@ type liveSession struct {
 	lastPush    time.Time
 	closed      time.Time // zero while running
 	ended       time.Time // first player back in the lobby or reporting the battle; zero before
-	publisher   *net.UDPAddr
+	pushed      bool
 	header      []byte
 	rounds      []byte
 	frameBytes  int
 	inputs      []byte
 	closeReason string
-	subs        map[string]*liveSubscriber
+	subs        map[string]time.Time // spectator id -> last pull
+	changed     chan struct{}
 	users       []*db.ReplayUser // for the /lbs/live list
 }
 
-// liveStream is a receiver's go-back-N position in frames.
-type liveStream struct {
-	acked, next int
-	progress    time.Time
-}
-
-type liveSubscriber struct {
-	addr       *net.UDPAddr
-	seen       time.Time
-	headerAck  bool
-	headerSent time.Time
-	roundAck   int
-	roundSent  time.Time
-	frames     liveStream
-	closeAck   bool
-	closeSent  time.Time
-}
-
 func NewSpectatorRegistry() *SpectatorRegistry {
-	r := &SpectatorRegistry{sessions: map[string]*liveSession{}}
-	if _, err := rand.Read(r.cookieKey[:]); err != nil {
-		glog.Fatalln(err)
-	}
-	return r
+	return &SpectatorRegistry{sessions: map[string]*liveSession{}}
 }
 
 // Open starts accepting the battle's uplink (session = its ggpo_session; users for List). Idempotent.
@@ -111,12 +91,12 @@ func (r *SpectatorRegistry) Open(code string, session uint32, users []*db.Replay
 	if _, ok := r.sessions[code]; ok {
 		return
 	}
-	r.sessions[code] = &liveSession{code: code, session: int32(session), opened: now, lastPush: now, subs: map[string]*liveSubscriber{}, users: users}
+	r.sessions[code] = &liveSession{code: code, session: int32(session), opened: now, lastPush: now, subs: map[string]time.Time{}, changed: make(chan struct{}), users: users}
 	glog.Infoln("live open", code)
 }
 
 // End marks userID's battle as over. A still-pushing uplink ends with its own close; a silent one
-// is closed by Fanout after liveEndGrace.
+// is closed by Tick after liveEndGrace.
 func (r *SpectatorRegistry) End(code, userID string, now time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -133,94 +113,17 @@ func (r *SpectatorRegistry) End(code, userID string, now time.Time) {
 	}
 }
 
-// Serve sends with conn and runs the fanout and sweep until conn is closed.
-func (r *SpectatorRegistry) Serve(conn *net.UDPConn) {
-	r.mu.Lock()
-	r.send = func(data []byte, to *net.UDPAddr) { conn.WriteToUDP(data, to) }
-	r.mu.Unlock()
-	fanout := time.NewTicker(liveFanoutInterval)
-	defer fanout.Stop()
-	sweep := time.Now()
-	for now := range fanout.C {
-		r.Fanout(now)
-		if now.Sub(sweep) >= time.Minute {
-			r.Sweep(now)
-			sweep = now
-		}
+func (r *SpectatorRegistry) Run() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for now := range t.C {
+		r.Tick(now)
 	}
 }
 
-// Handle takes a spectator packet (false: not one).
-func (r *SpectatorRegistry) Handle(pkt *proto.Packet, from *net.UDPAddr, now time.Time) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	switch pkt.GetType() {
-	case proto.MessageType_SpectatorInputPushType:
-		r.onPush(pkt.GetSpectatorInputPushData(), from, now)
-	case proto.MessageType_SpectatorInputAckType:
-		r.onAck(pkt.GetSpectatorInputAckData(), from, now)
-	case proto.MessageType_SpectatorSubscribeType:
-		r.onSubscribe(pkt.GetSpectatorSubscribeData(), from, now)
-	default:
-		return false
-	}
-	return true
-}
-
-func (r *SpectatorRegistry) sendPacket(pkt *proto.Packet, to *net.UDPAddr) {
-	if r.send == nil {
-		return
-	}
-	data, err := pb.Marshal(pkt)
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	r.send(data, to)
-}
-
-func (r *SpectatorRegistry) onPush(m *proto.SpectatorInputPush, from *net.UDPAddr, now time.Time) {
-	s := r.sessions[m.GetBattleCode()]
-	if m == nil || s == nil || m.GetSessionId() != s.session {
-		return
-	}
-	if s.publisher == nil {
-		s.publisher = from
-		glog.Infoln("live uplink", s.code, from)
-	}
-	if !sameAddr(s.publisher, from) {
-		return
-	}
-	s.lastPush = now
-	if h := m.GetHeader(); len(h) > 0 && s.header == nil && len(h) <= liveMaxHeaderBytes {
-		s.header = append([]byte(nil), h...)
-	}
-	if rd := m.GetRoundData(); len(s.rounds) < len(rd) && len(rd) <= liveMaxRoundBytes {
-		s.rounds = append([]byte(nil), rd...)
-	}
-	if fb := int(m.GetFrameBytes()); 0 < fb && fb <= liveMaxFrameBytes && (s.frameBytes == 0 || s.frameBytes == fb) {
-		s.frameBytes = fb
-		in := m.GetInputData()
-		start := int(m.GetStartFrame()) * fb
-		if s.closed.IsZero() && len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) && start+len(in) <= liveMaxFrames*fb {
-			s.inputs = append(s.inputs, in[len(s.inputs)-start:]...)
-		}
-	}
-	if m.CloseReason != nil && s.closed.IsZero() && s.frameBytes > 0 && int(m.GetStartFrame())*s.frameBytes == len(s.inputs) {
-		s.closed = now
-		s.closeReason = m.GetCloseReason()
-		glog.Infoln("live close", s.code, s.closeReason, "frames", len(s.inputs)/s.frameBytes)
-	}
-	r.sendPacket(&proto.Packet{
-		Type: proto.MessageType_SpectatorInputAckType.Enum(),
-		SpectatorInputAckData: &proto.SpectatorInputAck{
-			BattleCode: pb.String(s.code),
-			AckFrame:   pb.Int32(int32(s.frames())),
-			HeaderAck:  pb.Bool(s.header != nil),
-			RoundAck:   pb.Int32(int32(len(s.rounds))),
-			CloseAck:   pb.Bool(!s.closed.IsZero()),
-		},
-	}, from)
+func (s *liveSession) notify() {
+	close(s.changed)
+	s.changed = make(chan struct{})
 }
 
 func (s *liveSession) frames() int {
@@ -230,77 +133,154 @@ func (s *liveSession) frames() int {
 	return len(s.inputs) / s.frameBytes
 }
 
-func (r *SpectatorRegistry) onAck(m *proto.SpectatorInputAck, from *net.UDPAddr, now time.Time) {
+// Push takes an uplink push and returns the ack (nil: no such battle or session).
+func (r *SpectatorRegistry) Push(m *proto.SpectatorInputPush, now time.Time) *proto.SpectatorInputAck {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	s := r.sessions[m.GetBattleCode()]
-	if s == nil {
-		return
+	if s == nil || m.GetSessionId() != s.session {
+		return nil
 	}
-	sub := s.subs[from.String()]
-	if sub == nil {
-		return
+	if !s.pushed {
+		s.pushed = true
+		glog.Infoln("live uplink", s.code)
 	}
-	sub.headerAck = sub.headerAck || m.GetHeaderAck()
-	if n := int(m.GetRoundAck()); n > sub.roundAck {
-		sub.roundAck = n
+	s.lastPush = now
+	changed := false
+	if h := m.GetHeader(); len(h) > 0 && s.header == nil && len(h) <= liveMaxHeaderBytes {
+		s.header = append([]byte(nil), h...)
+		changed = true
 	}
-	sub.frames.ack(int(m.GetAckFrame()), now)
-	sub.closeAck = sub.closeAck || m.GetCloseAck()
-	r.fanoutTo(s, sub, now)
-}
-
-func (st *liveStream) ack(n int, now time.Time) {
-	if st.acked < n {
-		st.acked = n
-		st.progress = now
+	if rd := m.GetRoundData(); len(s.rounds) < len(rd) && len(rd) <= liveMaxRoundBytes {
+		s.rounds = append([]byte(nil), rd...)
+		changed = true
 	}
-	if st.next < st.acked {
-		st.next = st.acked
-	}
-}
-
-func (r *SpectatorRegistry) onSubscribe(m *proto.SpectatorSubscribeRequest, from *net.UDPAddr, now time.Time) {
-	code := m.GetBattleCode()
-	if code == "" && len(m.GetSkipCodes()) > 0 {
-		if code = r.next(m.GetSkipCodes()); code != "" {
-			glog.Infoln("live next", code, "for", from, "skipping", len(m.GetSkipCodes()))
+	if fb := int(m.GetFrameBytes()); 0 < fb && fb <= liveMaxFrameBytes && (s.frameBytes == 0 || s.frameBytes == fb) {
+		s.frameBytes = fb
+		in := m.GetInputData()
+		start := int(m.GetStartFrame()) * fb
+		if s.closed.IsZero() && len(in)%fb == 0 && 0 <= start && start <= len(s.inputs) && len(s.inputs) < start+len(in) && start+len(in) <= liveMaxFrames*fb {
+			s.inputs = append(s.inputs, in[len(s.inputs)-start:]...)
+			changed = true
 		}
+	}
+	if m.CloseReason != nil && s.closed.IsZero() && s.frameBytes > 0 && int(m.GetStartFrame())*s.frameBytes == len(s.inputs) {
+		s.closed = now
+		s.closeReason = m.GetCloseReason()
+		changed = true
+		glog.Infoln("live close", s.code, s.closeReason, "frames", s.frames())
+	}
+	if changed {
+		s.notify()
+	}
+	return &proto.SpectatorInputAck{
+		BattleCode: pb.String(s.code),
+		AckFrame:   pb.Int32(int32(s.frames())),
+		HeaderAck:  pb.Bool(s.header != nil),
+		RoundAck:   pb.Int32(int32(len(s.rounds))),
+		CloseAck:   pb.Bool(!s.closed.IsZero()),
+	}
+}
+
+// LivePull is what a spectator holds of a battle (Code empty: pick one, see Skip).
+type LivePull struct {
+	Code   string
+	Skip   []string // with Code empty: the newest running battle not in Skip
+	ID     string
+	Frame  int
+	Header bool
+	Round  int
+}
+
+// Pull returns what is new for q (nil: no such battle, or the subscriber limit),
+// waiting up to wait for it. done aborts the wait.
+func (r *SpectatorRegistry) Pull(q *LivePull, wait time.Duration, done <-chan struct{}) *proto.SpectatorInputPush {
+	r.mu.Lock()
+	code := q.Code
+	if code == "" && len(q.Skip) > 0 {
+		code = r.next(q.Skip)
 	} else if code == "" {
 		code = r.newest()
 	}
 	s := r.sessions[code]
-	if s == nil {
-		return
+	if s == nil || !r.subscribe(s, q.ID, time.Now()) {
+		r.mu.Unlock()
+		return nil
 	}
-	if !r.validCookie(code, from, m.GetCookie(), now) {
-		r.sendPacket(&proto.Packet{
-			Type: proto.MessageType_SpectatorSubscribeChallengeType.Enum(),
-			SpectatorSubscribeChallengeData: &proto.SpectatorSubscribeChallenge{
-				BattleCode: pb.String(code),
-				Cookie:     r.cookie(code, from, now.Unix()/int64(liveCookieWindow/time.Second)),
-			},
-		}, from)
-		return
-	}
-	key := from.String()
-	sub := s.subs[key]
-	if sub == nil {
-		if r.nsubs >= liveMaxSubscribers || len(s.subs) >= liveMaxBattleSubscriber {
-			return
+	m := s.news(q)
+	if m == nil && wait > 0 {
+		ch := s.changed
+		r.mu.Unlock()
+		t := time.NewTimer(wait)
+		select {
+		case <-ch:
+		case <-t.C:
+		case <-done:
 		}
-		sub = &liveSubscriber{addr: from, frames: liveStream{progress: now}}
-		s.subs[key] = sub
-		r.nsubs++
-		glog.Infoln("live subscribe", code, from)
+		t.Stop()
+		r.mu.Lock()
+		m = s.news(q)
 	}
-	sub.seen = now
-	r.fanoutTo(s, sub, now)
+	r.mu.Unlock()
+	if m == nil {
+		m = &proto.SpectatorInputPush{}
+	}
+	m.BattleCode = pb.String(code)
+	return m
+}
+
+func (r *SpectatorRegistry) subscribe(s *liveSession, id string, now time.Time) bool {
+	if _, ok := s.subs[id]; !ok {
+		if r.nsubs >= liveMaxSubscribers || len(s.subs) >= liveMaxBattleSubscriber {
+			return false
+		}
+		r.nsubs++
+		glog.Infoln("live subscribe", s.code, id)
+	}
+	s.subs[id] = now
+	return true
+}
+
+// news returns what q lacks (nil: nothing). Header first: nothing else before the spectator has it.
+func (s *liveSession) news(q *LivePull) *proto.SpectatorInputPush {
+	if !q.Header {
+		if s.header == nil {
+			return nil
+		}
+		return &proto.SpectatorInputPush{Header: s.header}
+	}
+	m := &proto.SpectatorInputPush{}
+	any := false
+	if q.Round < len(s.rounds) {
+		m.RoundData = s.rounds
+		any = true
+	}
+	have := s.frames()
+	if fb := s.frameBytes; fb > 0 && 0 <= q.Frame && q.Frame < have {
+		n := have - q.Frame
+		if n > liveMaxPullFrames {
+			n = liveMaxPullFrames
+		}
+		m.StartFrame = pb.Int32(int32(q.Frame))
+		m.FrameBytes = pb.Int32(int32(fb))
+		m.InputData = s.inputs[q.Frame*fb : (q.Frame+n)*fb]
+		any = true
+	} else if !s.closed.IsZero() && q.Frame == have {
+		m.StartFrame = pb.Int32(int32(have))
+		m.CloseReason = pb.String(s.closeReason)
+		any = true
+	}
+	if !any {
+		return nil
+	}
+	return m
 }
 
 // newest returns the latest opened battle with an uplink, preferring running ones.
 func (r *SpectatorRegistry) newest() string {
 	var best *liveSession
 	for _, s := range r.sessions {
-		if s.publisher == nil {
+		if !s.pushed {
 			continue
 		}
 		if best == nil || (best.closed.IsZero() == s.closed.IsZero() && best.opened.Before(s.opened)) || (!best.closed.IsZero() && s.closed.IsZero()) {
@@ -329,7 +309,7 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 	defer r.mu.Unlock()
 	var ss []*liveSession
 	for _, s := range r.sessions {
-		if s.publisher != nil {
+		if s.pushed {
 			ss = append(ss, s)
 		}
 	}
@@ -358,7 +338,7 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 func (r *SpectatorRegistry) next(skip []string) string {
 	var best *liveSession
 	for _, s := range r.sessions {
-		if s.publisher == nil || !s.closed.IsZero() || containsCode(skip, s.code) {
+		if !s.pushed || !s.closed.IsZero() || containsCode(skip, s.code) {
 			continue
 		}
 		if best == nil || best.opened.Before(s.opened) {
@@ -371,117 +351,33 @@ func (r *SpectatorRegistry) next(skip []string) string {
 	return best.code
 }
 
-// Fanout sends every subscriber what its window allows and drops silent ones.
-func (r *SpectatorRegistry) Fanout(now time.Time) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, s := range r.sessions {
-		if s.closed.IsZero() && !s.ended.IsZero() && now.Sub(s.ended) >= liveEndGrace && now.Sub(s.lastPush) >= liveEndGrace {
-			s.closed = now
-			s.closeReason = "battle end"
-			glog.Infoln("live close", s.code, s.closeReason, "frames", s.frames(), "uplink silent")
-		}
-		for key, sub := range s.subs {
-			if now.Sub(sub.seen) > liveSubscriberTimeout {
-				delete(s.subs, key)
-				r.nsubs--
-				continue
-			}
-			r.fanoutTo(s, sub, now)
-		}
-	}
-}
-
-func (r *SpectatorRegistry) fanoutTo(s *liveSession, sub *liveSubscriber, now time.Time) {
-	push := func(m *proto.SpectatorInputPush) {
-		m.BattleCode = pb.String(s.code)
-		r.sendPacket(&proto.Packet{Type: proto.MessageType_SpectatorInputPushType.Enum(), SpectatorInputPushData: m}, sub.addr)
-	}
-	if !sub.headerAck {
-		if s.header != nil && now.Sub(sub.headerSent) >= liveResend {
-			sub.headerSent = now
-			push(&proto.SpectatorInputPush{Header: s.header})
-		}
-		return
-	}
-	if sub.roundAck < len(s.rounds) && now.Sub(sub.roundSent) >= liveResend {
-		sub.roundSent = now
-		push(&proto.SpectatorInputPush{RoundData: s.rounds})
-	}
-	if fb := s.frameBytes; fb > 0 {
-		per := liveChunkBytes / fb
-		if per > liveMaxFramesPerPush {
-			per = liveMaxFramesPerPush
-		}
-		sub.frames.window(now, s.frames(), per, func(f, n int) {
-			push(&proto.SpectatorInputPush{StartFrame: pb.Int32(int32(f)), FrameBytes: pb.Int32(int32(fb)), InputData: s.inputs[f*fb : (f+n)*fb]})
-		})
-	}
-	if !s.closed.IsZero() && !sub.closeAck && sub.frames.acked == s.frames() && now.Sub(sub.closeSent) >= liveResend {
-		sub.closeSent = now
-		push(&proto.SpectatorInputPush{StartFrame: pb.Int32(int32(s.frames())), CloseReason: pb.String(s.closeReason)})
-	}
-}
-
-// window sends chunks of up to per units from next while next < have and within
-// liveWindow chunks of acked; back to acked after liveResend without progress.
-func (st *liveStream) window(now time.Time, have, per int, send func(off, n int)) {
-	if st.next > st.acked && now.Sub(st.progress) >= liveResend {
-		st.next = st.acked
-		st.progress = now
-	}
-	for st.next < have && st.next < st.acked+liveWindow*per {
-		n := have - st.next
-		if n > per {
-			n = per
-		}
-		if st.next == st.acked {
-			st.progress = now
-		}
-		send(st.next, n)
-		st.next += n
-	}
-}
-
-// Sweep drops sessions closed longer than liveRetention or without a push for liveIdle.
-func (r *SpectatorRegistry) Sweep(now time.Time) {
+// Tick closes battles whose uplink went silent after the battle end, drops spectators
+// silent for liveSubscriberTimeout, and sessions closed longer than liveRetention or
+// without a push for liveIdle.
+func (r *SpectatorRegistry) Tick(now time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for code, s := range r.sessions {
 		if (!s.closed.IsZero() && now.Sub(s.closed) > liveRetention) || (s.closed.IsZero() && now.Sub(s.lastPush) > liveIdle) {
 			r.nsubs -= len(s.subs)
 			delete(r.sessions, code)
+			s.notify()
 			glog.Infoln("live drop", code)
+			continue
+		}
+		if s.closed.IsZero() && !s.ended.IsZero() && now.Sub(s.ended) >= liveEndGrace && now.Sub(s.lastPush) >= liveEndGrace {
+			s.closed = now
+			s.closeReason = "battle end"
+			s.notify()
+			glog.Infoln("live close", s.code, s.closeReason, "frames", s.frames(), "uplink silent")
+		}
+		for id, seen := range s.subs {
+			if now.Sub(seen) > liveSubscriberTimeout {
+				delete(s.subs, id)
+				r.nsubs--
+			}
 		}
 	}
-}
-
-// cookie binds a subscription to one battle, observed address and epoch;
-// length prefixes keep the encoding unambiguous.
-func (r *SpectatorRegistry) cookie(code string, addr *net.UDPAddr, epoch int64) []byte {
-	mac := hmac.New(sha256.New, r.cookieKey[:])
-	var enc [8]byte
-	for _, v := range []string{code, addr.String()} {
-		binary.BigEndian.PutUint64(enc[:], uint64(len(v)))
-		mac.Write(enc[:])
-		mac.Write([]byte(v))
-	}
-	binary.BigEndian.PutUint64(enc[:], uint64(epoch))
-	mac.Write(enc[:])
-	return mac.Sum(nil)[:liveCookieBytes]
-}
-
-// validCookie also accepts the previous epoch, so a challenge is good for at least one window.
-func (r *SpectatorRegistry) validCookie(code string, addr *net.UDPAddr, c []byte, now time.Time) bool {
-	if len(c) != liveCookieBytes {
-		return false
-	}
-	epoch := now.Unix() / int64(liveCookieWindow/time.Second)
-	return hmac.Equal(c, r.cookie(code, addr, epoch)) || hmac.Equal(c, r.cookie(code, addr, epoch-1))
-}
-
-func sameAddr(a, b *net.UDPAddr) bool {
-	return a.Port == b.Port && bytes.Equal(a.IP.To16(), b.IP.To16())
 }
 
 func containsCode(codes []string, code string) bool {
@@ -491,4 +387,68 @@ func containsCode(codes []string, code string) bool {
 		}
 	}
 	return false
+}
+
+func (h *APIHandler) serveLivePush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, liveMaxPushBytes+1))
+	if err != nil || len(body) > liveMaxPushBytes {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	m := new(proto.SpectatorInputPush)
+	if err := pb.Unmarshal(body, m); err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	ack := h.live().Push(m, time.Now())
+	if ack == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeProto(w, ack)
+}
+
+func (h *APIHandler) serveLivePull(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	q := &LivePull{Code: r.FormValue("battle_code"), ID: r.FormValue("id"), Header: r.FormValue("header") == "1"}
+	if s := r.FormValue("skip"); s != "" {
+		q.Skip = strings.Split(s, ",")
+	}
+	q.Frame, _ = strconv.Atoi(r.FormValue("frame"))
+	q.Round, _ = strconv.Atoi(r.FormValue("round"))
+	if q.ID == "" || len(q.ID) > liveMaxIDBytes {
+		q.ID = r.RemoteAddr
+	}
+	m := h.live().Pull(q, liveWait, r.Context().Done())
+	if m == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeProto(w, m)
+}
+
+func (h *APIHandler) live() *SpectatorRegistry {
+	if h.Live != nil {
+		return h.Live
+	}
+	return Spectators
+}
+
+func writeProto(w http.ResponseWriter, m pb.Message) {
+	data, err := pb.Marshal(m)
+	if err != nil {
+		glog.Errorln(err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-protobuf")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(data)
 }

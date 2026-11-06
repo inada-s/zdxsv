@@ -2,7 +2,6 @@ package lobby
 
 import (
 	"net"
-	"time"
 
 	"zdxsv/pkg/proto"
 
@@ -39,15 +38,14 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 	} else {
 		glog.Infoln("Start UDPStun test", testAddr)
 		defer test.Close()
-		go serveUDPStun(test, nil, nil)
+		go serveUDPStun(test, nil)
 	}
-	go Spectators.Serve(conn)
-	serveUDPStun(conn, test, Spectators)
+	serveUDPStun(conn, test)
 	return nil
 }
 
-// serveUDPStun answers Pings and hands spectator packets to live (nil: none).
-func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
+// serveUDPStun answers Pings.
+func serveUDPStun(conn, test *net.UDPConn) {
 	buf := make([]byte, 64<<10)
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
@@ -61,9 +59,6 @@ func serveUDPStun(conn, test *net.UDPConn, live *SpectatorRegistry) {
 		req := new(proto.Packet)
 		if err := pb.Unmarshal(buf[:n], req); err != nil {
 			glog.Errorln(err)
-			continue
-		}
-		if live != nil && live.Handle(req, addr, time.Now()) {
 			continue
 		}
 		data, test2 := udpStunAnswer(req, addr)

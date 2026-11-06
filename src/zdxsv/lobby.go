@@ -47,6 +47,7 @@ func serveLobby(app *lobby.App) {
 		go sv.Serve(l)
 	}
 	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.RPCAddr))
+	go lobby.Spectators.Run()
 	if c := config.Conf.Lobby; c.RelayAddr != "" {
 		public := c.RelayPublicAddr
 		if public == "" {
