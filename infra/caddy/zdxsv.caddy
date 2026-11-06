@@ -10,6 +10,7 @@ http://zdxsv.net {
 }
 
 lbs.zdxsv.net:8443 {
-	header Access-Control-Allow-Origin *
+	header /lbs/* Access-Control-Allow-Origin *
 	reverse_proxy /lbs/* 127.0.0.1:8203
+	reverse_proxy /auth/* 127.0.0.1:8203
 }
