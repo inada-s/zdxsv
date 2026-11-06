@@ -106,7 +106,10 @@ func TestLiveStream(t *testing.T) {
 	t.Log("8 MB to a reader beside a stalled one:", time.Since(start))
 
 	// A late spectator gets the stream from its start; the list counts all three.
-	b, _ := http.Get(sv.URL + "/lbs/live_stream")
+	b, err := http.Get(sv.URL + "/lbs/live_stream")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer b.Body.Close()
 	if b.Header.Get("X-Battle-Code") != "B1" {
 		t.Fatal("newest: ", b.Header)
