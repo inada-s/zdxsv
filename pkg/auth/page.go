@@ -10,18 +10,12 @@ type page struct {
 	Lang          string
 	Title         string
 	Notice        []string
-	CarryNotice   string
 	Button        string
 	ProviderURL   string
-	Carry         bool
 	Message       string
 	Expired       string
 	Denied        string
 	ProviderError string
-	CarryBad      string
-	CarryLocked   string
-	IdentityFull  string
-	AccountLinked string
 }
 
 var pages = map[string]page{
@@ -29,55 +23,37 @@ var pages = map[string]page{
 		Lang:  "ja",
 		Title: "ZDXSV サインイン",
 		Notice: []string{
-			"Discord アカウントでサインインします。ZDXSV が受け取るのは Discord のユーザー ID だけです。",
-			"サインイン後、エミュレーターに戻ると自動でログインします。",
-			"ひとつの Discord アカウントにつき ZDXSV アカウントはひとつです。",
+			"Discord アカウントでサインインします。ZDXSV が保存するのは Discord のユーザー ID だけです。",
+			"サインインが終わったらエミュレーターに戻ってください。",
 		},
-		CarryNotice:   "引き継ぎコードのアカウントをこの Discord アカウントに結び付けます。",
 		Button:        "Discord でサインイン",
 		Expired:       "サインインの期限が切れました。エミュレーターからやり直してください。",
 		Denied:        "サインインが取り消されました。",
 		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
-		CarryBad:      "引き継ぎコードが正しくないか、期限切れです。ロビーで新しいコードを発行してください。",
-		CarryLocked:   "引き継ぎコードの失敗が多すぎます。しばらくしてからやり直してください。",
-		IdentityFull:  "この Discord アカウントにはすでに 5 つの ZDXSV アカウントが結び付いています。",
-		AccountLinked: "このアカウントはすでに Discord アカウントに結び付いています。",
 	},
 	"en": {
 		Lang:  "en",
 		Title: "ZDXSV sign in",
 		Notice: []string{
-			"Sign in with your Discord account. ZDXSV receives only your Discord user ID.",
-			"After signing in, go back to the emulator: it logs in by itself.",
-			"One Discord account has one ZDXSV account.",
+			"Sign in with your Discord account. ZDXSV stores only your Discord user ID.",
+			"When the sign-in is done, go back to the emulator.",
 		},
-		CarryNotice:   "The account of your carry-over code will be linked to this Discord account.",
 		Button:        "Sign in with Discord",
 		Expired:       "The sign-in expired. Start again from the emulator.",
 		Denied:        "The sign-in was cancelled.",
 		ProviderError: "The sign-in failed. Try again later.",
-		CarryBad:      "The carry-over code is wrong or expired. Get a new one in the lobby.",
-		CarryLocked:   "Too many wrong carry-over codes. Try again later.",
-		IdentityFull:  "This Discord account already has 5 ZDXSV accounts.",
-		AccountLinked: "This account is already linked to a Discord account.",
 	},
 	"zh-TW": {
 		Lang:  "zh-TW",
 		Title: "ZDXSV 登入",
 		Notice: []string{
-			"使用 Discord 帳號登入。ZDXSV 只會取得您的 Discord 使用者 ID。",
-			"登入後回到模擬器，即會自動登入。",
-			"一個 Discord 帳號對應一個 ZDXSV 帳號。",
+			"使用 Discord 帳號登入。ZDXSV 只會儲存您的 Discord 使用者 ID。",
+			"登入完成後，請回到模擬器。",
 		},
-		CarryNotice:   "引繼碼的帳號將與此 Discord 帳號連結。",
 		Button:        "使用 Discord 登入",
 		Expired:       "登入已逾時，請從模擬器重新開始。",
 		Denied:        "登入已取消。",
 		ProviderError: "登入失敗，請稍後再試。",
-		CarryBad:      "引繼碼錯誤或已過期，請在大廳重新取得。",
-		CarryLocked:   "引繼碼錯誤次數過多，請稍後再試。",
-		IdentityFull:  "此 Discord 帳號已連結 5 個 ZDXSV 帳號。",
-		AccountLinked: "此帳號已連結 Discord 帳號。",
 	},
 }
 
@@ -112,7 +88,7 @@ a.b{display:inline-block;background:#5865f2;color:#fff;padding:.7em 1.4em;border
 </head><body><h1>{{.Title}}</h1>`
 
 var tplStart = template.Must(template.New("start").Parse(head +
-	`{{range .Notice}}<p>{{.}}</p>{{end}}{{if .Carry}}<p><b>{{.CarryNotice}}</b></p>{{end}}
+	`{{range .Notice}}<p>{{.}}</p>{{end}}
 <p><a class="b" href="{{.ProviderURL}}">{{.Button}}</a></p></body></html>`))
 
 var tplMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></body></html>`))

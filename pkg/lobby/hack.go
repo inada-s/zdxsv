@@ -12,6 +12,9 @@ func SendLobbyChatHackNotice(p *AppPeer) {
 	NoticeChatMessage(p, "SERVER", "＞", "利用可能コマンド")
 	NoticeChatMessage(p, "SERVER", "＞", "ｗ０：ワイドスクリーンパッチ無効化")
 	NoticeChatMessage(p, "SERVER", "＞", "ｗ１：ワイドスクリーンパッチ有効化")
+	if p.app.carryCode != nil {
+		NoticeChatMessage(p, "SERVER", "＞", "ｄｃ：エミュレーター用引き継ぎコード")
+	}
 }
 
 func LobbyChatHack(p *AppPeer, str string) {

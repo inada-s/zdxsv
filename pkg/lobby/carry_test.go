@@ -21,15 +21,34 @@ func TestCarryCodeCommand(t *testing.T) {
 	})
 	var cs []*testClient
 	var keys []string
-	for i := 0; i < 2; i++ {
+	for _, lobby := range []uint16{1, 1, 4} {
 		c := dialLobby(t, addr)
 		ac := registerAccount(t)
 		c.login(ac, "******", "pilot")
-		c.ask(0x6305, u16(4))
+		c.ask(0x6305, u16(lobby))
+		c.heard()
 		cs = append(cs, c)
 		keys = append(keys, ac.LoginKey)
 	}
 
+	cs[0].say(sjis(t, carryCommand))
+	if got := cs[0].heard(); len(issuedFor) != 0 || len(got) != 1 || strings.Contains(got[0], "CARRY234") {
+		t.Fatalf("under %d battles: issued for %v, heard %q", db.CarryMinBattles, issuedFor, got)
+	}
+	for _, k := range keys {
+		users, err := db.DefaultDB.GetUserList(k)
+		if err != nil || len(users) == 0 {
+			t.Fatal("no user", k, err)
+		}
+		users[0].BattleCount = db.CarryMinBattles
+		if err := db.DefaultDB.UpdateUser(users[0]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cs[2].say(sjis(t, carryCommand))
+	if len(issuedFor) != 0 {
+		t.Fatalf("issued outside lobby 1 for %v", issuedFor)
+	}
 	cs[0].say(sjis(t, carryCommand))
 	got := cs[0].heard()
 	if len(issuedFor) != 1 || issuedFor[0] != keys[0] || len(got) == 0 || !strings.Contains(got[0], "CARRY234") {

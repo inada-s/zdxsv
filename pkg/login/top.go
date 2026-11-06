@@ -2,8 +2,10 @@ package login
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -139,6 +141,8 @@ type APILoginResponse struct {
 	SessionID string `json:"session_id"`
 	LobbyAddr string `json:"lobby_addr"`
 	LbsInfo   string `json:"lbs_info"`
+	// Account is the number (from 1) of the account logged in to among the identity's.
+	Account int `json:"account,omitempty"`
 }
 
 // HandleAPILogin answers the login result in JSON, for clients that skip the
@@ -158,16 +162,46 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loginKey, keys, err := db.DefaultDB.TokenAccounts(token)
-	if n := r.FormValue("account"); err == nil && n != "" {
+	n := r.FormValue("account")
+	if err == nil && n == "" && len(keys) == 0 {
+		n = "new"
+	}
+	if err == nil && n == "new" {
+		// An account is made at its first login (the identity's first, or one the emulator added), so a
+		// mistaken Add makes nothing.
+		for _, k := range keys {
+			if ban, e := db.DefaultDB.FindBan(k); e != nil || ban != nil {
+				http.Error(w, "banned", http.StatusForbidden)
+				return
+			}
+		}
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		a, e := db.DefaultDB.AddTokenAccount(token, ip)
+		if errors.Is(e, db.ErrIdentityFull) {
+			http.Error(w, "too many accounts", http.StatusConflict)
+			return
+		}
+		if e != nil {
+			glog.Errorln("token login: new account:", e)
+			http.Error(w, "login failed", http.StatusForbidden)
+			return
+		}
+		glog.Infoln("token login: new account", a.LoginKey)
+		loginKey, keys = a.LoginKey, append(keys, a.LoginKey)
+	} else if err == nil && n != "" {
 		if i, e := strconv.Atoi(n); e == nil && 1 <= i && i <= len(keys) {
 			loginKey = keys[i-1]
 		} else {
 			loginKey = ""
 		}
 	}
-	if err != nil || loginKey == "" {
+	if err != nil || (loginKey == "" && len(keys) > 0) {
 		glog.Errorln("token login refused", err)
 		http.Error(w, "login failed", http.StatusForbidden)
+		return
+	}
+	if loginKey == "" {
+		http.Error(w, "no account", http.StatusNotFound)
 		return
 	}
 	a, err := loginAccount(loginKey)
@@ -184,12 +218,18 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(APILoginResponse{
+	res := APILoginResponse{
 		LoginKey:  gameKey,
 		SessionID: a.SessionID,
 		LobbyAddr: config.Conf.Lobby.PublicAddr,
 		LbsInfo:   LbsInfo,
-	})
+	}
+	for i, k := range keys {
+		if k == loginKey {
+			res.Account = i + 1
+		}
+	}
+	json.NewEncoder(w).Encode(res)
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {

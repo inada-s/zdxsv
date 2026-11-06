@@ -89,16 +89,21 @@ func TestMigrateIdentityHoldsManyKeys(t *testing.T) {
 	key, err := db.IdentityLoginKey("discord", "d1")
 	must(t, err)
 	assertEq(t, first.LoginKey, key)
-	for i := 2; i <= MaxIdentityAccounts; i++ {
+	for i := 2; i <= MaxIdentityNewAccounts; i++ {
 		_, err := db.RegisterIdentityAccount("discord", "d1", "1.2.3.4")
 		must(t, err)
 	}
 	if _, err := db.RegisterIdentityAccount("discord", "d1", "1.2.3.4"); err != ErrIdentityFull {
-		t.Fatal("account past the cap", err)
+		t.Fatal("new account past the cap", err)
+	}
+	for i := 1; i <= MaxIdentityCarriedAccounts; i++ {
+		a, err := db.RegisterAccount("1.2.3.4")
+		must(t, err)
+		must(t, db.LinkIdentity("discord", "d1", a.LoginKey))
 	}
 	keys, err := identityKeys(db.DB, "discord", "d1")
 	must(t, err)
-	assertEq(t, MaxIdentityAccounts, len(keys))
+	assertEq(t, MaxIdentityNewAccounts+MaxIdentityCarriedAccounts, len(keys))
 	assertEq(t, first.LoginKey, keys[0])
 }
 

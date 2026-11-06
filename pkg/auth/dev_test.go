@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"html"
 	"io"
 	"net/http"
@@ -65,6 +66,16 @@ func TestDevSignIn(t *testing.T) {
 	if resp.StatusCode != http.StatusFound || loc.Host != "127.0.0.1:50123" || loc.Query().Get("state") != "st" {
 		t.Fatal("emulator redirect", resp.StatusCode, loc)
 	}
+	resp, err := http.PostForm(site.URL+"/auth/token", url.Values{"code": {loc.Query().Get("code")}, "code_verifier": {verifier}})
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatal("token", err, resp.StatusCode)
+	}
+	var tok struct{ Token string }
+	json.NewDecoder(resp.Body).Decode(&tok)
+	resp.Body.Close()
+	if _, err := db.DefaultDB.AddTokenAccount(tok.Token, "127.0.0.1"); err != nil {
+		t.Fatal("add account", err)
+	}
 	if key, err := db.DefaultDB.IdentityLoginKey("dev", "alice"); err != nil || key == "" {
 		t.Fatal("dev identity", key, err)
 	}
@@ -93,5 +104,36 @@ func TestDevAuthorizeOffForDiscord(t *testing.T) {
 	r := newRig(t)
 	if resp, _ := get(t, http.DefaultClient, r.site.URL+"/auth/dev/authorize?state=x"); resp.StatusCode != http.StatusNotFound {
 		t.Fatal("dev page served by the discord provider", resp.StatusCode)
+	}
+}
+
+func TestDevCarryCode(t *testing.T) {
+	site, _ := newDevSite(t)
+	resp, err := http.Post(site.URL+"/auth/dev/carry", "", nil)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatal("dev carry", err, resp.StatusCode)
+	}
+	var got struct {
+		Code     string `json:"code"`
+		LoginKey string `json:"login_key"`
+	}
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	token, err := db.DefaultDB.IssueAuthToken("dev", "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.PostForm(site.URL+"/auth/accounts/carry", url.Values{"token": {token}, "code": {got.Code}})
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatal("carry the dev code", err, resp.StatusCode)
+	}
+	resp.Body.Close()
+	if key, _ := db.DefaultDB.IdentityLoginKey("dev", "bob"); key != got.LoginKey || key == "" {
+		t.Fatal("carried account", key, got.LoginKey)
+	}
+
+	r := newRig(t)
+	if resp, _ := get(t, http.DefaultClient, r.site.URL+"/auth/dev/carry"); resp.StatusCode != http.StatusNotFound {
+		t.Fatal("dev carry served by the discord provider", resp.StatusCode)
 	}
 }

@@ -86,12 +86,9 @@ var buttonRe = regexp.MustCompile(`href="([^"]+)"`)
 
 // signIn runs the browser part and returns the one-time code given to the emulator, or the
 // status of the page that stopped it.
-func (r *rig) signIn(discordID, carry string) (string, int) {
+func (r *rig) signIn(discordID string) (string, int) {
 	r.provider.userID = discordID
 	q := url.Values{"redirect_port": {"50123"}, "state": {"st"}, "code_challenge": {challenge(verifier)}, "lang": {"en"}}
-	if carry != "" {
-		q.Set("carry", carry)
-	}
 	resp, err := http.Get(r.site.URL + "/auth/start?" + q.Encode())
 	if err != nil {
 		r.t.Fatal(err)
@@ -120,6 +117,19 @@ func (r *rig) signIn(discordID, carry string) (string, int) {
 		r.t.Fatalf("emulator redirect %s", loc)
 	}
 	return loc.Query().Get("code"), resp.StatusCode
+}
+
+// tokenFor signs in and returns the emulator's token.
+func (r *rig) tokenFor(discordID string) string {
+	code, st := r.signIn(discordID)
+	if st != http.StatusFound {
+		r.t.Fatal("sign in", st)
+	}
+	token, st := r.token(code, verifier)
+	if st != 200 || token == "" {
+		r.t.Fatal("token", st)
+	}
+	return token
 }
 
 func (r *rig) token(code, v string) (string, int) {
@@ -152,9 +162,9 @@ func (r *rig) lbsLoginAs(token, account string) (login.APILoginResponse, int) {
 	return got, resp.StatusCode
 }
 
-func TestSignInRegistersThenLogsIn(t *testing.T) {
+func TestSignInCreatesNoAccount(t *testing.T) {
 	r := newRig(t)
-	code, st := r.signIn("1111", "")
+	code, st := r.signIn("1111")
 	if st != http.StatusFound {
 		t.Fatal("sign in", st)
 	}
@@ -164,7 +174,7 @@ func TestSignInRegistersThenLogsIn(t *testing.T) {
 	if _, st := r.token(code, verifier); st != http.StatusBadRequest {
 		t.Fatal("code reused after a failed exchange", st)
 	}
-	code, _ = r.signIn("1111", "")
+	code, _ = r.signIn("1111")
 	token, st := r.token(code, verifier)
 	if st != 200 || token == "" {
 		t.Fatal("token", st)
@@ -172,11 +182,20 @@ func TestSignInRegistersThenLogsIn(t *testing.T) {
 	if _, st := r.token(code, verifier); st != http.StatusBadRequest {
 		t.Fatal("code reused", st)
 	}
-	key, err := db.DefaultDB.IdentityLoginKey("discord", "1111")
-	if err != nil || key == "" {
-		t.Fatal("identity", key, err)
+	if key, err := db.DefaultDB.IdentityLoginKey("discord", "1111"); err != nil || key != "" {
+		t.Fatal("sign-in made an account", key, err)
 	}
-
+	if list, st := r.accounts("/auth/accounts", token); st != 200 || len(list.Accounts) != 0 || list.Default != 0 {
+		t.Fatalf("list %d %+v", st, list)
+	}
+	made, st := r.lbsLogin(token)
+	key, _ := db.DefaultDB.IdentityLoginKey("discord", "1111")
+	if st != 200 || made.Account != 1 || key == "" || mustAccount(t, made.LoginKey) != key {
+		t.Fatalf("first login of an identity with no account %d %+v", st, made)
+	}
+	if list, st := r.accounts("/auth/accounts", token); st != 200 || len(list.Accounts) != 1 || list.Default != 1 {
+		t.Fatalf("list after the new account %d %+v", st, list)
+	}
 	first, st := r.lbsLogin(token)
 	if st != 200 || first.LoginKey == "" || first.LoginKey == key {
 		t.Fatalf("lbs login %d %+v, account key %s", st, first, key)
@@ -193,10 +212,9 @@ func TestSignInRegistersThenLogsIn(t *testing.T) {
 		t.Fatal("old temp key still logs in")
 	}
 
-	code, _ = r.signIn("1111", "")
-	token2, _ := r.token(code, verifier)
-	if k, _ := db.DefaultDB.IdentityLoginKey("discord", "1111"); k != key {
-		t.Fatal("second sign-in made a new account", k)
+	token2 := r.tokenFor("1111")
+	if got, st := r.lbsLogin(token2); st != 200 || mustAccount(t, got.LoginKey) != key {
+		t.Fatal("second sign-in does not reach the account", st)
 	}
 	resp, err := http.PostForm(r.site.URL+"/auth/revoke", url.Values{"token": {token}})
 	if err != nil || resp.StatusCode != http.StatusNoContent {
@@ -210,38 +228,47 @@ func TestSignInRegistersThenLogsIn(t *testing.T) {
 	}
 }
 
+func (r *rig) carry(token, code string) (accountList, int) {
+	resp, err := http.PostForm(r.site.URL+"/auth/accounts/carry", url.Values{"token": {token}, "code": {code}})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got accountList
+	json.NewDecoder(resp.Body).Decode(&got)
+	return got, resp.StatusCode
+}
+
 func TestCarryOverLinksExistingAccount(t *testing.T) {
 	r := newRig(t)
 	old, err := db.DefaultDB.RegisterAccount("198.51.100.8")
 	if err != nil {
 		t.Fatal(err)
 	}
-	carry := r.auth.IssueCarryCode(old.LoginKey)
-	code, st := r.signIn("2222", strings.ToLower(carry))
-	if st != http.StatusFound {
-		t.Fatal("carry sign in", st)
+	token := r.tokenFor("2222")
+	code := r.auth.IssueCarryCode(old.LoginKey)
+	if list, st := r.carry(token, " "+strings.ToLower(code)+" "); st != 200 || list.Added != 1 || list.Default != 1 {
+		t.Fatalf("carry %d %+v", st, list)
 	}
-	token, _ := r.token(code, verifier)
 	got, st := r.lbsLogin(token)
 	if a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(got.LoginKey); st != 200 || a == nil || a.LoginKey != old.LoginKey {
 		t.Fatalf("carried login %d %+v", st, a)
 	}
-	if _, st := r.signIn("3333", carry); st != http.StatusForbidden {
+	if _, st := r.carry(token, code); st != http.StatusBadRequest {
 		t.Fatal("carry code reused", st)
 	}
-	again := r.auth.IssueCarryCode(old.LoginKey)
-	if _, st := r.signIn("4444", again); st != http.StatusForbidden {
+	if _, st := r.carry(r.tokenFor("4444"), r.auth.IssueCarryCode(old.LoginKey)); st != http.StatusUnprocessableEntity {
 		t.Fatal("linked account linked twice", st)
 	}
 	other, _ := db.DefaultDB.RegisterAccount("198.51.100.9")
-	if _, st := r.signIn("2222", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusFound {
-		t.Fatal("identity refused a second account", st)
+	if list, st := r.carry(token, r.auth.IssueCarryCode(other.LoginKey)); st != 200 || list.Added != 2 {
+		t.Fatalf("identity refused a second account %d %+v", st, list)
 	}
 	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got.LoginKey) != other.LoginKey {
 		t.Fatalf("carried second account %d %+v", st, got)
 	}
-	if k, _ := db.DefaultDB.IdentityLoginKey("discord", "4444"); k != "" {
-		t.Fatal("failed carry registered an account", k)
+	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusForbidden {
+		t.Fatal("unknown token carried", st)
 	}
 }
 
@@ -257,8 +284,12 @@ type accountList struct {
 	Accounts []struct {
 		Account int
 		Users   []string
+		Carried bool
 	}
-	Default, Max, Added int
+	Default    int
+	MaxNew     int `json:"max_new"`
+	MaxCarried int `json:"max_carried"`
+	Added      int
 }
 
 func (r *rig) accounts(path, token string) (accountList, int) {
@@ -272,44 +303,55 @@ func (r *rig) accounts(path, token string) (accountList, int) {
 	return got, resp.StatusCode
 }
 
-func TestAccountsUpToMax(t *testing.T) {
+func TestAccountLimits(t *testing.T) {
 	r := newRig(t)
-	code, _ := r.signIn("5555", "")
-	token, _ := r.token(code, verifier)
-	list, st := r.accounts("/auth/accounts", token)
-	if st != 200 || len(list.Accounts) != 1 || list.Default != 1 || list.Max != db.MaxIdentityAccounts {
-		t.Fatalf("list %d %+v", st, list)
-	}
-	keys := map[string]int{}
-	for n := 2; n <= db.MaxIdentityAccounts; n++ {
-		list, st = r.accounts("/auth/accounts/add", token)
-		if st != 200 || list.Added != n || len(list.Accounts) != n || list.Default != 1 {
-			t.Fatalf("add %d: %d %+v", n, st, list)
+	token := r.tokenFor("5555")
+	for n := 1; n <= db.MaxIdentityNewAccounts; n++ {
+		if got, st := r.lbsLoginAs(token, "new"); st != 200 || got.Account != n {
+			t.Fatalf("new account %d: %d %+v", n, st, got)
 		}
 	}
-	if _, st := r.accounts("/auth/accounts/add", token); st != http.StatusConflict {
-		t.Fatal("account past the cap", st)
+	if _, st := r.lbsLoginAs(token, "new"); st != http.StatusConflict {
+		t.Fatal("new account past the cap", st)
 	}
-	code, _ = r.signIn("5555", "")
-	if _, st := r.token(code, verifier); st != 200 {
-		t.Fatal("full identity cannot sign in", st)
+	for n := 1; n <= db.MaxIdentityCarriedAccounts; n++ {
+		a, _ := db.DefaultDB.RegisterAccount("198.51.100.8")
+		if list, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != 200 || list.Added != db.MaxIdentityNewAccounts+n {
+			t.Fatalf("carry %d: %d %+v", n, st, list)
+		}
 	}
-	for n := 1; n <= db.MaxIdentityAccounts; n++ {
+	extra, _ := db.DefaultDB.RegisterAccount("198.51.100.8")
+	if _, st := r.carry(token, r.auth.IssueCarryCode(extra.LoginKey)); st != http.StatusConflict {
+		t.Fatal("carried past the cap", st)
+	}
+	total := db.MaxIdentityNewAccounts + db.MaxIdentityCarriedAccounts
+	list, st := r.accounts("/auth/accounts", token)
+	if st != 200 || len(list.Accounts) != total || list.Default != 1 || list.MaxNew != db.MaxIdentityNewAccounts ||
+		list.MaxCarried != db.MaxIdentityCarriedAccounts {
+		t.Fatalf("list %d %+v", st, list)
+	}
+	for i, a := range list.Accounts {
+		if a.Carried != (i >= db.MaxIdentityNewAccounts) {
+			t.Fatalf("account %d carried %v", i+1, a.Carried)
+		}
+	}
+	keys := map[string]int{}
+	for n := 1; n <= total; n++ {
 		got, st := r.lbsLoginAs(token, strconv.Itoa(n))
 		a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(got.LoginKey)
-		if st != 200 || a == nil {
-			t.Fatalf("login account %d: %d", n, st)
+		if st != 200 || a == nil || got.Account != n {
+			t.Fatalf("login account %d: %d %+v", n, st, got)
 		}
 		keys[a.LoginKey] = n
 	}
-	if len(keys) != db.MaxIdentityAccounts {
+	if len(keys) != total {
 		t.Fatal("accounts not distinct", keys)
 	}
 	first, _ := r.lbsLogin(token)
 	if a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(first.LoginKey); a == nil || keys[a.LoginKey] != 1 {
 		t.Fatal("no account given: not the default one")
 	}
-	for _, bad := range []string{"0", "6", "x", "-1"} {
+	for _, bad := range []string{"0", strconv.Itoa(total + 1), "x", "-1"} {
 		if _, st := r.lbsLoginAs(token, bad); st != http.StatusForbidden {
 			t.Fatal("account", bad, st)
 		}
@@ -318,30 +360,30 @@ func TestAccountsUpToMax(t *testing.T) {
 		t.Fatal("unknown token listed", st)
 	}
 
-	code, _ = r.signIn("6666", "")
-	other, _ := r.token(code, verifier)
-	otherList, _ := r.accounts("/auth/accounts", other)
-	if len(otherList.Accounts) != 1 {
+	other := r.tokenFor("6666")
+	if otherList, _ := r.accounts("/auth/accounts", other); len(otherList.Accounts) != 0 {
 		t.Fatal("identities share accounts", otherList)
 	}
+	r.lbsLoginAs(other, "new")
 	key, _ := db.DefaultDB.IdentityLoginKey("discord", "6666")
 	u, _ := db.DefaultDB.RegisterUser(key)
 	if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: []*db.MasterBan{{Key: u.UserID, Until: time.Now().Add(time.Hour)}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, st := r.accounts("/auth/accounts/add", other); st != http.StatusForbidden {
-		t.Fatal("banned identity added an account", st)
+	carried, _ := db.DefaultDB.RegisterAccount("198.51.100.9")
+	if _, st := r.carry(other, r.auth.IssueCarryCode(carried.LoginKey)); st != http.StatusForbidden {
+		t.Fatal("banned identity carried an account", st)
 	}
 }
 
 func TestCarryOverMissesLock(t *testing.T) {
 	r := newRig(t)
 	a, _ := db.DefaultDB.RegisterAccount("198.51.100.8")
+	token := r.tokenFor("5555")
 	for i := 0; i < carryMaxMisses; i++ {
-		r.signIn("5555", "WRONGCOD")
+		r.carry(token, "WRONGCOD")
 	}
-	good := r.auth.IssueCarryCode(a.LoginKey)
-	if _, st := r.signIn("5555", good); st != http.StatusForbidden {
+	if _, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != http.StatusTooManyRequests {
 		t.Fatal("good code accepted after the miss limit", st)
 	}
 }
