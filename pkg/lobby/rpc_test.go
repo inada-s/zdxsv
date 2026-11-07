@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"zdxsv/pkg/battle/battlerpc"
-	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/lobbyrpc"
 	"zdxsv/pkg/lobby/message"
@@ -58,7 +57,7 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 
 	type player struct {
 		c      *testClient
-		ac     *db.Account
+		ac     *testLogin
 		userID string
 	}
 	sides := []byte{byte(model.EntryAeug), byte(model.EntryTitans)}

@@ -12,11 +12,12 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
+	"zdxsv/pkg/session"
 
 	"golang.org/x/text/encoding/japanese"
 )
 
-// startLoginServer serves the login handlers the way src/zdxsv mainLogin routes them.
+// startLoginServer serves the login handlers the way src/zdxsv newLoginHandler routes them.
 func startLoginServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	Prepare()
@@ -96,28 +97,29 @@ func TestRegisterThenLogin(t *testing.T) {
 		t.Fatalf("register page has no completion message: %q", body)
 	}
 
-	body = postLogin(t, ts, key)
-	a, err := db.DefaultDB.GetAccountByLoginKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.SessionID == "" {
-		t.Fatal("login did not store a session id")
-	}
-	for _, want := range []string{`"` + key + `"`, `"` + a.SessionID + `"`, `"198.51.100.7:8200"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("login page lacks %s: %q", want, body)
+	sessionOf := func(body string) string {
+		t.Helper()
+		m := regexp.MustCompile(`"OK",\s*"` + key + `",\s*"(\d{8})"`).FindStringSubmatch(body)
+		if m == nil {
+			t.Fatalf("login page has no session id: %q", body)
 		}
+		if _, ok := session.Default.Use(m[1], key); !ok {
+			t.Fatalf("session %s not stored", m[1])
+		}
+		return m[1]
+	}
+	body = postLogin(t, ts, key)
+	first := sessionOf(body)
+	if !strings.Contains(body, `"198.51.100.7:8200"`) {
+		t.Errorf("login page lacks the lobby address: %q", body)
 	}
 
-	// A second login issues a new session id.
-	body = postLogin(t, ts, key)
-	b, err := db.DefaultDB.GetAccountByLoginKey(key)
-	if err != nil {
-		t.Fatal(err)
+	// A second login issues a new session id and keeps the first one.
+	if second := sessionOf(postLogin(t, ts, key)); second == first {
+		t.Errorf("second login reused session id %s", first)
 	}
-	if !strings.Contains(body, `"`+b.SessionID+`"`) {
-		t.Errorf("second login page lacks session id %s", b.SessionID)
+	if _, ok := session.Default.Use(first, key); !ok {
+		t.Error("second login ended the first session")
 	}
 }
 

@@ -43,7 +43,6 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_DNAS_REGION":              "us",
 		"ZDXSV_DNAS_HTTPS_BACKEND":       "127.0.0.1:8444",
 		"ZDXSV_DNS_ADDR":                 "192.168.1.3:53",
-		"ZDXSV_LOGIN_ADDR":               ":9876",
 		"ZDXSV_LOGIN_PUBLIC_ADDR":        "1.2.3.4:9876",
 		"ZDXSV_LOBBY_ADDR":               ":8200",
 		"ZDXSV_LOBBY_RPC_ADDR":           ":8201",
@@ -76,7 +75,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	want := Config{
 		DNS:   DNSConfig{Addr: "192.168.1.3:53"},
 		DNAS:  DNASConfig{PublicAddr: "1.2.3.4:443", Addr: ":10443", Region: "us", HTTPSBackend: "127.0.0.1:8444"},
-		Login: LoginConfig{Addr: ":9876", PublicAddr: "1.2.3.4:9876"},
+		Login: LoginConfig{PublicAddr: "1.2.3.4:9876"},
 		Lobby: LobbyConfig{
 			Addr:             ":8200",
 			RPCAddr:          ":8201",

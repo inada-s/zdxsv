@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"zdxsv/pkg/assets"
-	"zdxsv/pkg/config"
 	"zdxsv/pkg/login"
 
 	"github.com/golang/glog"
@@ -103,12 +102,4 @@ func newLoginHandler() http.Handler {
 // assetsCheck fails when the embedded assets are missing (pkg/assets not generated).
 func assetsCheck() ([]byte, error) {
 	return assets.Asset("assets/checkfile")
-}
-
-func mainLogin() {
-	h := prepareLogin()
-	err := http.ListenAndServe(stripHost(config.Conf.Login.Addr), h)
-	if err != nil {
-		glog.Fatalln(err)
-	}
 }

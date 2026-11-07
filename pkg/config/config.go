@@ -66,7 +66,6 @@ type DNASConfig struct {
 }
 
 type LoginConfig struct {
-	Addr       string `env:"ZDXSV_LOGIN_ADDR"`
 	PublicAddr string `env:"ZDXSV_LOGIN_PUBLIC_ADDR"`
 }
 
