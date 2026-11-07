@@ -33,7 +33,7 @@ const (
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
 //	POST /lbs/login (form token): logs in like the login server's /login, as JSON
-//	  (login.HandleAPILogin) and answers a temporary key that the next one replaces.
+//	  (login.HandleAPILogin) and answers a temporary key of the new login session.
 //	/auth/*: emulator sign-in (Auth).
 //	POST /discord/interactions: Discord slash commands (Discord).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's

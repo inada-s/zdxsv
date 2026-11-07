@@ -8,6 +8,7 @@ import (
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
+	"zdxsv/pkg/session"
 )
 
 func TestCarryCodeCommand(t *testing.T) {
@@ -72,14 +73,9 @@ func TestTempKeyLobbyLogin(t *testing.T) {
 	dbtest.Use(t)
 	addr := startLobby(t, battlerpc.NewBattleRpc())
 	ac := registerAccount(t)
-	temp, err := db.DefaultDB.RotateTempKey(ac.LoginKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	id, temp := session.Default.Start(ac.LoginKey, true)
 	c := dialLobby(t, addr)
-	byTemp := *ac
-	byTemp.LoginKey = temp
-	c.login(&byTemp, "******", "pilot")
+	c.login(&testLogin{LoginKey: temp, SessionID: id}, "******", "pilot")
 	users, err := db.DefaultDB.GetUserList(ac.LoginKey)
 	if err != nil || len(users) == 0 {
 		t.Fatalf("no user registered under the account: %v %v", users, err)

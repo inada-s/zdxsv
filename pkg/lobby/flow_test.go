@@ -17,6 +17,7 @@ import (
 	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/session"
 )
 
 func listenLocal(t *testing.T) *net.TCPListener {
@@ -160,7 +161,20 @@ func (c *testClient) ask(command uint16, body []byte) *Message {
 
 // login logs in as userID ("******" registers a new user) and returns the
 // decided user ID, the user IDs the lobby offered and its battle result question.
-func (c *testClient) login(ac *db.Account, userID, name string) (string, []string, *Message) {
+func (c *testClient) login(ac *testLogin, userID, name string) (string, []string, *Message) {
+	c.t.Helper()
+	listed := c.chooseUser(ac, userID, name)
+	ask := c.expect(0x6138, CategoryQuestion)
+	c.expect(0x6104, CategoryNotice)
+	decided := c.expect(0x6132, CategoryAnswer).Reader().ReadString()
+	if len(decided) != 6 {
+		c.t.Fatalf("user id %q", decided)
+	}
+	return decided, listed, ask
+}
+
+// chooseUser runs the login up to the user choice and returns the user IDs the lobby offered.
+func (c *testClient) chooseUser(ac *testLogin, userID, name string) []string {
 	c.t.Helper()
 	kp := c.expect(0x6101, CategoryQuestion)
 	a := NewClientAnswer(kp)
@@ -179,13 +193,7 @@ func (c *testClient) login(ac *db.Account, userID, name string) (string, []strin
 	q := NewClientQuestion(0x6132)
 	q.Writer().Write(append(encryptString(q.Seq, userID), encryptString(q.Seq, name)...))
 	c.send(q)
-	ask := c.expect(0x6138, CategoryQuestion)
-	c.expect(0x6104, CategoryNotice)
-	decided := c.expect(0x6132, CategoryAnswer).Reader().ReadString()
-	if len(decided) != 6 {
-		c.t.Fatalf("user id %q", decided)
-	}
-	return decided, listed, ask
+	return listed
 }
 
 // battleResult is the client's answer body to the 0x6138 battle result question.
@@ -201,17 +209,26 @@ func battleResult(seq uint16, battleCode string, rounds, win, lose byte, kill, d
 	return m.Body
 }
 
-func registerAccount(t *testing.T) *db.Account {
+// testLogin is what a client got from the login pages: the key it logs in with and its session.
+type testLogin struct {
+	LoginKey  string
+	SessionID string
+}
+
+// registerAccount makes an account and logs it in as the login pages do.
+func registerAccount(t *testing.T) *testLogin {
 	t.Helper()
 	ac, err := db.DefaultDB.RegisterAccount("127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The login server issues the session ID the lobby checks.
-	if err := db.DefaultDB.LoginAccount(ac); err != nil {
-		t.Fatal(err)
-	}
-	return ac
+	return loginAgain(ac.LoginKey)
+}
+
+// loginAgain starts another session of the account, as a login from another client does.
+func loginAgain(loginKey string) *testLogin {
+	id, _ := session.Default.Start(loginKey, false)
+	return &testLogin{LoginKey: loginKey, SessionID: id}
 }
 
 func u16(v uint16) []byte { return []byte{byte(v >> 8), byte(v)} }
@@ -225,25 +242,27 @@ func TestLobbyBattleRoundTrip(t *testing.T) {
 		lobbyID uint16
 		sides   []byte
 		counted bool // the result adds to the user's totals (4 player battles only)
+		shared  int  // the first players are users of one account, each from its own client
 	}{
-		{"1vs1 lobby", 2, []byte{a, ti}, false},
-		{"2vs2 lobby", 4, []byte{a, ti, a, ti}, true},
+		{"1vs1 lobby", 2, []byte{a, ti}, false, 0},
+		{"2vs2 lobby", 4, []byte{a, ti, a, ti}, true, 0},
+		{"2vs2 of three users of one account", 4, []byte{a, ti, a, ti}, true, 3},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			battleRoundTrip(t, c.lobbyID, c.sides, c.counted)
+			battleRoundTrip(t, c.lobbyID, c.sides, c.counted, c.shared)
 		})
 	}
 }
 
-func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool) {
+func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, shared int) {
 	dbtest.Use(t)
 	brpc := battlerpc.NewBattleRpc()
 	addr := startLobby(t, brpc)
 
 	type player struct {
 		c      *testClient
-		ac     *db.Account
+		ac     *testLogin
 		userID string
 		side   byte
 		pos    byte
@@ -253,12 +272,17 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool) {
 		players = append(players, &player{side: side})
 	}
 	for i, p := range players {
-		p.ac = registerAccount(t)
+		want := 0
+		if 0 < i && i < shared {
+			p.ac, want = loginAgain(players[0].ac.LoginKey), i
+		} else {
+			p.ac = registerAccount(t)
+		}
 		p.c = dialLobby(t, addr)
 		var listed []string
 		p.userID, listed, _ = p.c.login(p.ac, "******", fmt.Sprintf("pilot%d", i))
-		if len(listed) != 0 {
-			t.Fatalf("new account lists %v", listed)
+		if len(listed) != want {
+			t.Fatalf("player %d: account lists %v", i, listed)
 		}
 	}
 

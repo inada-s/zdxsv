@@ -18,6 +18,7 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/login"
+	"zdxsv/pkg/session"
 )
 
 type fakeProvider struct {
@@ -190,7 +191,7 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	}
 	made, st := r.lbsLogin(token)
 	key, _ := db.DefaultDB.IdentityLoginKey("discord", "1111")
-	if st != 200 || made.Account != 1 || key == "" || mustAccount(t, made.LoginKey) != key {
+	if st != 200 || made.Account != 1 || key == "" || mustAccount(t, made) != key {
 		t.Fatalf("first login of an identity with no account %d %+v", st, made)
 	}
 	if list, st := r.accounts("/auth/accounts", token); st != 200 || len(list.Accounts) != 1 || list.Default != 1 {
@@ -200,20 +201,22 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	if st != 200 || first.LoginKey == "" || first.LoginKey == key {
 		t.Fatalf("lbs login %d %+v, account key %s", st, first, key)
 	}
-	a, err := db.DefaultDB.GetAccountByLoginOrTempKey(first.LoginKey)
-	if err != nil || a.LoginKey != key || a.SessionID != first.SessionID {
-		t.Fatalf("temp key account %+v %v", a, err)
+	if got := sessionAccount(first); got != key {
+		t.Fatalf("temp key account %q", got)
 	}
 	second, _ := r.lbsLogin(token)
-	if second.LoginKey == first.LoginKey {
-		t.Fatal("temp key not rotated")
+	if second.LoginKey == first.LoginKey || second.SessionID == first.SessionID {
+		t.Fatal("second login shares the first one's session", first, second)
 	}
-	if _, err := db.DefaultDB.GetAccountByLoginOrTempKey(first.LoginKey); err == nil {
-		t.Fatal("old temp key still logs in")
+	if mustAccount(t, first) != key || mustAccount(t, second) != key {
+		t.Fatal("a login ended the other session of the account")
+	}
+	if _, ok := session.Default.Use(second.SessionID, first.LoginKey); ok {
+		t.Fatal("temp key logs in to another session")
 	}
 
 	token2 := r.tokenFor("1111")
-	if got, st := r.lbsLogin(token2); st != 200 || mustAccount(t, got.LoginKey) != key {
+	if got, st := r.lbsLogin(token2); st != 200 || mustAccount(t, got) != key {
 		t.Fatal("second sign-in does not reach the account", st)
 	}
 	resp, err := http.PostForm(r.site.URL+"/auth/revoke", url.Values{"token": {token}})
@@ -251,8 +254,8 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 		t.Fatalf("carry %d %+v", st, list)
 	}
 	got, st := r.lbsLogin(token)
-	if a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(got.LoginKey); st != 200 || a == nil || a.LoginKey != old.LoginKey {
-		t.Fatalf("carried login %d %+v", st, a)
+	if a := sessionAccount(got); st != 200 || a != old.LoginKey {
+		t.Fatalf("carried login %d %q", st, a)
 	}
 	if _, st := r.carry(token, code); st != http.StatusBadRequest {
 		t.Fatal("carry code reused", st)
@@ -264,7 +267,7 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 	if list, st := r.carry(token, r.auth.IssueCarryCode(other.LoginKey)); st != 200 || list.Added != 2 {
 		t.Fatalf("identity refused a second account %d %+v", st, list)
 	}
-	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got.LoginKey) != other.LoginKey {
+	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got) != other.LoginKey {
 		t.Fatalf("carried second account %d %+v", st, got)
 	}
 	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusForbidden {
@@ -272,12 +275,18 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 	}
 }
 
-func mustAccount(t *testing.T, gameKey string) string {
-	a, err := db.DefaultDB.GetAccountByLoginOrTempKey(gameKey)
-	if err != nil {
-		t.Fatal("no account for", gameKey, err)
+func mustAccount(t *testing.T, res login.APILoginResponse) string {
+	a := sessionAccount(res)
+	if a == "" {
+		t.Fatal("no account for", res)
 	}
-	return a.LoginKey
+	return a
+}
+
+// sessionAccount is the login key of the session a login answered, "" when none.
+func sessionAccount(res login.APILoginResponse) string {
+	a, _ := session.Default.Use(res.SessionID, res.LoginKey)
+	return a
 }
 
 type accountList struct {
@@ -338,17 +347,17 @@ func TestAccountLimits(t *testing.T) {
 	keys := map[string]int{}
 	for n := 1; n <= total; n++ {
 		got, st := r.lbsLoginAs(token, strconv.Itoa(n))
-		a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(got.LoginKey)
-		if st != 200 || a == nil || got.Account != n {
+		a := sessionAccount(got)
+		if st != 200 || a == "" || got.Account != n {
 			t.Fatalf("login account %d: %d %+v", n, st, got)
 		}
-		keys[a.LoginKey] = n
+		keys[a] = n
 	}
 	if len(keys) != total {
 		t.Fatal("accounts not distinct", keys)
 	}
 	first, _ := r.lbsLogin(token)
-	if a, _ := db.DefaultDB.GetAccountByLoginOrTempKey(first.LoginKey); a == nil || keys[a.LoginKey] != 1 {
+	if a := sessionAccount(first); a == "" || keys[a] != 1 {
 		t.Fatal("no account given: not the default one")
 	}
 	for _, bad := range []string{"0", strconv.Itoa(total + 1), "x", "-1"} {

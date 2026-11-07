@@ -13,14 +13,14 @@ import (
 
 func TestLobbyBan(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
 	ban := func(bans ...*db.MasterBan) {
 		t.Helper()
 		if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: bans}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	refused := func(ac *db.Account) {
+	refused := func(ac *testLogin) {
 		t.Helper()
 		c := dialLobby(t, addr)
 		kp := c.expect(0x6101, CategoryQuestion)
@@ -39,7 +39,8 @@ func TestLobbyBan(t *testing.T) {
 	}
 
 	ac1 := registerAccount(t)
-	u1, _, _ := dialLobby(t, addr).login(ac1, "******", "one")
+	c1 := dialLobby(t, addr)
+	u1, _, _ := c1.login(ac1, "******", "one")
 	ac2 := registerAccount(t)
 	dialLobby(t, addr).login(ac2, "******", "two")
 
@@ -48,5 +49,10 @@ func TestLobbyBan(t *testing.T) {
 	dialLobby(t, addr).login(ac2, "******", "two")
 
 	ban(&db.MasterBan{Key: u1, Until: time.Now().Add(-time.Second)})
+	c1.conn.Close()
+	waitFor(t, "the lobby to drop "+u1, func() (gone bool) {
+		app.Locked(func(a *App) { _, ok := a.users[u1]; gone = !ok })
+		return
+	})
 	dialLobby(t, addr).login(ac1, u1, "one")
 }

@@ -14,6 +14,7 @@ import (
 	"zdxsv/pkg/assets"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/session"
 
 	"github.com/golang/glog"
 	"golang.org/x/text/encoding/japanese"
@@ -113,7 +114,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	p.ServerVersion = "1.0"
 	p.LoginKey = a.LoginKey
-	p.SessionID = a.SessionID
+	p.SessionID, _ = session.Default.Start(a.LoginKey, false)
 	p.ServerAddr = config.Conf.Lobby.PublicAddr
 
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -210,17 +211,12 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
-	// The emulator gets a key that the next token login replaces, never the account's own.
-	gameKey, err := db.DefaultDB.RotateTempKey(a.LoginKey)
-	if err != nil {
-		glog.Errorln(err)
-		http.Error(w, "login failed", http.StatusInternalServerError)
-		return
-	}
+	// The emulator gets a key of its session, never the account's own.
+	sessionID, gameKey := session.Default.Start(a.LoginKey, true)
 	w.Header().Set("Content-Type", "application/json")
 	res := APILoginResponse{
 		LoginKey:  gameKey,
-		SessionID: a.SessionID,
+		SessionID: sessionID,
 		LobbyAddr: config.Conf.Lobby.PublicAddr,
 		LbsInfo:   LbsInfo,
 	}

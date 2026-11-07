@@ -12,6 +12,7 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/login"
+	"zdxsv/pkg/session"
 )
 
 func TestAPILogin(t *testing.T) {
@@ -42,12 +43,11 @@ func TestAPILogin(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	a, err := db.DefaultDB.GetAccountByLoginKey(registered.LoginKey)
-	if err != nil {
-		t.Fatal(err)
+	if a, ok := session.Default.Use(got.SessionID, got.LoginKey); !ok || a != registered.LoginKey || got.LoginKey == registered.LoginKey {
+		t.Fatalf("got %+v: account %q %v", got, a, ok)
 	}
-	want := login.APILoginResponse{LoginKey: a.TempKey.String, SessionID: a.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo, Account: 1}
-	if a.SessionID == "" || a.TempKey.String == "" || got != want {
+	want := login.APILoginResponse{LoginKey: got.LoginKey, SessionID: got.SessionID, LobbyAddr: "198.51.100.7:8200", LbsInfo: login.LbsInfo, Account: 1}
+	if got.SessionID == "" || got.LoginKey == "" || got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 

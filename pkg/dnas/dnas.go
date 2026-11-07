@@ -4,7 +4,7 @@
 // The PS2 opens with an SSLv2-format ClientHello and TLS 1.0 RC4 (tls10.go).
 // DNAS queries are answered with canned
 // packets (data/www/<gateway>/packets/<gameid>_<qrytype>); i-connect answers
-// get two 3DES-CBC layers. /00000020/* is proxied to the zdxsv login server
+// get two 3DES-CBC layers. /00000020/* goes to the zdxsv login pages
 // (the game's browser opens the login page through the same host).
 package dnas
 
@@ -23,8 +23,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -153,8 +151,8 @@ type Server struct {
 	mux *http.ServeMux
 }
 
-// NewServer: region selects the certificate (jp, us, eu); login is the zdxsv login
-// server behind /00000020/ (its handler in process, or LoginProxy to another process).
+// NewServer: region selects the certificate (jp, us, eu); login serves the zdxsv login
+// pages behind /00000020/.
 func NewServer(region string, login http.Handler) (*Server, error) {
 	cfg, err := loadTLS(region)
 	if err != nil {
@@ -164,15 +162,6 @@ func NewServer(region string, login http.Handler) (*Server, error) {
 	s.mux.HandleFunc("/", handleDNAS)
 	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", login))
 	return s, nil
-}
-
-// LoginProxy forwards to the zdxsv login server at addr (host:port) over HTTP.
-func LoginProxy(addr string) (http.Handler, error) {
-	u, err := url.Parse("http://" + addr + "/")
-	if err != nil {
-		return nil, err
-	}
-	return httputil.NewSingleHostReverseProxy(u), nil
 }
 
 func handleDNAS(w http.ResponseWriter, r *http.Request) {

@@ -40,7 +40,6 @@ func (c *SQLiteCache) deleteRankingCache() {
 const schema = `
 CREATE TABLE IF NOT EXISTS account (
 	login_key text,
-	session_id text default '',
 	last_user_id text default '',
 	created_ip text default '',
 	created timestamp,
@@ -48,7 +47,6 @@ CREATE TABLE IF NOT EXISTS account (
 	last_login_ip text default '',
 	last_login_machine_id text default '',
 	system integer default 0,
-	temp_key text UNIQUE,
 	PRIMARY KEY (login_key)
 );
 CREATE TABLE IF NOT EXISTS auth_identity (
@@ -186,23 +184,32 @@ func (db SQLiteDB) Migrate() error {
 	}
 
 	// copy old table into new table and drop old table
-	// it works unless key name is changed
+	// it works unless key name is changed; columns no longer in the schema are dropped
 	for _, table := range tables {
 		tmp := table + "_tmp"
-		rows, err := tx.Query(`SELECT * FROM ` + tmp + ` LIMIT 1`)
+		oldColumns, err := tableColumns(tx, tmp)
 		if err != nil {
 			tx.Rollback()
 			return errors.Wrap(err, "SELECT failed")
 		}
-
-		columns, err := rows.Columns()
+		newColumns, err := tableColumns(tx, table)
 		if err != nil {
 			tx.Rollback()
-			return errors.Wrap(err, "Columns() failed")
+			return errors.Wrap(err, "SELECT failed")
 		}
-		rows.Close()
+		kept := map[string]bool{}
+		for _, c := range newColumns {
+			kept[c] = true
+		}
+		var columns []string
+		for _, c := range oldColumns {
+			if kept[c] {
+				columns = append(columns, c)
+			}
+		}
 
-		_, err = tx.Exec(`INSERT INTO ` + table + `(` + strings.Join(columns, ",") + `) SELECT * FROM ` + tmp)
+		cols := strings.Join(columns, ",")
+		_, err = tx.Exec(`INSERT INTO ` + table + `(` + cols + `) SELECT ` + cols + ` FROM ` + tmp)
 		if err != nil {
 			tx.Rollback()
 			return errors.Wrap(err, "INSERT failed")
@@ -225,8 +232,25 @@ func (db SQLiteDB) Migrate() error {
 	return tx.Commit()
 }
 
+func tableColumns(tx *sql.Tx, table string) ([]string, error) {
+	rows, err := tx.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var columns []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		columns = append(columns, c)
+	}
+	return columns, rows.Err()
+}
+
 func (db SQLiteDB) RegisterAccount(ip string) (*Account, error) {
-	key := genLoginKey()
+	key := GenLoginKey()
 	now := time.Now()
 	_, err := db.Exec(`
 INSERT INTO account
@@ -253,19 +277,8 @@ func (db SQLiteDB) GetAccountByLoginKey(key string) (*Account, error) {
 }
 
 func (db SQLiteDB) LoginAccount(a *Account) error {
-	a.SessionID = genSessionID()
 	a.LastLogin = time.Now()
-	_, err := db.Exec(`
-UPDATE
-	account
-SET
-	session_id = ?,
-	last_login = ?
-WHERE
-	login_key = ?`,
-		a.SessionID,
-		a.LastLogin,
-		a.LoginKey)
+	_, err := db.Exec(`UPDATE account SET last_login = ? WHERE login_key = ?`, a.LastLogin, a.LoginKey)
 	return err
 }
 

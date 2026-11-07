@@ -28,8 +28,6 @@ const (
 // CarryMinBattles is the battle count (over the account's users) a carry-over code needs.
 const CarryMinBattles = 100
 
-const tempKeyTries = 8
-
 func hashAuthToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
@@ -41,15 +39,6 @@ func genAuthToken() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-func (db SQLiteDB) GetAccountByLoginOrTempKey(key string) (*Account, error) {
-	a := &Account{}
-	err := db.QueryRowx("SELECT * FROM account WHERE login_key = ? OR temp_key = ? LIMIT 1", key, key).StructScan(a)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
 }
 
 func (db SQLiteDB) IdentityLoginKey(provider, providerUserID string) (string, error) {
@@ -159,7 +148,7 @@ func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) 
 	if n >= MaxIdentityNewAccounts {
 		return nil, ErrIdentityFull
 	}
-	key := genLoginKey()
+	key := GenLoginKey()
 	now := time.Now()
 	if _, err := tx.Exec(`INSERT INTO account (login_key, created_ip, created, last_login, system) VALUES (?, ?, ?, ?, 0)`,
 		key, ip, now, now); err != nil {
@@ -224,28 +213,6 @@ func (db SQLiteDB) IssueAuthToken(provider, providerUserID string) (string, erro
 func (db SQLiteDB) RevokeAuthToken(token string) error {
 	_, err := db.Exec("DELETE FROM auth_token WHERE token_hash = ?", hashAuthToken(token))
 	return err
-}
-
-func (db SQLiteDB) RotateTempKey(loginKey string) (string, error) {
-	for i := 0; i < tempKeyTries; i++ {
-		key := genLoginKey()
-		var n int
-		if err := db.QueryRow("SELECT COUNT(*) FROM account WHERE login_key = ?", key).Scan(&n); err != nil {
-			return "", err
-		}
-		if n > 0 {
-			continue
-		}
-		res, err := db.Exec("UPDATE account SET temp_key = ? WHERE login_key = ?", key, loginKey)
-		if err != nil {
-			continue
-		}
-		if c, _ := res.RowsAffected(); c == 0 {
-			return "", sql.ErrNoRows
-		}
-		return key, nil
-	}
-	return "", errors.New("no free temporary key")
 }
 
 func (db SQLiteDB) AccountCarried(loginKey string) (bool, error) {

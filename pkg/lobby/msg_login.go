@@ -40,6 +40,12 @@ func SendBanned(p *AppPeer) {
 	p.SendMessage(n)
 }
 
+func SendUserInUse(p *AppPeer) {
+	n := NewServerNotice(0x6003)
+	n.Writer().WriteString("<BODY><LF=5><CENTER>このIDは使用中です<END>")
+	p.SendMessage(n)
+}
+
 func SendPleaseUpdate(p *AppPeer) {
 	n := NewServerNotice(0x6003)
 	n.Writer().WriteString("<BODY><LF=5><CENTER>PLEASE UPDATE PCSX2<END>")
@@ -128,7 +134,9 @@ var _ = register(0x6132, "DecideUserID", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	userID := r.ReadEncryptedString()
 	name := r.ReadEncryptedString()
-	p.app.OnDecideUserID(p, userID, name)
+	if !p.app.OnDecideUserID(p, userID, name) {
+		return
+	}
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.WriteString(p.UserID)
