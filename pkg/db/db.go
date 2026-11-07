@@ -2,7 +2,6 @@ package db
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"fmt"
 	"math/big"
 	"time"
@@ -24,7 +23,8 @@ func randomString(length int, source string) string {
 	return string(b)
 }
 
-func genLoginKey() string {
+// GenLoginKey makes a login key, or a temporary key in its place.
+func GenLoginKey() string {
 	return randomString(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 }
 
@@ -32,7 +32,8 @@ func genUserID() string {
 	return randomString(6, "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789")
 }
 
-func genSessionID() string {
+// GenSessionID makes a session id the game can carry: 8 digits, no 0.
+func GenSessionID() string {
 	return randomString(8, "123456789")
 }
 
@@ -41,16 +42,14 @@ func GenBattleCode() string {
 }
 
 type Account struct {
-	LoginKey           string         `db:"login_key" json:"login_key,omitempty"`
-	SessionID          string         `db:"session_id" json:"session_id,omitempty"`
-	LastUserID         string         `db:"last_user_id" json:"last_user_id,omitempty"`
-	Created            time.Time      `db:"created" json:"created,omitempty"`
-	CreatedIP          string         `db:"created_ip" json:"created_ip,omitempty"`
-	LastLogin          time.Time      `db:"last_login" json:"last_login,omitempty"`
-	LastLoginIP        string         `db:"last_login_ip" json:"last_login_ip,omitempty"`
-	LastLoginMachineID string         `db:"last_login_machine_id" json:"last_login_machine_id,omitempty"`
-	System             byte           `db:"system" json:"system,omitempty"`
-	TempKey            sql.NullString `db:"temp_key" json:"-"`
+	LoginKey           string    `db:"login_key" json:"login_key,omitempty"`
+	LastUserID         string    `db:"last_user_id" json:"last_user_id,omitempty"`
+	Created            time.Time `db:"created" json:"created,omitempty"`
+	CreatedIP          string    `db:"created_ip" json:"created_ip,omitempty"`
+	LastLogin          time.Time `db:"last_login" json:"last_login,omitempty"`
+	LastLoginIP        string    `db:"last_login_ip" json:"last_login_ip,omitempty"`
+	LastLoginMachineID string    `db:"last_login_machine_id" json:"last_login_machine_id,omitempty"`
+	System             byte      `db:"system" json:"system,omitempty"`
 }
 
 // MasterBan is a row of m_ban, the spreadsheet's bans: every user of the account of user Key
@@ -185,8 +184,6 @@ type DB interface {
 	RegisterAccount(ip string) (*Account, error)
 
 	GetAccountByLoginKey(key string) (*Account, error)
-	// GetAccountByLoginOrTempKey finds the account whose login key or temporary key is key.
-	GetAccountByLoginOrTempKey(key string) (*Account, error)
 	// IdentityLoginKey returns the first login key linked to a provider identity, "" when none.
 	IdentityLoginKey(provider, providerUserID string) (string, error)
 	// RegisterIdentityAccount creates an account linked to a provider identity;
@@ -210,8 +207,7 @@ type DB interface {
 	// IssueAuthToken stores a new emulator token for a provider identity and returns it.
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
-	// RotateTempKey replaces the account's temporary key and returns the new one.
-	RotateTempKey(loginKey string) (string, error)
+	// LoginAccount records a login of the account at the login pages.
 	LoginAccount(*Account) error
 
 	// SetLoginEndpoint records where the account last logged in to the lobby from.

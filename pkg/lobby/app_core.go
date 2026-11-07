@@ -13,6 +13,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/session"
 )
 
 // ===========================
@@ -28,23 +29,25 @@ func (a *App) OnClose(p *AppPeer) {
 		a.OnExitBattleAfterRoom(p)
 	}
 	a.OnExitLobby(p)
-	delete(a.users, p.UserID)
+	a.removeUser(p)
+}
+
+// removeUser forgets p as its user unless a peer that logged in later holds the user id.
+func (a *App) removeUser(p *AppPeer) {
+	if a.users[p.UserID] == p {
+		delete(a.users, p.UserID)
+	}
 }
 
 func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
-	ac, err := db.DefaultDB.GetAccountByLoginOrTempKey(loginKey)
+	accountKey, ok := session.Default.Use(sessionID, loginKey)
+	if !ok {
+		glog.Errorln("no login session", sessionID)
+		return
+	}
+	ac, err := db.DefaultDB.GetAccountByLoginKey(accountKey)
 	if err != nil {
 		glog.Errorln(err)
-		return
-	}
-
-	if ac == nil {
-		glog.Errorf("Account not found. loginKey = %v sessionID = %v\n", loginKey, sessionID)
-		return
-	}
-
-	if ac.SessionID != sessionID {
-		glog.Errorln("Mismatch account sessionID, ", ac.SessionID, sessionID)
 		return
 	}
 
@@ -72,7 +75,7 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 	}
 
 	p.LoginKey = ac.LoginKey
-	p.SessionID = ac.SessionID
+	p.SessionID = sessionID
 	RequestFirstData(p)
 }
 
@@ -97,14 +100,16 @@ func (a *App) OnFirstData(p *AppPeer) {
 	}
 }
 
-func (a *App) OnDecideUserID(p *AppPeer, userID, name string) {
+// OnDecideUserID logs p in as a user of its account; false when refused. The users of an
+// account may play at once, from separate clients, but each user from one client only.
+func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 	sessionID := p.SessionID
 
 	if userID == "******" {
 		u, err := db.DefaultDB.RegisterUser(p.LoginKey)
 		if err != nil {
 			glog.Errorln(err)
-			return
+			return false
 		}
 		p.User.User = *u
 		p.Name = name
@@ -117,12 +122,16 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) {
 		ac, err := db.DefaultDB.GetAccountByLoginKey(p.LoginKey)
 		if err != nil {
 			glog.Errorln(err)
-			return
+			return false
 		}
 		u, err := db.DefaultDB.GetUser(ac.LastUserID)
 		if err != nil {
 			glog.Errorln(err)
-			return
+			return false
+		}
+		if u.LoginKey != p.LoginKey {
+			glog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+			return false
 		}
 		p.User.User = *u
 		p.SessionID = sessionID
@@ -130,31 +139,42 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) {
 		u, err := db.DefaultDB.GetUser(userID)
 		if err != nil {
 			glog.Errorln(err)
-			return
+			return false
+		}
+		if u.LoginKey != p.LoginKey {
+			glog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+			return false
 		}
 		p.User.User = *u
 		p.Name = name
 		p.SessionID = sessionID
 	} else {
 		glog.Errorln("Undefined UserID:", userID, "Name", name, "SessionID", sessionID)
-		return
+		return false
+	}
+
+	if other, ok := a.users[p.UserID]; ok && other != p {
+		glog.Infoln("user already logged in refused", p.UserID, p.SessionID)
+		SendUserInUse(p)
+		return false
 	}
 
 	err := db.DefaultDB.LoginUser(&p.User.User)
 	if err != nil {
 		glog.Errorln(err)
-		return
+		return false
 	}
 
 	err = db.DefaultDB.UpdateUser(&p.User.User)
 	if err != nil {
 		glog.Errorln(err)
-		return
+		return false
 	}
 
 	a.users[p.UserID] = p
 	AskBattleResult(p)
 	NoticeLoginOk(p)
+	return true
 }
 
 func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
@@ -298,12 +318,14 @@ func (a *App) OnUserLogout(p *AppPeer) {
 	p.Lobby = nil
 	p.Room = nil
 	p.Entry = model.EntryNone
-	delete(a.users, p.UserID)
+	a.removeUser(p)
 }
 
 func (a *App) OnUserGotoBattle(p *AppPeer) {
 	if p.Battle != nil {
 		a.battles[p.SessionID] = p.Battle
+		// The client comes back with this session after the battle.
+		session.Default.Touch(p.SessionID)
 	}
 	if p.Lobby != nil {
 		a.OnExitLobby(p)
@@ -312,7 +334,7 @@ func (a *App) OnUserGotoBattle(p *AppPeer) {
 	p.Lobby = nil
 	p.Room = nil
 	p.Entry = model.EntryNone
-	delete(a.users, p.UserID)
+	a.removeUser(p)
 }
 
 func (a *App) OnUserTopPageJump(p *AppPeer) {

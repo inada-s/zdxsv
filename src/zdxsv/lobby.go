@@ -22,10 +22,6 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-func mainLobby() {
-	serveLobby(lobby.NewApp())
-}
-
 // serveLobby runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
 func serveLobby(app *lobby.App) {
 	if c := config.Conf.Lobby; c.RelayRegions != "" {

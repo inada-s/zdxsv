@@ -12,9 +12,9 @@ func TestGeneratedKeys(t *testing.T) {
 		gen  func() string
 		re   *regexp.Regexp
 	}{
-		{"login key", genLoginKey, regexp.MustCompile(`^[a-zA-Z0-9]{10}$`)},
+		{"login key", GenLoginKey, regexp.MustCompile(`^[a-zA-Z0-9]{10}$`)},
 		{"user id", genUserID, regexp.MustCompile(`^[A-Z2-9]{6}$`)},
-		{"session id", genSessionID, regexp.MustCompile(`^[1-9]{8}$`)},
+		{"session id", GenSessionID, regexp.MustCompile(`^[1-9]{8}$`)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			seen := map[string]bool{}

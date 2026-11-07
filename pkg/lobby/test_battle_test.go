@@ -9,7 +9,6 @@ import (
 	"golang.org/x/text/encoding/japanese"
 
 	"zdxsv/pkg/battle/battlerpc"
-	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/lobbyrpc"
 	. "zdxsv/pkg/lobby/message"
@@ -17,7 +16,7 @@ import (
 )
 
 // lobby1Proxy logs a user in, enters lobby 1 and registers its proxy over RPC.
-func lobby1Proxy(t *testing.T) (*App, *testClient, *db.Account, string) {
+func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
 	t.Helper()
 	dbtest.Use(t)
 	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())

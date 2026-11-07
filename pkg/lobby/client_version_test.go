@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
-	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 )
@@ -28,7 +27,7 @@ func TestLobbyOutdatedClient(t *testing.T) {
 		}
 		return c
 	}
-	refusedAs := func(ac *db.Account, info string) {
+	refusedAs := func(ac *testLogin, info string) {
 		t.Helper()
 		c := dial(info)
 		kp := c.expect(0x6101, CategoryQuestion)
@@ -46,7 +45,7 @@ func TestLobbyOutdatedClient(t *testing.T) {
 		}
 	}
 	refused := func(info string) { t.Helper(); refusedAs(registerAccount(t), info) }
-	allowedAs := func(ac *db.Account, info string) {
+	allowedAs := func(ac *testLogin, info string) {
 		t.Helper()
 		dial(info).login(ac, "******", "p")
 	}

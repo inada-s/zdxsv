@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -74,11 +73,7 @@ func TestAnswerGolden(t *testing.T) {
 	}
 }
 
-func startServer(t *testing.T, loginAddr string) string {
-	login, err := LoginProxy(loginAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+func startServer(t *testing.T, login http.Handler) string {
 	s, err := NewServer("jp", login)
 	if err != nil {
 		t.Fatal(err)
@@ -105,13 +100,11 @@ func dialQuery(t *testing.T, addr, method, urlPath string, body []byte) (int, []
 }
 
 // TestServer: the PS2 dialect end to end (hello, TLS 1.0 RC4-MD5, HTTP/1.0) for
-// both query kinds, a 404, and the login page proxy.
+// both query kinds, a 404, and the login pages.
 func TestServer(t *testing.T) {
-	login := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	addr := startServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "login %s", r.URL.Path)
 	}))
-	defer login.Close()
-	addr := startServer(t, strings.TrimPrefix(login.URL, "http://"))
 
 	for _, kind := range []string{"i-connect", "others"} {
 		q := query("gai-gw", kind, "c9acca0f30eecbf7_01180000", 308)
@@ -129,6 +122,6 @@ func TestServer(t *testing.T) {
 	}
 	status, got := dialQuery(t, addr, "GET", "/00000020/CRS-top.jsp", nil)
 	if status != 200 || string(got) != "login /CRS-top.jsp" {
-		t.Errorf("login proxy: status %d %q", status, got)
+		t.Errorf("login pages: status %d %q", status, got)
 	}
 }

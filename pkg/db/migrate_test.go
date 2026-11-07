@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -122,6 +123,28 @@ func TestMigrateEmptyDB(t *testing.T) {
 	must(t, db.Migrate())
 	assertIndexes(t, db)
 	must(t, db.SetReplayURL("none", "http://r/1"))
+}
+
+func TestMigrateDropsAccountSessionColumns(t *testing.T) {
+	oldSchema := strings.Replace(schema, "\tsystem integer default 0,\n\tPRIMARY KEY (login_key)\n);\nCREATE TABLE IF NOT EXISTS auth_identity",
+		"\tsystem integer default 0,\n\tsession_id text default '',\n\ttemp_key text UNIQUE,\n\tPRIMARY KEY (login_key)\n);\nCREATE TABLE IF NOT EXISTS auth_identity", 1)
+	if oldSchema == schema {
+		t.Fatal("old account schema not rebuilt")
+	}
+	db := openSchemaDB(t, oldSchema+indexes)
+	_, err := db.Exec(`INSERT INTO account (login_key, session_id, temp_key, last_user_id, created_ip, created, last_login) VALUES ('key1', '12345678', 'temp1', 'USER01', '1.2.3.4', ?, ?)`,
+		time.Now(), time.Now())
+	must(t, err)
+
+	must(t, db.Migrate())
+	assertIndexes(t, db)
+
+	ac, err := db.GetAccountByLoginKey("key1")
+	must(t, err)
+	assertEq(t, [3]string{"key1", "USER01", "1.2.3.4"}, [3]string{ac.LoginKey, ac.LastUserID, ac.CreatedIP})
+	var dropped []string
+	must(t, db.Select(&dropped, `SELECT name FROM pragma_table_info('account') WHERE name IN ('session_id', 'temp_key')`))
+	assertEq(t, 0, len(dropped))
 }
 
 // assertIndexes checks the indexes are there and no table copy is left.
