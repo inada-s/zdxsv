@@ -24,7 +24,7 @@
 <div class="btn-group btn-group-justified links">
   <a href="#top" class="btn btn-default" data-toggle="tab">トップ</a>
   <a href="#ps2" class="btn btn-default" data-toggle="tab">PS2</a>
-  <a href="#pcsx2" class="btn btn-default" data-toggle="tab">PCSX2 <span class="label label-warning">検証中</span></a>
+  <a href="#pcsx2" class="btn btn-default" data-toggle="tab">PCSX2</a>
   <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank" class="btn btn-default">Discord</a>
 </div>
 </div>
@@ -153,21 +153,21 @@
 </div>  <!-- end of ps2 -->
 
 <div class="tab-pane" id="pcsx2">
-  <h2>PCSX2 で遊ぶ <span class="label label-warning">検証中</span></h2>
-  <p class="danger">※PCSX2 版は現在検証中です。不具合や動作の変更があり得ます。気づいた点は <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank">Discord</a> でお知らせください。</p>
-  <p>PC 上のエミュレーター PCSX2 (zdxsv 版) で接続する方法です。PS2 実機で遊ぶ場合は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。</p>
+  <h2>PCSX2 で遊ぶ (検証中)</h2>
+  <p class="danger">※PCSX2 版は現在検証中です。不具合や動作の変更があり得ます。</p>
+  <p>PC 上のエミュレーター PCSX2 で接続する方法です。PS2 実機で遊ぶ場合は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。</p>
 
   <h3>必要なもの</h3>
   <ul>
   <li>Windows (64bit) の PC</li>
-  <li>PS2 の BIOS (ご自身の PS2 本体から吸い出したもの)</li>
-  <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム (ご自身でお持ちのディスク又はそのイメージ)</li>
+  <li>PS2 の BIOS (PS2 本体から吸い出したもの)</li>
+  <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
   <li>Discord アカウント (サインインに使います)</li>
-  <li>コントローラ 又は キーボード</li>
-  <li>PCSX2 (zdxsv 版)
+  <li>コントローラー</li>
+  <li>PCSX2 for zdxsv
     <div class="download">
       <a id="pcsx2-download" class="btn btn-primary" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
-        <span class="glyphicon glyphicon-download-alt"></span> PCSX2 (zdxsv 版) をダウンロード (Windows 64bit)</a>
+        <span class="glyphicon glyphicon-download-alt"></span> PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
       <div><small id="pcsx2-file" class="text-muted">pcsx2-zdxsv-windows-x64.zip (最新版)</small></div>
       <div><small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small></div>
     </div>
@@ -177,9 +177,8 @@
   <h3>使い方</h3>
   <ul>
 	<li>zip を解凍して中の pcsx2-qt.exe を実行します</li>
-	<li>初回起動時のセットアップで BIOS とゲームの場所を設定し、zdxsv にサインイン (Discord) します</li>
-	<li>ゲームを起動し、通信対戦を選択します (ネットワーク設定や DNS の設定は不要です)</li>
-	<li>UDPプロキシ (zproxy) は不要です</li>
+	<li>初回起動時のセットアップで BIOS とゲームの場所を設定し、Discordでサインインします</li>
+	<li>ゲームを起動し、通信対戦を選択します</li>
   </ul>
 </div>  <!-- end of pcsx2 -->
 
@@ -197,7 +196,7 @@
     <p id="ps2-battle-user-count"></p>
     <table class="table mini-font mini-table table-inverse" id="ps2-battle-users-table"></table>
     <div id="emu-section">
-    <h5>PCSX2 <span class="label label-warning">検証中</span></h5>
+    <h5>PCSX2</h5>
     <p id="emu-lobby-user-count"></p>
     <table class="table mini-font mini-table table-inverse" id="emu-lobby-users-table"></table>
     <p id="emu-battle-user-count"></p>
