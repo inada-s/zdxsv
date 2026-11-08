@@ -55,7 +55,7 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
-- Master data (today only bans, `m_ban`) from a Google Spreadsheet by a Discord slash command
+- Master data (bans `m_ban`, server settings `m_server_setting`) from a Google Spreadsheet by a Discord slash command
   for moderators: `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key),
   `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and moderator role ids that may run
   it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
@@ -71,6 +71,9 @@ Optional:
   row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
   account is refused at its next login until `until`, with no restart. `m_ban` is the only ban
   list (the old `ban` table is dropped by `migratedb`).
+  A table under `@m_server_setting` (header `key`, `value`), when present, replaces all of
+  `m_server_setting` (absent: kept): `min_pcsx2_version` (`zdxsv-X.Y.Z`; empty: no minimum),
+  `pcsx2_allow`. Read at each login, so it applies at once. Keys missing from the table are removed.
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

@@ -9,10 +9,15 @@ import (
 	"time"
 
 	"zdxsv/pkg/db"
+
+	"github.com/blang/semver"
 )
 
 // BanTable is the spreadsheet table that becomes m_ban.
 const BanTable = "m_ban"
+
+// ServerSettingTable is the spreadsheet table that becomes m_server_setting, when the sheet has it.
+const ServerSettingTable = "m_server_setting"
 
 // MasterUpdater replaces the master data with the spreadsheet's tables, only when every table
 // is valid. Tables zdxsv does not use are ignored.
@@ -52,7 +57,11 @@ func (u *MasterUpdater) Update(ctx context.Context) (string, error) {
 	if err := d.ReplaceMaster(m); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s updated: %d rows", BanTable, len(m.Bans)), nil
+	msg := fmt.Sprintf("%s updated: %d rows", BanTable, len(m.Bans))
+	if m.ServerSettings != nil {
+		msg += fmt.Sprintf(", %s: %d rows", ServerSettingTable, len(m.ServerSettings))
+	}
+	return msg, nil
 }
 
 // ParseMaster checks every table zdxsv uses and returns them, or all the problems found.
@@ -67,7 +76,44 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 		return nil, fmt.Errorf("%s: %w", BanTable, err)
 	}
 	m.Bans = bans
+	if table, ok := tables[ServerSettingTable]; ok {
+		if m.ServerSettings, err = ParseServerSettings(table); err != nil {
+			return nil, fmt.Errorf("%s: %w", ServerSettingTable, err)
+		}
+	}
 	return m, nil
+}
+
+// ParseServerSettings checks the m_server_setting table (header first): columns key and value.
+// min_pcsx2_version must be empty or a version (zdxsv-X.Y.Z).
+func ParseServerSettings(table [][]string) (map[string]string, error) {
+	col, errs := columns(table, []string{"key", "value"}, nil)
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	settings := map[string]string{}
+	seen := map[string]int{}
+	for n, row := range table[1:] {
+		line := n + 1
+		key, value := strings.TrimSpace(row[col["key"]]), strings.TrimSpace(row[col["value"]])
+		if key == "" {
+			errs = append(errs, fmt.Errorf("row %d: no key", line))
+		}
+		if prev, ok := seen[key]; ok {
+			errs = append(errs, fmt.Errorf("row %d: key %q is also on row %d", line, key, prev))
+		}
+		seen[key] = line
+		if key == "min_pcsx2_version" && value != "" {
+			if _, err := semver.Parse(strings.TrimPrefix(value, "zdxsv-")); err != nil {
+				errs = append(errs, fmt.Errorf("row %d: min_pcsx2_version %q is not a version like zdxsv-1.2.3", line, value))
+			}
+		}
+		settings[key] = value
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return settings, nil
 }
 
 // ParseBans checks the m_ban table (header first). Columns: key (a user id, which must exist)

@@ -321,6 +321,16 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			return err
 		}
 	}
+	if m.ServerSettings != nil {
+		if _, err := tx.Exec(`DELETE FROM m_server_setting`); err != nil {
+			return err
+		}
+		for k, v := range m.ServerSettings {
+			if _, err := tx.Exec(`INSERT INTO m_server_setting (key, value) VALUES (?, ?)`, k, v); err != nil {
+				return err
+			}
+		}
+	}
 	return tx.Commit()
 }
 
