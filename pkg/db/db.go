@@ -64,6 +64,8 @@ type MasterBan struct {
 // Master is the master data loaded from the spreadsheet; ReplaceMaster replaces all of it.
 type Master struct {
 	Bans []*MasterBan
+	// ServerSettings replaces m_server_setting; nil keeps it.
+	ServerSettings map[string]string
 }
 
 type User struct {

@@ -259,6 +259,55 @@ func TestReloadMasterBan(t *testing.T) {
 	}
 }
 
+func TestReloadServerSetting(t *testing.T) {
+	r := newRig(t)
+	setting := func(key string) string {
+		t.Helper()
+		v, err := db.DefaultDB.GetServerSetting(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	withSettings := func(rows ...[]string) map[string][][]string {
+		s := banSheets()
+		s["setting"] = append([][]string{{"@m_server_setting"}, {"key", "value"}}, rows...)
+		return s
+	}
+
+	r.sheets.sheets = withSettings([]string{"min_pcsx2_version", "zdxsv-1.2.0"}, []string{"pcsx2_allow", "k1,k2"})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_server_setting: 2 rows" {
+		t.Fatalf("message %q", msg)
+	}
+	if setting("min_pcsx2_version") != "zdxsv-1.2.0" || setting("pcsx2_allow") != "k1,k2" {
+		t.Fatalf("after load: %q %q", setting("min_pcsx2_version"), setting("pcsx2_allow"))
+	}
+
+	r.sheets.sheets = withSettings([]string{"min_pcsx2_version", "1.3"}, []string{"min_pcsx2_version", "zdxsv-1.3.0"},
+		[]string{"", "x"})
+	msg := r.run("ops-user")
+	for _, s := range []string{"failed, nothing changed", `row 1: min_pcsx2_version "1.3" is not a version`,
+		`row 2: key "min_pcsx2_version" is also on row 1`, "row 3: no key"} {
+		if !strings.Contains(msg, s) {
+			t.Errorf("message %q lacks %q", msg, s)
+		}
+	}
+	if setting("min_pcsx2_version") != "zdxsv-1.2.0" {
+		t.Fatalf("an invalid sheet changed m_server_setting: %q", setting("min_pcsx2_version"))
+	}
+
+	r.sheets.sheets = banSheets()
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows" || setting("min_pcsx2_version") != "zdxsv-1.2.0" {
+		t.Fatalf("no table: %q %q", msg, setting("min_pcsx2_version"))
+	}
+
+	r.sheets.sheets = withSettings([]string{"min_pcsx2_version", ""})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_server_setting: 1 rows" ||
+		setting("min_pcsx2_version") != "" || setting("pcsx2_allow") != "" {
+		t.Fatalf("replace: %q %q %q", msg, setting("min_pcsx2_version"), setting("pcsx2_allow"))
+	}
+}
+
 func TestOpMaster(t *testing.T) {
 	r := newRig(t)
 	if got := r.runCommand("op master", "someone", "ops-role"); got != "https://docs.google.com/spreadsheets/d/sheet-id" {
