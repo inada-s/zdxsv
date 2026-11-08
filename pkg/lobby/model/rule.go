@@ -87,7 +87,7 @@ func (r *Rule) Serialize() []byte {
 	binary.Write(b, binary.BigEndian, r.battleTime)
 	binary.Write(b, binary.BigEndian, zero8) // Unknown
 	binary.Write(b, binary.BigEndian, r.reloadType)
-	binary.Write(b, binary.BigEndian, zero8) // Unknown
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: radar off
 	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
 	binary.Write(b, binary.BigEndian, r.damageLevel-1)
 	binary.Write(b, binary.BigEndian, r.battleCount)
