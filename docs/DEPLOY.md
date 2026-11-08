@@ -60,7 +60,7 @@ Optional:
 
 ## Master data
 
-Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link.
+Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link. Tables and columns: `pkg/chatops/master.go`.
 
 Setup: set `ZDXSV_DISCORD_PUBLIC_KEY`, `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (user and role ids), share the sheet with the service account (viewer), point the Discord Interactions Endpoint at `/discord/interactions` on `ZDXSV_LOBBY_API_ADDR`, and register `/op` once:
 
@@ -69,19 +69,6 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
   -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' \
   https://discord.com/api/v10/applications/<app id>/commands
 ```
-
-A table is a cell `@m_<name>`, a header row below it, and data down to the first empty row. `#` columns are ignored. Any invalid row: nothing changes. `@m_ban` is required; another table, when absent, is kept.
-
-| Table | Columns |
-|---|---|
-| `m_ban` | `key` (user ID), `until` (UTC unless it has an offset), `reason`, `created` |
-| `m_server_setting` | `key`, `value`. Keys: `min_pcsx2_version`, `pcsx2_allow` |
-| `m_lobby_setting` | `platform` (`console`, `emu`), `no`, `start` (`2v2`, `1v1`, `solo`), `explain`, `rule_id`, `hack` |
-| `m_rule` | `id`, `battle_count`, `battle_time`, `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`, `awake_dec_ratio` |
-
-`hack` is comma separated: `none`, `pad_delay`, `widescreen`, `zproxy_test`, `chat_command`. Without a value, a lobby has no hack and starts at `2v2`.
-
-The PS2 needs `console` rows: 1 `zproxy_test,chat_command`; 2 `start` `1v1`; 3 `start` `solo`, `pad_delay`; 4 `widescreen`.
 
 ## Commands
 
