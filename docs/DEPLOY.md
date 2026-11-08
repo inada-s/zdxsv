@@ -82,7 +82,8 @@ Optional:
   patch)). An empty cell or a lobby without a row keeps the default (start: 1v1 in lobby 2, solo
   in 3, else 2v2; rule: the default rule, the menu defaults with the `ZDXSV_LOBBY_BATTLE_*` values;
   hack: `pad_delay` in lobby 3, `widescreen` in 4, else `none`). A hack replaces the explain;
-  lobby 1 keeps its own. A `rule_id` missing from `m_rule` at battle start: the default rule.
+  lobby 1 keeps its own. A platform with no `widescreen` lobby gets no `ｗ０`/`ｗ１` notice or
+  command in lobby 1. A `rule_id` missing from `m_rule` at battle start: the default rule.
   A table under `@m_rule`, when present, replaces all of `m_rule` (same rules as above). One row
   per rule: `id`; optional values from the in-game menu (empty: the menu default; the
   `ZDXSV_LOBBY_BATTLE_*` values do not apply): `battle_count`, `battle_time` (seconds),

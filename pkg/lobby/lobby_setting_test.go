@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
@@ -88,4 +89,53 @@ func TestLobbySetting(t *testing.T) {
 
 	battleRule(5, 1, 90)
 	battleRule(7, 600, 210)
+}
+
+func TestLobbyHackNoticeOff(t *testing.T) {
+	conn := dbtest.Use(t)
+	addr := startLobby(t, battlerpc.NewBattleRpc())
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 4, '', '', '', 'none')`); err != nil {
+		t.Fatal(err)
+	}
+	serverLines := func(c *testClient) []string {
+		c.ask(0x6408, nil)
+		var got []string
+		for _, m := range c.queue {
+			if m.Command != 0x6702 {
+				continue
+			}
+			r := m.Reader()
+			if r.ReadString() == "SERVER" {
+				r.ReadString()
+				got = append(got, r.ReadString())
+			}
+		}
+		c.queue = nil
+		return got
+	}
+	for _, emu := range []bool{true, false} {
+		c := dialLobby(t, addr)
+		if emu {
+			m := NewClientNotice(0x9950)
+			m.Writer().Write([]byte("emulator=pcsx2\nsync=00000000000000aa\n"))
+			c.send(m)
+		}
+		userID, _, _ := c.login(registerAccount(t), "******", "pilot")
+		c.ask(0x6305, u16(1))
+		c.ask(0x640F, u16(1))
+		notice := serverLines(c)
+		c.ask(0x6305, u16(1))
+		c.chat("ｗ１", 0)
+		reply := serverLines(c)
+		u, err := db.DefaultDB.GetUser(userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if emu && (len(notice) != 2 || len(reply) != 0 || u.System != 0) {
+			t.Errorf("emu without a widescreen lobby: notice %q, w1 reply %q, system %x", notice, reply, u.System)
+		}
+		if !emu && (len(notice) != 5 || len(reply) != 3 || u.System != 1) {
+			t.Errorf("console: notice %q, w1 reply %q, system %x", notice, reply, u.System)
+		}
+	}
 }
