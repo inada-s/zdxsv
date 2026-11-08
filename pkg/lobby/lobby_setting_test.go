@@ -3,7 +3,6 @@ package lobby
 import (
 	"encoding/binary"
 	"fmt"
-	"strings"
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
@@ -89,8 +88,8 @@ func TestLobbySetting(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 1, '', '', '', 'zproxy_test,chat_command')`); err != nil {
 		t.Fatal(err)
 	}
-	if s := explain(a6, 1); !strings.HasPrefix(s, "<B>Lobby 01<B><BR><B>") || strings.HasSuffix(s, "<B><END>") {
-		t.Errorf("zproxy_test lobby default explain %q", s)
+	if s := explain(a6, 1); s != "<B>Lobby 01<END>" {
+		t.Errorf("zproxy_test lobby without an explain: %q", s)
 	}
 	if _, err := conn.Exec(`UPDATE m_lobby_setting SET explain = 'connection test' WHERE platform = 'emu' AND no = 1`); err != nil {
 		t.Fatal(err)

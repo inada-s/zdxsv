@@ -70,9 +70,6 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	s := lobbySetting(p.Platform, lobbyID)
-	if s.Explain == "" && lobbyHasHack(s, model.HackZproxyTest) {
-		s.Explain = "接続テスト対戦専用"
-	}
 	switch {
 	case lobbyHasHack(s, model.HackPadDelay):
 		a = SetPadDelayLobbyHack(p, m)
