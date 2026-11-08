@@ -60,14 +60,9 @@ Optional:
 
 ## Master data
 
-Moderators update bans, server settings, lobby settings and rules from a Google Spreadsheet with a Discord slash command. Changes apply at once, with no restart.
+Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link.
 
-### Setup
-
-1. Set `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key), `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and role ids that may run it; empty: nobody).
-2. Use the same Google credentials as for the bucket, and share the spreadsheet with that service account as a viewer.
-3. Set the Discord app's Interactions Endpoint URL to `https://<host>/discord/interactions` and proxy it to `ZDXSV_LOBBY_API_ADDR`.
-4. Register `/op` once with the bot token. Permission 4 shows it only to members who can ban.
+Setup: set `ZDXSV_DISCORD_PUBLIC_KEY`, `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (user and role ids), share the sheet with the service account (viewer), point the Discord Interactions Endpoint at `/discord/interactions` on `ZDXSV_LOBBY_API_ADDR`, and register `/op` once:
 
 ```sh
 curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
@@ -75,69 +70,18 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
   https://discord.com/api/v10/applications/<app id>/commands
 ```
 
-`/op master` answers the spreadsheet link. `/op master-up` reads the spreadsheet and updates the master data.
+A table is a cell `@m_<name>`, a header row below it, and data down to the first empty row. `#` columns are ignored. Any invalid row: nothing changes. `@m_ban` is required; another table, when absent, is kept.
 
-### Sheet format
-
-- A table starts at a cell `@m_<name>` on any sheet. The header is the row below it, and the data runs to the first empty row.
-- Columns whose header starts with `#` are ignored.
-- If any row is invalid, nothing changes and the command answers the errors.
-- `@m_ban` is required. Any other table replaces its whole DB table when present, and leaves it unchanged when absent.
-
-### `@m_ban`
-
-| Column | |
+| Table | Columns |
 |---|---|
-| `key` | User ID; must exist |
-| `until` | End of the ban. UTC unless it has an offset (`2026/11/06 12:00:00`, `2026-11-06T21:00:00+09:00`) |
-| `reason`, `created` | Optional |
+| `m_ban` | `key` (user ID), `until` (UTC unless it has an offset), `reason`, `created` |
+| `m_server_setting` | `key`, `value`. Keys: `min_pcsx2_version`, `pcsx2_allow` |
+| `m_lobby_setting` | `platform` (`console`, `emu`), `no`, `start` (`2v2`, `1v1`, `solo`), `explain`, `rule_id`, `hack` |
+| `m_rule` | `id`, `battle_count`, `battle_time`, `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`, `awake_dec_ratio` |
 
-A banned user's account is refused at its next login. This is the only ban list; `migratedb` drops the old `ban` table.
+`hack` is comma separated: `none`, `pad_delay`, `widescreen`, `zproxy_test`, `chat_command`. Without a value, a lobby has no hack and starts at `2v2`.
 
-### `@m_server_setting`
-
-Columns `key` and `value`. Keys missing from the table are removed.
-
-| Key | Value |
-|---|---|
-| `min_pcsx2_version` | `zdxsv-X.Y.Z`; empty: no minimum |
-| `pcsx2_allow` | Login keys or machine IDs that skip the version check |
-
-### `@m_lobby_setting`
-
-One row per lobby and platform. A lobby without a row has all the defaults.
-
-| Column | Value | Empty |
-|---|---|---|
-| `platform` | `console` or `emu` | Required |
-| `no` | Lobby number | Required |
-| `start` | `2v2`, `1v1` or `solo` | `2v2` |
-| `explain` | Text under "Lobby NN" in the lobby list | None |
-| `rule_id` | An `m_rule` id | Menu defaults |
-| `hack` | Comma separated, see below | None |
-
-| `hack` | Effect |
-|---|---|
-| `none` | Nothing; cannot be combined |
-| `pad_delay` | Fixed pad delay. Replaces `explain`; cannot be combined with `widescreen` |
-| `widescreen` | The `ｗ０`/`ｗ１` patch. Replaces `explain` |
-| `zproxy_test` | Entering a battle starts a zproxy connection test. Empty `explain`: `接続テスト対戦専用` |
-| `chat_command` | The `ｗ０`/`ｗ１`/`ｄｃ` chat commands and their notice. `ｗ０`/`ｗ１` need a `widescreen` lobby on the platform |
-
-The PS2 needs these rows to keep its lobbies:
-
-| `platform` | `no` | `start` | `hack` |
-|---|---|---|---|
-| `console` | 1 | | `zproxy_test,chat_command` |
-| `console` | 2 | `1v1` | |
-| `console` | 3 | `solo` | `pad_delay` |
-| `console` | 4 | | `widescreen` |
-
-### `@m_rule`
-
-One row per rule, with a required `id`. Each `rule_id` must exist in `m_rule`, in the sheet or else in the DB.
-
-The other columns are numbers, not limited to the room menu's choices; empty is the menu default: `battle_count`, `battle_time` (seconds), `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`, `awake_dec_ratio`.
+The PS2 needs `console` rows: 1 `zproxy_test,chat_command`; 2 `start` `1v1`; 3 `start` `solo`, `pad_delay`; 4 `widescreen`.
 
 ## Commands
 
