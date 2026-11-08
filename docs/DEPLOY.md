@@ -55,44 +55,89 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
-- Master data (bans `m_ban`, server settings `m_server_setting`, lobby settings `m_lobby_setting`, rules `m_rule`) from a Google Spreadsheet by a Discord slash command
-  for moderators: `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key),
-  `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and moderator role ids that may run
-  it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
-  spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint URL
-  to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register the
-  command `/op` once with the bot token (`default_member_permissions` 4: shown only to members who
-  can ban):
-  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' https://discord.com/api/v10/applications/<app id>/commands`.
-  `/op master` answers the spreadsheet link. `/op master-up` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
-  `@m_` tables are ignored): header row `key` (a user id), `until`, optional `reason`,
-  `created`; data rows down to the first empty row. In every table, a column whose header starts with `#` is
-  ignored. Times like `2026/11/06 12:00:00` are UTC
-  unless they carry an offset (`2026-11-06T21:00:00+09:00`). It replaces `m_ban` only when every
-  row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
-  account is refused at its next login until `until`, with no restart. `m_ban` is the only ban
-  list (the old `ban` table is dropped by `migratedb`).
-  A table under `@m_server_setting` (header `key`, `value`), when present, replaces all of
-  `m_server_setting` (absent: kept): `min_pcsx2_version` (`zdxsv-X.Y.Z`; empty: no minimum),
-  `pcsx2_allow`. Read at each login, so it applies at once. Keys missing from the table are removed.
-  A table under `@m_lobby_setting`, when present, replaces all of `m_lobby_setting` (absent: kept;
-  only valid rows: else nothing changes). One row per lobby: `platform` (`console` or `emu`), `no`
-  (0-25); optional `start` (`2v2`, `1v1`, `solo`: players per side a lobby battle needs), `explain`
-  (text under "Lobby NN" in the lobby list), `rule_id` (an `m_rule` id) and `hack` (the lobby's special
-  uses, comma separated: `none`; `pad_delay` (fixed pad delay) or `widescreen` (the `ｗ０`/`ｗ１`
-  patch), code the lobby list runs in the game; `zproxy_test` (entering a battle starts a zproxy
-  connection test; explain: empty is `接続テスト対戦専用`); `chat_command` (the `ｗ０`/`ｗ１`/`ｄｃ`
-  chat commands and their notice)). An empty cell or a lobby without a row keeps the default (start: 2v2; rule: the menu defaults;
-  hack: `none`). `pad_delay` and `widescreen` replace the explain. A platform with no `widescreen`
-  lobby gets no `ｗ０`/`ｗ１` notice or command. To keep the PS2 behaviour: `console`, lobby 1
-  hack `zproxy_test,chat_command`; 2 start `1v1`; 3 start `solo`, hack `pad_delay`; 4 hack
-  `widescreen`. A `rule_id` missing from `m_rule` at battle start: the default rule.
-  A table under `@m_rule`, when present, replaces all of `m_rule` (same rules as above). One row
-  per rule: `id`; optional numbers, not limited to the room menu's choices (empty: the menu default): `battle_count`, `battle_time` (seconds),
-  `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`,
-  `awake_dec_ratio`. Every `rule_id` must be in `m_rule` (the sheet's, else the DB's), else
-  nothing changes. Read at each battle start and lobby list view, so it applies at once.
+- Master data from a Google Spreadsheet by a Discord slash command: see [Master data](#master-data)
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
+
+## Master data
+
+Moderators update bans, server settings, lobby settings and rules from a Google Spreadsheet with a Discord slash command. Changes apply at once, with no restart.
+
+### Setup
+
+1. Set `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key), `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and role ids that may run it; empty: nobody).
+2. Use the same Google credentials as for the bucket, and share the spreadsheet with that service account as a viewer.
+3. Set the Discord app's Interactions Endpoint URL to `https://<host>/discord/interactions` and proxy it to `ZDXSV_LOBBY_API_ADDR`.
+4. Register `/op` once with the bot token. Permission 4 shows it only to members who can ban.
+
+```sh
+curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' \
+  https://discord.com/api/v10/applications/<app id>/commands
+```
+
+`/op master` answers the spreadsheet link. `/op master-up` reads the spreadsheet and updates the master data.
+
+### Sheet format
+
+- A table starts at a cell `@m_<name>` on any sheet. The header is the row below it, and the data runs to the first empty row.
+- Columns whose header starts with `#` are ignored.
+- If any row is invalid, nothing changes and the command answers the errors.
+- `@m_ban` is required. Any other table replaces its whole DB table when present, and leaves it unchanged when absent.
+
+### `@m_ban`
+
+| Column | |
+|---|---|
+| `key` | User ID; must exist |
+| `until` | End of the ban. UTC unless it has an offset (`2026/11/06 12:00:00`, `2026-11-06T21:00:00+09:00`) |
+| `reason`, `created` | Optional |
+
+A banned user's account is refused at its next login. This is the only ban list; `migratedb` drops the old `ban` table.
+
+### `@m_server_setting`
+
+Columns `key` and `value`. Keys missing from the table are removed.
+
+| Key | Value |
+|---|---|
+| `min_pcsx2_version` | `zdxsv-X.Y.Z`; empty: no minimum |
+| `pcsx2_allow` | Login keys or machine IDs that skip the version check |
+
+### `@m_lobby_setting`
+
+One row per lobby and platform. A lobby without a row has all the defaults.
+
+| Column | Value | Empty |
+|---|---|---|
+| `platform` | `console` or `emu` | Required |
+| `no` | Lobby number | Required |
+| `start` | `2v2`, `1v1` or `solo` | `2v2` |
+| `explain` | Text under "Lobby NN" in the lobby list | None |
+| `rule_id` | An `m_rule` id | Menu defaults |
+| `hack` | Comma separated, see below | None |
+
+| `hack` | Effect |
+|---|---|
+| `none` | Nothing; cannot be combined |
+| `pad_delay` | Fixed pad delay. Replaces `explain`; cannot be combined with `widescreen` |
+| `widescreen` | The `ｗ０`/`ｗ１` patch. Replaces `explain` |
+| `zproxy_test` | Entering a battle starts a zproxy connection test. Empty `explain`: `接続テスト対戦専用` |
+| `chat_command` | The `ｗ０`/`ｗ１`/`ｄｃ` chat commands and their notice. `ｗ０`/`ｗ１` need a `widescreen` lobby on the platform |
+
+The PS2 needs these rows to keep its lobbies:
+
+| `platform` | `no` | `start` | `hack` |
+|---|---|---|---|
+| `console` | 1 | | `zproxy_test,chat_command` |
+| `console` | 2 | `1v1` | |
+| `console` | 3 | `solo` | `pad_delay` |
+| `console` | 4 | | `widescreen` |
+
+### `@m_rule`
+
+One row per rule, with a required `id`. Each `rule_id` must exist in `m_rule`, in the sheet or else in the DB.
+
+The other columns are numbers, not limited to the room menu's choices; empty is the menu default: `battle_count`, `battle_time` (seconds), `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`, `awake_dec_ratio`.
 
 ## Commands
 
