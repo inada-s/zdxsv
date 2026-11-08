@@ -66,7 +66,8 @@ Optional:
   `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' https://discord.com/api/v10/applications/<app id>/commands`.
   `/op master` answers the spreadsheet link. `/op master-up` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
   `@m_` tables are ignored): header row `key` (a user id), `until`, optional `reason`,
-  `created`; data rows down to the first empty row. Times like `2026/11/06 12:00:00` are UTC
+  `created`; data rows down to the first empty row. In every table, a column whose header starts with `#` is
+  ignored. Times like `2026/11/06 12:00:00` are UTC
   unless they carry an offset (`2026-11-06T21:00:00+09:00`). It replaces `m_ban` only when every
   row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
   account is refused at its next login until `until`, with no restart. `m_ban` is the only ban
