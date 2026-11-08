@@ -14,9 +14,16 @@ import (
 func TestLobbySetting(t *testing.T) {
 	conn := dbtest.Use(t)
 	addr := startLobby(t, battlerpc.NewBattleRpc())
-	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule) VALUES
-		('emu', 5, '1v1', 'one on one', '{"battle_gauge":1,"battle_time":90}'),
-		('console', 6, '1v1', '', '')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO m_rule (id, battle_count, visible_team, battle_time, battle_gauge, reload_type, damage_level, awake_type, awake_inc_ratio, awake_dec_ratio)
+		VALUES ('tai', 0, 0, 90, 1, 0, 3, 0, 100, 100)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES
+		('emu', 5, '1v1', 'one on one', 'tai', ''),
+		('emu', 7, '1v1', '', 'missing', ''),
+		('emu', 4, '', 'no widescreen', '', 'none'),
+		('emu', 8, '', '', '', 'widescreen'),
+		('console', 6, '1v1', '', 'tai', '')`); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
@@ -48,6 +55,18 @@ func TestLobbySetting(t *testing.T) {
 		r.Read16()
 		return r.ReadString()
 	}
+	battleRule := func(lobbyID uint16, gauge, time uint16) {
+		t.Helper()
+		a, b := enter(lobbyID, model.EntryAeug), enter(lobbyID, model.EntryTitans)
+		for i, c := range []*testClient{a, b} {
+			c.expect(0x6910, CategoryNotice)
+			rule := c.ask(0x6914, nil).Body
+			g, tm := binary.BigEndian.Uint16(rule[72:]), binary.BigEndian.Uint16(rule[80:])
+			if g != gauge || tm != time {
+				t.Errorf("lobby %d player %d: gauge %d time %d, want %d %d", lobbyID, i, g, tm, gauge, time)
+			}
+		}
+	}
 
 	a6, b6 := enter(6, model.EntryAeug), enter(6, model.EntryTitans)
 	if started(a6) || started(b6) {
@@ -59,14 +78,14 @@ func TestLobbySetting(t *testing.T) {
 	if s := explain(a6, 5); s != "<B>Lobby 05<BR>one on one<END>" {
 		t.Errorf("lobby 5 explain %q", s)
 	}
-
-	a5, b5 := enter(5, model.EntryAeug), enter(5, model.EntryTitans)
-	for i, c := range []*testClient{a5, b5} {
-		c.expect(0x6910, CategoryNotice)
-		rule := c.ask(0x6914, nil).Body
-		gauge, time := binary.BigEndian.Uint16(rule[72:]), binary.BigEndian.Uint16(rule[80:])
-		if gauge != 1 || time != 90 {
-			t.Errorf("player %d: gauge %d time %d, want 1 90", i, gauge, time)
-		}
+	if s := explain(a6, 4); s != "<B>Lobby 04<BR>no widescreen<END>" {
+		t.Errorf("lobby 4 with hack none: explain %q", s)
 	}
+	if b := hackPayload(t, a6, 8); le32(b, len(b)-4) != 0x00c22cc0+0x68 {
+		t.Errorf("lobby 8 with hack widescreen: return address %08x", le32(b, len(b)-4))
+	}
+	hackPayload(t, a6, 3)
+
+	battleRule(5, 1, 90)
+	battleRule(7, 600, 210)
 }

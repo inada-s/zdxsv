@@ -181,7 +181,7 @@ func banSheets(rows ...[]string) map[string][][]string {
 	}
 	return map[string][][]string{
 		"memo":       {{"free text"}},
-		"other game": {{"@m_rule"}, {"anything"}, {"1"}},
+		"other game": {{"@m_patch"}, {"anything"}, {"1"}},
 		"ban":        append(table, []string{}, []string{"", "trailing rows are not part of the table"}),
 	}
 }
@@ -318,53 +318,93 @@ func TestReloadLobbySetting(t *testing.T) {
 		}
 		return s
 	}
-	withLobbies := func(header []string, rows ...[]string) map[string][][]string {
+	rule := func(id string) *db.Rule {
+		t.Helper()
+		r, err := db.DefaultDB.GetRule(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	ruleHeader := []string{"id", "battle_gauge", "battle_time", "reload_type"}
+	lobbyHeader := []string{"platform", "no", "start", "explain", "rule_id", "hack"}
+	sheets := func(rules, lobbies [][]string) map[string][][]string {
 		s := banSheets()
-		s["lobby"] = append([][]string{{"@m_lobby_setting"}, header}, rows...)
+		if rules != nil {
+			s["rule"] = append([][]string{{"@m_rule"}}, rules...)
+		}
+		if lobbies != nil {
+			s["lobby"] = append([][]string{{"@m_lobby_setting"}}, lobbies...)
+		}
 		return s
 	}
-	header := []string{"platform", "no", "start", "explain", "battle_gauge", "battle_time", "reload_type"}
 
-	r.sheets.sheets = withLobbies(header,
-		[]string{"emu", "5", "1v1", "タイマン", "1", "90", ""},
-		[]string{"console", "5", "", "", "", "", "0"})
-	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 2 rows" {
+	r.sheets.sheets = sheets(
+		[][]string{ruleHeader, {"tai", "1", "90", ""}, {"noreload", "", "", "1"}},
+		[][]string{lobbyHeader, {"emu", "5", "1v1", "タイマン", "tai", ""}, {"emu", "4", "", "", "", "none"}, {"console", "5", "", "", "noreload", "widescreen"}})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 3 rows, m_rule: 2 rows" {
 		t.Fatalf("message %q", msg)
 	}
-	if s := lobby("emu", 5); s == nil || s.Start != "1v1" || s.Explain != "タイマン" || s.Rule != `{"battle_gauge":1,"battle_time":90}` {
+	if s := lobby("emu", 5); s == nil || s.Start != "1v1" || s.Explain != "タイマン" || s.RuleID != "tai" || s.Hack != "" {
 		t.Fatalf("emu 5: %+v", s)
 	}
-	if s := lobby("console", 5); s == nil || s.Start != "" || s.Rule != `{"reload_type":0}` {
+	if s := lobby("emu", 4); s == nil || s.Hack != "none" || s.RuleID != "" {
+		t.Fatalf("emu 4: %+v", s)
+	}
+	if s := lobby("console", 5); s == nil || s.RuleID != "noreload" || s.Hack != "widescreen" {
 		t.Fatalf("console 5: %+v", s)
 	}
+	want := db.Rule{ID: "tai", BattleCount: 0, VisibleTeam: 0, BattleTime: 90, BattleGauge: 1, ReloadType: 0, DamageLevel: 3, AwakeType: 0, AwakeIncRatio: 100, AwakeDecRatio: 100}
+	if got := rule("tai"); got == nil || *got != want {
+		t.Fatalf("rule tai %+v, want %+v", got, want)
+	}
+	if got := rule("noreload"); got == nil || got.ReloadType != 1 || got.BattleGauge != 600 || got.BattleTime != 210 {
+		t.Fatalf("rule noreload %+v", got)
+	}
 
-	r.sheets.sheets = withLobbies(header,
-		[]string{"pc", "26", "3v3", "", "2", "", "x"},
-		[]string{"emu", "1", "", "", "", "", ""},
-		[]string{"emu", "1", "", "", "", "", ""})
+	r.sheets.sheets = sheets(
+		[][]string{ruleHeader, {"", "2", "", "x"}, {"tai", "", "", ""}, {"tai", "", "", ""}},
+		[][]string{lobbyHeader, {"pc", "26", "3v3", "", "", "wide"}, {"emu", "1", "", "", "", ""}, {"emu", "1", "", "", "", ""}})
 	msg := r.run("ops-user")
-	for _, s := range []string{"failed, nothing changed", `row 1: platform "pc"`, `row 1: no "26" is not a lobby number 0-25`,
-		`row 1: start "3v3"`, `row 1: battle_gauge "2" is not one of [1 300 600 610 625 900 1200]`, `row 1: reload_type "x"`,
-		"row 3: lobby emu 1 is also on row 2"} {
+	for _, s := range []string{"failed, nothing changed", "row 1: no id", `row 1: battle_gauge "2" is not one of [1 300 600 610 625 900 1200]`,
+		`row 1: reload_type "x"`, `row 3: id "tai" is also on row 2`} {
 		if !strings.Contains(msg, s) {
 			t.Errorf("message %q lacks %q", msg, s)
 		}
 	}
-	if lobby("emu", 5) == nil || lobby("emu", 1) != nil {
-		t.Fatal("an invalid sheet changed m_lobby_setting")
+	r.sheets.sheets = sheets(nil,
+		[][]string{lobbyHeader, {"pc", "26", "3v3", "", "", "wide"}, {"emu", "1", "", "", "", ""}, {"emu", "1", "", "", "", ""}})
+	msg = r.run("ops-user")
+	for _, s := range []string{"failed, nothing changed", `row 1: platform "pc"`, `row 1: no "26" is not a lobby number 0-25`,
+		`row 1: start "3v3"`, `row 1: hack "wide" is not one of [none pad_delay widescreen]`, "row 3: lobby emu 1 is also on row 2"} {
+		if !strings.Contains(msg, s) {
+			t.Errorf("message %q lacks %q", msg, s)
+		}
 	}
-	r.sheets.sheets = withLobbies([]string{"platform", "no", "max_players"})
+	if lobby("emu", 5) == nil || lobby("emu", 1) != nil || rule("tai") == nil {
+		t.Fatal("an invalid sheet changed the master")
+	}
+	r.sheets.sheets = sheets([][]string{{"id", "max_players"}}, nil)
 	if msg := r.run("ops-user"); !strings.Contains(msg, `unknown column "max_players"`) {
 		t.Fatalf("unknown column: %q", msg)
 	}
 
+	r.sheets.sheets = sheets(nil, [][]string{lobbyHeader, {"emu", "6", "", "", "nosuch", ""}})
+	if msg := r.run("ops-user"); !strings.Contains(msg, `lobby emu 6: rule_id "nosuch" is not in m_rule`) || lobby("emu", 6) != nil {
+		t.Fatalf("unknown rule_id against the DB: %q", msg)
+	}
+	r.sheets.sheets = sheets([][]string{ruleHeader, {"other", "", "", ""}}, nil)
+	if msg := r.run("ops-user"); !strings.Contains(msg, `lobby emu 5: rule_id "tai" is not in m_rule`) || rule("tai") == nil {
+		t.Fatalf("m_rule dropping a rule in use: %q", msg)
+	}
+
 	r.sheets.sheets = banSheets()
-	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows" || lobby("emu", 5) == nil {
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows" || lobby("emu", 5) == nil || rule("tai") == nil {
 		t.Fatalf("no table: %q", msg)
 	}
 
-	r.sheets.sheets = withLobbies(header)
-	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 0 rows" || lobby("emu", 5) != nil {
+	r.sheets.sheets = sheets([][]string{ruleHeader}, [][]string{lobbyHeader})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 0 rows, m_rule: 0 rows" || lobby("emu", 5) != nil || rule("tai") != nil {
 		t.Fatalf("empty table: %q", msg)
 	}
 }

@@ -127,8 +127,21 @@ CREATE TABLE IF NOT EXISTS m_lobby_setting (
 	no integer,
 	start text default '',
 	explain text default '',
-	rule text default '',
+	rule_id text default '',
+	hack text default '',
 	PRIMARY KEY (platform, no)
+);
+CREATE TABLE IF NOT EXISTS m_rule (
+	id text PRIMARY KEY,
+	battle_count integer not null,
+	visible_team integer not null,
+	battle_time integer not null,
+	battle_gauge integer not null,
+	reload_type integer not null,
+	damage_level integer not null,
+	awake_type integer not null,
+	awake_inc_ratio integer not null,
+	awake_dec_ratio integer not null
 );
 CREATE TABLE IF NOT EXISTS m_ban (
 	key text,
@@ -156,7 +169,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_ban", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_rule", "m_ban", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -344,13 +357,37 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			return err
 		}
 		for _, s := range m.LobbySettings {
-			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule) VALUES (:platform, :no, :start, :explain, :rule)`, s)
+			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES (:platform, :no, :start, :explain, :rule_id, :hack)`, s)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if m.Rules != nil {
+		if _, err := tx.Exec(`DELETE FROM m_rule`); err != nil {
+			return err
+		}
+		for _, r := range m.Rules {
+			_, err := tx.NamedExec(`INSERT INTO m_rule (id, battle_count, visible_team, battle_time, battle_gauge, reload_type, damage_level, awake_type, awake_inc_ratio, awake_dec_ratio)
+				VALUES (:id, :battle_count, :visible_team, :battle_time, :battle_gauge, :reload_type, :damage_level, :awake_type, :awake_inc_ratio, :awake_dec_ratio)`, r)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return tx.Commit()
+}
+
+func (db SQLiteDB) GetRule(id string) (*Rule, error) {
+	r := &Rule{}
+	err := db.QueryRowx(`SELECT * FROM m_rule WHERE id = ?`, id).StructScan(r)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func (db SQLiteDB) GetMasterBans() ([]*MasterBan, error) {
@@ -749,4 +786,10 @@ func (db SQLiteDB) GetKillCountRanking(side byte) ([]*RankingRecord, error) {
 	db.mtx.Unlock()
 
 	return ranking, nil
+}
+
+func (db SQLiteDB) GetLobbySettings() ([]*LobbySetting, error) {
+	settings := []*LobbySetting{}
+	err := db.Select(&settings, `SELECT * FROM m_lobby_setting ORDER BY platform, no`)
+	return settings, err
 }

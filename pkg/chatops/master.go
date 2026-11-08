@@ -3,7 +3,6 @@ package chatops
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -69,7 +68,45 @@ func (u *MasterUpdater) Update(ctx context.Context) (string, error) {
 	if m.LobbySettings != nil {
 		msg += fmt.Sprintf(", %s: %d rows", LobbySettingTable, len(m.LobbySettings))
 	}
+	if m.Rules != nil {
+		msg += fmt.Sprintf(", %s: %d rows", RuleTable, len(m.Rules))
+	}
 	return msg, nil
+}
+
+// checkRuleIDs checks that each rule_id of m_lobby_setting is in m_rule: the sheet's when it has
+// the table, else the DB's.
+func checkRuleIDs(d db.DB, m *db.Master) error {
+	if m.LobbySettings == nil && m.Rules == nil {
+		return nil
+	}
+	settings := m.LobbySettings
+	if settings == nil {
+		var err error
+		if settings, err = d.GetLobbySettings(); err != nil {
+			return err
+		}
+	}
+	var errs []error
+	for _, s := range settings {
+		if s.RuleID == "" {
+			continue
+		}
+		found := false
+		if m.Rules != nil {
+			found = slices.ContainsFunc(m.Rules, func(r *db.Rule) bool { return r.ID == s.RuleID })
+		} else {
+			r, err := d.GetRule(s.RuleID)
+			if err != nil {
+				return err
+			}
+			found = r != nil
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("lobby %s %d: rule_id %q is not in %s", s.Platform, s.No, s.RuleID, RuleTable))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ParseMaster checks every table zdxsv uses and returns them, or all the problems found.
@@ -89,6 +126,14 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 			return nil, fmt.Errorf("%s: %w", ServerSettingTable, err)
 		}
 	}
+	if table, ok := tables[RuleTable]; ok {
+		if m.Rules, err = ParseRules(table); err != nil {
+			return nil, fmt.Errorf("%s: %w", RuleTable, err)
+		}
+		if m.Rules == nil {
+			m.Rules = []*db.Rule{}
+		}
+	}
 	if table, ok := tables[LobbySettingTable]; ok {
 		if m.LobbySettings, err = ParseLobbySettings(table); err != nil {
 			return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
@@ -96,6 +141,9 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 		if m.LobbySettings == nil {
 			m.LobbySettings = []*db.LobbySetting{}
 		}
+	}
+	if err := checkRuleIDs(d, m); err != nil {
+		return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
 	}
 	return m, nil
 }
@@ -227,18 +275,18 @@ func parseTime(s string) (time.Time, error) {
 // LobbySettingTable is the spreadsheet table that becomes m_lobby_setting, when the sheet has it.
 const LobbySettingTable = "m_lobby_setting"
 
+// RuleTable is the spreadsheet table that becomes m_rule, when the sheet has it.
+const RuleTable = "m_rule"
+
 var lobbyStarts = []string{model.Start2v2, model.Start1v1, model.StartSolo}
 
+var lobbyHacks = []string{model.HackNone, model.HackPadDelay, model.HackWideScreen}
+
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
-// and no (lobby number) are required; start, explain and the model.RuleKeys columns optional.
+// and no (lobby number) are required; start, explain, rule_id and hack optional.
 // An empty cell keeps the lobby's default.
 func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
-	var ruleKeys []string
-	for k := range model.RuleKeys {
-		ruleKeys = append(ruleKeys, k)
-	}
-	sort.Strings(ruleKeys)
-	col, errs := columns(table, []string{"platform", "no"}, append([]string{"start", "explain"}, ruleKeys...))
+	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -246,14 +294,8 @@ func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
 	seen := map[string]int{}
 	for n, row := range table[1:] {
 		line := n + 1
-		cell := func(name string) string {
-			i, ok := col[name]
-			if !ok || len(row) <= i {
-				return ""
-			}
-			return strings.TrimSpace(row[i])
-		}
-		s := &db.LobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain")}
+		cell := cellFunc(col, row)
+		s := &db.LobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain"), RuleID: cell("rule_id"), Hack: cell("hack")}
 		if s.Platform != model.PlatformConsole && s.Platform != model.PlatformEmu {
 			errs = append(errs, fmt.Errorf("row %d: platform %q is not %s or %s", line, s.Platform, model.PlatformConsole, model.PlatformEmu))
 		}
@@ -270,8 +312,44 @@ func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
 		if s.Start != "" && !slices.Contains(lobbyStarts, s.Start) {
 			errs = append(errs, fmt.Errorf("row %d: start %q is not one of %v", line, s.Start, lobbyStarts))
 		}
-		rule := map[string]uint16{}
+		if s.Hack != "" && !slices.Contains(lobbyHacks, s.Hack) {
+			errs = append(errs, fmt.Errorf("row %d: hack %q is not one of %v", line, s.Hack, lobbyHacks))
+		}
+		settings = append(settings, s)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return settings, nil
+}
+
+// ParseRules checks the m_rule table (header first): id is required, the model.RuleKeys
+// columns optional; an empty cell is the menu default.
+func ParseRules(table [][]string) ([]*db.Rule, error) {
+	var ruleKeys []string
+	for k := range model.RuleKeys {
+		ruleKeys = append(ruleKeys, k)
+	}
+	sort.Strings(ruleKeys)
+	col, errs := columns(table, []string{"id"}, ruleKeys)
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	var rules []*db.Rule
+	seen := map[string]int{}
+	for n, row := range table[1:] {
+		line := n + 1
+		cell := cellFunc(col, row)
+		r := &db.Rule{ID: cell("id")}
+		if r.ID == "" {
+			errs = append(errs, fmt.Errorf("row %d: no id", line))
+		} else if prev, ok := seen[r.ID]; ok {
+			errs = append(errs, fmt.Errorf("row %d: id %q is also on row %d", line, r.ID, prev))
+		}
+		seen[r.ID] = line
+		values := r.Values()
 		for _, k := range ruleKeys {
+			*values[k] = model.RuleDefault(k)
 			v := cell(k)
 			if v == "" {
 				continue
@@ -281,16 +359,22 @@ func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
 				errs = append(errs, fmt.Errorf("row %d: %s %q is not one of %v", line, k, v, model.RuleValues(k)))
 				continue
 			}
-			rule[k] = uint16(n)
+			*values[k] = uint16(n)
 		}
-		if len(rule) > 0 {
-			b, _ := json.Marshal(rule)
-			s.Rule = string(b)
-		}
-		settings = append(settings, s)
+		rules = append(rules, r)
 	}
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
-	return settings, nil
+	return rules, nil
+}
+
+func cellFunc(col map[string]int, row []string) func(string) string {
+	return func(name string) string {
+		i, ok := col[name]
+		if !ok || len(row) <= i {
+			return ""
+		}
+		return strings.TrimSpace(row[i])
+	}
 }

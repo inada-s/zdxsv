@@ -255,3 +255,12 @@ func RuleValues(key string) []uint16 {
 	}
 	return vs
 }
+
+// RuleDefault is the menu default value of the rule named key (RuleKeys).
+func RuleDefault(key string) uint16 {
+	id, ok := RuleKeys[key]
+	if !ok {
+		return 0
+	}
+	return ruleList[id].List[ruleList[id].Default].Value
+}

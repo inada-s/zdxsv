@@ -4,6 +4,7 @@ package lobby
 import (
 	"fmt"
 	. "zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/lobby/model"
 )
 
 var _ = register(0x6203, "GetPlazaCount", func(p *AppPeer, m *Message) {
@@ -68,17 +69,18 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	switch lobbyID {
-	case 1:
+	s := lobbySetting(p.Platform, lobbyID)
+	switch hack := lobbyHack(s); {
+	case lobbyID == 1:
 		w.Write16(lobbyID)
 		w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>接続テスト対戦専用<END>", lobbyID))
-	case 3:
+	case hack == model.HackPadDelay:
 		a = SetPadDelayLobbyHack(p, m)
-	case 4:
+	case hack == model.HackWideScreen:
 		a = SetWideScreenLobbyHack(p, m)
 	default:
 		w.Write16(lobbyID)
-		if s := lobbySetting(p.Platform, lobbyID); s.Explain != "" {
+		if s.Explain != "" {
 			w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>%s<END>", lobbyID, s.Explain))
 		} else {
 			w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID))
