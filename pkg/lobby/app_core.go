@@ -603,16 +603,9 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 			} else {
 				glog.Errorln("Failed to start battle")
 			}
-		} else if lobby.CanBattleStart() {
+		} else if setting := lobbySetting(lobby.Platform, lobby.ID); lobbyCanStart(lobby, setting) {
 			users := lobby.StartBattleUsers()
-			var rule *model.Rule
-			if c := config.Conf.Lobby; c.BattleGauge != 0 || c.BattleTime != 0 || c.BattleCount != 0 {
-				rule = model.NewRule()
-				rule.SetBattleGauge(c.BattleGauge)
-				rule.SetBattleTime(c.BattleTime)
-				rule.SetBattleCount(c.BattleCount)
-			}
-			result := a.startBattle(lobby.Platform, lobby.ID, users, rule)
+			result := a.startBattle(lobby.Platform, lobby.ID, users, lobbyBattleRule(setting))
 			if result {
 				for _, u := range users {
 					u.Entry = model.EntryNone

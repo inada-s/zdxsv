@@ -122,6 +122,14 @@ CREATE TABLE IF NOT EXISTS m_server_setting (
 	key text PRIMARY KEY,
 	value text default ''
 );
+CREATE TABLE IF NOT EXISTS m_lobby_setting (
+	platform text,
+	no integer,
+	start text default '',
+	explain text default '',
+	rule text default '',
+	PRIMARY KEY (platform, no)
+);
 CREATE TABLE IF NOT EXISTS m_ban (
 	key text,
 	until timestamp,
@@ -148,7 +156,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_ban", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_ban", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -331,6 +339,17 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			}
 		}
 	}
+	if m.LobbySettings != nil {
+		if _, err := tx.Exec(`DELETE FROM m_lobby_setting`); err != nil {
+			return err
+		}
+		for _, s := range m.LobbySettings {
+			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule) VALUES (:platform, :no, :start, :explain, :rule)`, s)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return tx.Commit()
 }
 
@@ -338,6 +357,18 @@ func (db SQLiteDB) GetMasterBans() ([]*MasterBan, error) {
 	bans := []*MasterBan{}
 	err := db.Select(&bans, `SELECT * FROM m_ban ORDER BY key`)
 	return bans, err
+}
+
+func (db SQLiteDB) GetLobbySetting(platform string, no int) (*LobbySetting, error) {
+	s := &LobbySetting{}
+	err := db.QueryRowx(`SELECT * FROM m_lobby_setting WHERE platform = ? AND no = ?`, platform, no).StructScan(s)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (db SQLiteDB) GetServerSetting(key string) (string, error) {

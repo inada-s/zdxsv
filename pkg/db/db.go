@@ -2,6 +2,7 @@ package db
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -66,6 +67,27 @@ type Master struct {
 	Bans []*MasterBan
 	// ServerSettings replaces m_server_setting; nil keeps it.
 	ServerSettings map[string]string
+	// LobbySettings replaces m_lobby_setting; nil keeps it.
+	LobbySettings []*LobbySetting
+}
+
+type LobbySetting struct {
+	Platform string `db:"platform"`
+	No       int    `db:"no"`
+	Start    string `db:"start"`
+	Explain  string `db:"explain"`
+	// Rule is a JSON object of rule key to value, e.g. {"battle_gauge":600}.
+	Rule string `db:"rule"`
+}
+
+// RuleValues decodes Rule; an empty Rule has none.
+func (s *LobbySetting) RuleValues() (map[string]uint16, error) {
+	m := map[string]uint16{}
+	if s.Rule == "" {
+		return m, nil
+	}
+	err := json.Unmarshal([]byte(s.Rule), &m)
+	return m, err
 }
 
 type User struct {
@@ -219,6 +241,8 @@ type DB interface {
 	FindBan(loginKey string) (*MasterBan, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
+	// GetLobbySetting returns the m_lobby_setting of a lobby, nil if none.
+	GetLobbySetting(platform string, no int) (*LobbySetting, error)
 	// ReplaceMaster replaces every m_ table of m in one transaction.
 	ReplaceMaster(m *Master) error
 	GetMasterBans() ([]*MasterBan, error)

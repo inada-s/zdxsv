@@ -78,7 +78,11 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 		a = SetWideScreenLobbyHack(p, m)
 	default:
 		w.Write16(lobbyID)
-		w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID))
+		if s := lobbySetting(p.Platform, lobbyID); s.Explain != "" {
+			w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>%s<END>", lobbyID, s.Explain))
+		} else {
+			w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID))
+		}
 	}
 	p.SendMessage(a)
 })

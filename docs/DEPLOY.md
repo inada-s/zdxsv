@@ -55,7 +55,7 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
-- Master data (bans `m_ban`, server settings `m_server_setting`) from a Google Spreadsheet by a Discord slash command
+- Master data (bans `m_ban`, server settings `m_server_setting`, lobby settings `m_lobby_setting`) from a Google Spreadsheet by a Discord slash command
   for moderators: `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key),
   `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and moderator role ids that may run
   it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
@@ -74,6 +74,15 @@ Optional:
   A table under `@m_server_setting` (header `key`, `value`), when present, replaces all of
   `m_server_setting` (absent: kept): `min_pcsx2_version` (`zdxsv-X.Y.Z`; empty: no minimum),
   `pcsx2_allow`. Read at each login, so it applies at once. Keys missing from the table are removed.
+  A table under `@m_lobby_setting`, when present, replaces all of `m_lobby_setting` (absent: kept;
+  only valid rows: else nothing changes). One row per lobby: `platform` (`console` or `emu`), `no`
+  (0-25); optional `start` (`2v2`, `1v1`, `solo`: players per side a lobby battle needs), `explain`
+  (text under "Lobby NN" in the lobby list), and rule values from the in-game menu: `battle_count`,
+  `battle_time` (seconds), `battle_gauge`, `visible_team`, `reload_type`, `damage_level`,
+  `awake_type`, `awake_inc_ratio`, `awake_dec_ratio`. An empty cell or a lobby without a row keeps
+  the default (start: 1v1 in lobby 2, solo in 3, else 2v2; rule: the `ZDXSV_LOBBY_BATTLE_*` values,
+  which a lobby value overrides). Lobbies 1, 3, 4 keep their own explain. Read at each battle
+  start and lobby list view, so it applies at once.
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
 
 ## Commands

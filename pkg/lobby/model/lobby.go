@@ -2,10 +2,13 @@ package model
 
 const roomCount = 5
 
+const LobbyCount = 26
+
 type Lobby struct {
 	ID         uint16
 	Platform   string
 	Rule       *Rule
+	Start      string
 	Users      map[string]*User
 	Rooms      map[uint16]*Room
 	EntryUsers []string
@@ -83,7 +86,22 @@ func (l *Lobby) CanBattleStart() bool {
 	return ok
 }
 
+// Start values: the players per side a lobby battle needs. Empty: the lobby's built-in one.
+const (
+	Start2v2  = "2v2"
+	Start1v1  = "1v1"
+	StartSolo = "solo"
+)
+
 func (l *Lobby) canStart(a, b int) bool {
+	switch l.Start {
+	case Start2v2:
+		return 2 <= a && 2 <= b
+	case Start1v1:
+		return 1 <= a && 1 <= b
+	case StartSolo:
+		return 1 <= a || 1 <= b
+	}
 	if l.ID == uint16(2) {
 		return 1 <= a && 1 <= b
 	}
