@@ -215,7 +215,7 @@ func setupDefaultRule() {
 	}
 }
 
-// RuleKeys are the rule names a lobby setting may fix, with the menu each value must be in.
+// RuleKeys are the rule names a lobby setting may fix.
 var RuleKeys = map[string]byte{
 	"battle_count":    ruleBattleCount,
 	"visible_team":    ruleVisibleTeam,
@@ -228,32 +228,47 @@ var RuleKeys = map[string]byte{
 	"awake_dec_ratio": ruleAwakeDecRatio,
 }
 
-// SetByKey selects the element of value v of the rule named key (RuleKeys); false when either is unknown.
+// SetByKey sets the rule named key (RuleKeys) to v, in the room menu or not; false when the key is
+// unknown or v does not fit the rule's field.
 func (r *Rule) SetByKey(key string, v uint16) bool {
 	id, ok := RuleKeys[key]
 	if !ok {
 		return false
 	}
-	for i, e := range ruleList[id].List {
-		if e.Value == v {
-			r.Set(id, byte(i))
-			return true
+	switch id {
+	case ruleBattleTime:
+		r.battleTime = v
+		return true
+	case ruleBattleGauge:
+		r.battleGauge = v
+		return true
+	case ruleAwakeIncRatio:
+		r.awakeIncRatio = v
+		return true
+	case ruleAwakeDecRatio:
+		r.awakeDecRatio = v
+		return true
+	}
+	if 0xff < v {
+		return false
+	}
+	switch id {
+	case ruleBattleCount:
+		r.battleCount = byte(v)
+	case ruleVisibleTeam:
+		r.visibleTeam = byte(v)
+	case ruleReloadType:
+		r.reloadType = byte(v)
+	case ruleDamageLevel:
+		// Serialize sends the level minus 1.
+		if v == 0 {
+			return false
 		}
+		r.damageLevel = byte(v)
+	case ruleAwakeType:
+		r.awakeType = byte(v)
 	}
-	return false
-}
-
-// RuleValues lists the menu values of the rule named key.
-func RuleValues(key string) []uint16 {
-	id, ok := RuleKeys[key]
-	if !ok {
-		return nil
-	}
-	var vs []uint16
-	for _, e := range ruleList[id].List {
-		vs = append(vs, e.Value)
-	}
-	return vs
+	return true
 }
 
 // RuleDefault is the menu default value of the rule named key (RuleKeys).

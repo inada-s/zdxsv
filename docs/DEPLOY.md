@@ -78,16 +78,17 @@ Optional:
   A table under `@m_lobby_setting`, when present, replaces all of `m_lobby_setting` (absent: kept;
   only valid rows: else nothing changes). One row per lobby: `platform` (`console` or `emu`), `no`
   (0-25); optional `start` (`2v2`, `1v1`, `solo`: players per side a lobby battle needs), `explain`
-  (text under "Lobby NN" in the lobby list), `rule_id` (an `m_rule` id) and `hack` (code the lobby
-  list runs in the game: `none`, `pad_delay` (fixed pad delay), `widescreen` (the `ｗ０`/`ｗ１`
-  patch)). An empty cell or a lobby without a row keeps the default (start: 1v1 in lobby 2, solo
-  in 3, else 2v2; rule: the default rule, the menu defaults with the `ZDXSV_LOBBY_BATTLE_*` values;
-  hack: `pad_delay` in lobby 3, `widescreen` in 4, else `none`). A hack replaces the explain;
-  lobby 1 keeps its own. A platform with no `widescreen` lobby gets no `ｗ０`/`ｗ１` notice or
-  command in lobby 1. A `rule_id` missing from `m_rule` at battle start: the default rule.
+  (text under "Lobby NN" in the lobby list), `rule_id` (an `m_rule` id) and `hack` (the lobby's special
+  uses, comma separated: `none`; `pad_delay` (fixed pad delay) or `widescreen` (the `ｗ０`/`ｗ１`
+  patch), code the lobby list runs in the game; `zproxy_test` (entering a battle starts a zproxy
+  connection test; explain: empty is `接続テスト対戦専用`); `chat_command` (the `ｗ０`/`ｗ１`/`ｄｃ`
+  chat commands and their notice)). An empty cell or a lobby without a row keeps the default (start: 2v2; rule: the menu defaults;
+  hack: `none`). `pad_delay` and `widescreen` replace the explain. A platform with no `widescreen`
+  lobby gets no `ｗ０`/`ｗ１` notice or command. To keep the PS2 behaviour: `console`, lobby 1
+  hack `zproxy_test,chat_command`; 2 start `1v1`; 3 start `solo`, hack `pad_delay`; 4 hack
+  `widescreen`. A `rule_id` missing from `m_rule` at battle start: the default rule.
   A table under `@m_rule`, when present, replaces all of `m_rule` (same rules as above). One row
-  per rule: `id`; optional values from the in-game menu (empty: the menu default; the
-  `ZDXSV_LOBBY_BATTLE_*` values do not apply): `battle_count`, `battle_time` (seconds),
+  per rule: `id`; optional numbers, not limited to the room menu's choices (empty: the menu default): `battle_count`, `battle_time` (seconds),
   `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`,
   `awake_dec_ratio`. Every `rule_id` must be in `m_rule` (the sheet's, else the DB's), else
   nothing changes. Read at each battle start and lobby list view, so it applies at once.

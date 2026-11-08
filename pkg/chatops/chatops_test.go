@@ -312,6 +312,27 @@ func TestReloadServerSetting(t *testing.T) {
 	}
 }
 
+func TestParseLobbyHack(t *testing.T) {
+	for _, c := range []struct {
+		cell, want string
+		ok         bool
+	}{
+		{"", "", true},
+		{"none", "none", true},
+		{"zproxy_test, chat_command", "zproxy_test,chat_command", true},
+		{"widescreen,chat_command", "widescreen,chat_command", true},
+		{"pad_delay,widescreen", "", false},
+		{"none,chat_command", "", false},
+		{"chat_command,chat_command", "", false},
+		{"chat_command,wide", "", false},
+	} {
+		got, err := parseLobbyHack(c.cell)
+		if got != c.want || (err == nil) != c.ok {
+			t.Errorf("%q: %q, %v", c.cell, got, err)
+		}
+	}
+}
+
 func TestReloadLobbySetting(t *testing.T) {
 	r := newRig(t)
 	lobby := func(platform string, no int) *db.LobbySetting {
@@ -367,10 +388,10 @@ func TestReloadLobbySetting(t *testing.T) {
 	}
 
 	r.sheets.sheets = sheets(
-		[][]string{ruleHeader, {"", "2", "", "x"}, {"tai", "", "", ""}, {"tai", "", "", ""}},
+		[][]string{ruleHeader, {"", "70000", "", "x"}, {"tai", "", "", ""}, {"tai", "", "", ""}},
 		[][]string{lobbyHeader, {"pc", "26", "3v3", "", "", "wide"}, {"emu", "1", "", "", "", ""}, {"emu", "1", "", "", "", ""}})
 	msg := r.run("ops-user")
-	for _, s := range []string{"failed, nothing changed", "row 1: no id", `row 1: battle_gauge "2" is not one of [1 300 600 610 625 900 1200]`,
+	for _, s := range []string{"failed, nothing changed", "row 1: no id", `row 1: battle_gauge "70000" is out of range`,
 		`row 1: reload_type "x"`, `row 3: id "tai" is also on row 2`} {
 		if !strings.Contains(msg, s) {
 			t.Errorf("message %q lacks %q", msg, s)
@@ -380,7 +401,7 @@ func TestReloadLobbySetting(t *testing.T) {
 		[][]string{lobbyHeader, {"pc", "26", "3v3", "", "", "wide"}, {"emu", "1", "", "", "", ""}, {"emu", "1", "", "", "", ""}})
 	msg = r.run("ops-user")
 	for _, s := range []string{"failed, nothing changed", `row 1: platform "pc"`, `row 1: no "26" is not a lobby number 0-25`,
-		`row 1: start "3v3"`, `row 1: hack "wide" is not one of [none pad_delay widescreen]`, "row 3: lobby emu 1 is also on row 2"} {
+		`row 1: start "3v3"`, `row 1: hack "wide" is not one of [none pad_delay widescreen zproxy_test chat_command]`, "row 3: lobby emu 1 is also on row 2"} {
 		if !strings.Contains(msg, s) {
 			t.Errorf("message %q lacks %q", msg, s)
 		}

@@ -592,7 +592,8 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 		lobby := p.Lobby
 		lobby.Entry(&p.User, side)
 
-		if lobby.ID == uint16(1) && side != model.EntryNone {
+		setting := lobbySetting(lobby.Platform, lobby.ID)
+		if lobbyHasHack(setting, model.HackZproxyTest) && side != model.EntryNone {
 			users := lobby.StartBattleUsers()
 			message, result := a.startTestBattle(lobby.Platform, lobby.ID, users)
 			NoticeChatMessage(p, "SERVER", ">", message)
@@ -603,7 +604,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 			} else {
 				glog.Errorln("Failed to start battle")
 			}
-		} else if setting := lobbySetting(lobby.Platform, lobby.ID); lobbyCanStart(lobby, setting) {
+		} else if lobbyCanStart(lobby, setting) {
 			users := lobby.StartBattleUsers()
 			result := a.startBattle(lobby.Platform, lobby.ID, users, lobbyBattleRule(setting))
 			if result {

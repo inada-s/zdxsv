@@ -96,14 +96,6 @@ type LobbyConfig struct {
 	// API (local tests, urls http://<APIAddr>/lbs/replays/); upload off when both are empty.
 	ReplayBucket string `env:"ZDXSV_LOBBY_REPLAY_BUCKET"`
 	ReplayDir    string `env:"ZDXSV_LOBBY_REPLAY_DIR"`
-	// 戦力ゲージ of battles started in a lobby (not a room): a value of the rule menu (1, 300, 600, ...);
-	// the default rule when 0. 1 ends a battle at the first shoot-down (short test battles).
-	BattleGauge uint16 `env:"ZDXSV_LOBBY_BATTLE_GAUGE"`
-	// 作戦時間 in seconds of battles started in a lobby: a value of the rule menu (90, 120, ...); default when 0.
-	BattleTime uint16 `env:"ZDXSV_LOBBY_BATTLE_TIME"`
-	// 連続対戦数 of battles started in a lobby: a value of the rule menu (1, 3, 5, 10); default (任意: rematch
-	// picked by the players) when 0.
-	BattleCount uint16 `env:"ZDXSV_LOBBY_BATTLE_COUNT"`
 	// Emulator sign-in through Discord (pkg/auth, /auth/* on APIAddr), off when DiscordClientID is
 	// empty. AuthPublicURL is where players reach /auth/ (https://host). AuthProviderURL replaces
 	// https://discord.com, for tests only.

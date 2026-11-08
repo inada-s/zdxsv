@@ -86,7 +86,7 @@ func (l *Lobby) CanBattleStart() bool {
 	return ok
 }
 
-// Start values: the players per side a lobby battle needs. Empty: the lobby's built-in one.
+// Start values: the players per side a lobby battle needs. Empty: 2v2.
 const (
 	Start2v2  = "2v2"
 	Start1v1  = "1v1"
@@ -95,17 +95,9 @@ const (
 
 func (l *Lobby) canStart(a, b int) bool {
 	switch l.Start {
-	case Start2v2:
-		return 2 <= a && 2 <= b
 	case Start1v1:
 		return 1 <= a && 1 <= b
 	case StartSolo:
-		return 1 <= a || 1 <= b
-	}
-	if l.ID == uint16(2) {
-		return 1 <= a && 1 <= b
-	}
-	if l.ID == uint16(3) {
 		return 1 <= a || 1 <= b
 	}
 	return 2 <= a && 2 <= b
@@ -168,9 +160,11 @@ func (l *Lobby) StartBattleUsers() []*User {
 	return ret
 }
 
-// Hack values: the code a lobby's explain runs in the client. Empty: the lobby's built-in one.
+// Hack values: the special uses of a lobby, comma separated. Empty: none.
 const (
-	HackNone       = "none"
-	HackPadDelay   = "pad_delay"
-	HackWideScreen = "widescreen"
+	HackNone        = "none"
+	HackPadDelay    = "pad_delay"
+	HackWideScreen  = "widescreen"
+	HackZproxyTest  = "zproxy_test"
+	HackChatCommand = "chat_command"
 )

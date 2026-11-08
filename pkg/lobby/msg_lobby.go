@@ -70,18 +70,19 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	s := lobbySetting(p.Platform, lobbyID)
-	switch hack := lobbyHack(s); {
-	case lobbyID == 1:
-		w.Write16(lobbyID)
-		w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>接続テスト対戦専用<END>", lobbyID))
-	case hack == model.HackPadDelay:
+	if s.Explain == "" && lobbyHasHack(s, model.HackZproxyTest) {
+		s.Explain = "接続テスト対戦専用"
+	}
+	switch {
+	case lobbyHasHack(s, model.HackPadDelay):
 		a = SetPadDelayLobbyHack(p, m)
-	case hack == model.HackWideScreen:
+	case lobbyHasHack(s, model.HackWideScreen):
 		a = SetWideScreenLobbyHack(p, m)
 	default:
 		w.Write16(lobbyID)
 		if s.Explain != "" {
-			w.WriteString(fmt.Sprintf("<B>Lobby %02d<BR>%s<END>", lobbyID, s.Explain))
+			// The game draws half-width characters only in a line that starts with <B>.
+			w.WriteString(fmt.Sprintf("<B>Lobby %02d<B><BR><B>%s<END>", lobbyID, s.Explain))
 		} else {
 			w.WriteString(fmt.Sprintf("<B>Lobby %02d<END>", lobbyID))
 		}
@@ -116,9 +117,7 @@ var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *AppPeer, m *Message) 
 	w.Write16(titans)
 	p.SendMessage(a)
 
-	if lobbyID == 1 {
-		SendLobbyChatHackNotice(p)
-	}
+	SendLobbyChatHackNotice(p, lobbySetting(p.Platform, lobbyID))
 })
 
 var _ = register(0x640E, "EntryLobbyBattle", func(p *AppPeer, m *Message) {
@@ -153,7 +152,7 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 
 var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
 	str := m.Reader().ReadEncryptedString()
-	if p.Lobby != nil && p.Lobby.ID == 1 {
+	if p.Lobby != nil && lobbyHasHack(lobbySetting(p.Platform, p.Lobby.ID), model.HackChatCommand) {
 		if lobbyChatCarry(p, str) {
 			return
 		}

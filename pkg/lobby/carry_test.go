@@ -12,7 +12,10 @@ import (
 )
 
 func TestCarryCodeCommand(t *testing.T) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'chat_command')`); err != nil {
+		t.Fatal(err)
+	}
 	var issuedFor []string
 	addr, _ := startLobbyAppWith(t, battlerpc.NewBattleRpc(), func(a *App) {
 		a.SetCarryCodeIssuer(func(loginKey string) string {
