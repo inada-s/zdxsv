@@ -308,6 +308,67 @@ func TestReloadServerSetting(t *testing.T) {
 	}
 }
 
+func TestReloadLobbySetting(t *testing.T) {
+	r := newRig(t)
+	lobby := func(platform string, no int) *db.LobbySetting {
+		t.Helper()
+		s, err := db.DefaultDB.GetLobbySetting(platform, no)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	withLobbies := func(header []string, rows ...[]string) map[string][][]string {
+		s := banSheets()
+		s["lobby"] = append([][]string{{"@m_lobby_setting"}, header}, rows...)
+		return s
+	}
+	header := []string{"platform", "no", "start", "explain", "battle_gauge", "battle_time", "reload_type"}
+
+	r.sheets.sheets = withLobbies(header,
+		[]string{"emu", "5", "1v1", "タイマン", "1", "90", ""},
+		[]string{"console", "5", "", "", "", "", "0"})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 2 rows" {
+		t.Fatalf("message %q", msg)
+	}
+	if s := lobby("emu", 5); s == nil || s.Start != "1v1" || s.Explain != "タイマン" || s.Rule != `{"battle_gauge":1,"battle_time":90}` {
+		t.Fatalf("emu 5: %+v", s)
+	}
+	if s := lobby("console", 5); s == nil || s.Start != "" || s.Rule != `{"reload_type":0}` {
+		t.Fatalf("console 5: %+v", s)
+	}
+
+	r.sheets.sheets = withLobbies(header,
+		[]string{"pc", "26", "3v3", "", "2", "", "x"},
+		[]string{"emu", "1", "", "", "", "", ""},
+		[]string{"emu", "1", "", "", "", "", ""})
+	msg := r.run("ops-user")
+	for _, s := range []string{"failed, nothing changed", `row 1: platform "pc"`, `row 1: no "26" is not a lobby number 0-25`,
+		`row 1: start "3v3"`, `row 1: battle_gauge "2" is not one of [1 300 600 610 625 900 1200]`, `row 1: reload_type "x"`,
+		"row 3: lobby emu 1 is also on row 2"} {
+		if !strings.Contains(msg, s) {
+			t.Errorf("message %q lacks %q", msg, s)
+		}
+	}
+	if lobby("emu", 5) == nil || lobby("emu", 1) != nil {
+		t.Fatal("an invalid sheet changed m_lobby_setting")
+	}
+	r.sheets.sheets = withLobbies([]string{"platform", "no", "max_players"})
+	if msg := r.run("ops-user"); !strings.Contains(msg, `unknown column "max_players"`) {
+		t.Fatalf("unknown column: %q", msg)
+	}
+
+	r.sheets.sheets = banSheets()
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows" || lobby("emu", 5) == nil {
+		t.Fatalf("no table: %q", msg)
+	}
+
+	r.sheets.sheets = withLobbies(header)
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 0 rows" || lobby("emu", 5) != nil {
+		t.Fatalf("empty table: %q", msg)
+	}
+}
+
 func TestOpMaster(t *testing.T) {
 	r := newRig(t)
 	if got := r.runCommand("op master", "someone", "ops-role"); got != "https://docs.google.com/spreadsheets/d/sheet-id" {

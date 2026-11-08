@@ -3,12 +3,17 @@ package chatops
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/lobby/model"
 
 	"github.com/blang/semver"
 )
@@ -61,6 +66,9 @@ func (u *MasterUpdater) Update(ctx context.Context) (string, error) {
 	if m.ServerSettings != nil {
 		msg += fmt.Sprintf(", %s: %d rows", ServerSettingTable, len(m.ServerSettings))
 	}
+	if m.LobbySettings != nil {
+		msg += fmt.Sprintf(", %s: %d rows", LobbySettingTable, len(m.LobbySettings))
+	}
 	return msg, nil
 }
 
@@ -79,6 +87,14 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 	if table, ok := tables[ServerSettingTable]; ok {
 		if m.ServerSettings, err = ParseServerSettings(table); err != nil {
 			return nil, fmt.Errorf("%s: %w", ServerSettingTable, err)
+		}
+	}
+	if table, ok := tables[LobbySettingTable]; ok {
+		if m.LobbySettings, err = ParseLobbySettings(table); err != nil {
+			return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
+		}
+		if m.LobbySettings == nil {
+			m.LobbySettings = []*db.LobbySetting{}
 		}
 	}
 	return m, nil
@@ -206,4 +222,75 @@ func parseTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("bad time %q", s)
+}
+
+// LobbySettingTable is the spreadsheet table that becomes m_lobby_setting, when the sheet has it.
+const LobbySettingTable = "m_lobby_setting"
+
+var lobbyStarts = []string{model.Start2v2, model.Start1v1, model.StartSolo}
+
+// ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
+// and no (lobby number) are required; start, explain and the model.RuleKeys columns optional.
+// An empty cell keeps the lobby's default.
+func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
+	var ruleKeys []string
+	for k := range model.RuleKeys {
+		ruleKeys = append(ruleKeys, k)
+	}
+	sort.Strings(ruleKeys)
+	col, errs := columns(table, []string{"platform", "no"}, append([]string{"start", "explain"}, ruleKeys...))
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	var settings []*db.LobbySetting
+	seen := map[string]int{}
+	for n, row := range table[1:] {
+		line := n + 1
+		cell := func(name string) string {
+			i, ok := col[name]
+			if !ok || len(row) <= i {
+				return ""
+			}
+			return strings.TrimSpace(row[i])
+		}
+		s := &db.LobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain")}
+		if s.Platform != model.PlatformConsole && s.Platform != model.PlatformEmu {
+			errs = append(errs, fmt.Errorf("row %d: platform %q is not %s or %s", line, s.Platform, model.PlatformConsole, model.PlatformEmu))
+		}
+		no, err := strconv.Atoi(cell("no"))
+		if err != nil || no < 0 || model.LobbyCount <= no {
+			errs = append(errs, fmt.Errorf("row %d: no %q is not a lobby number 0-%d", line, cell("no"), model.LobbyCount-1))
+		}
+		s.No = no
+		key := fmt.Sprintf("%s %d", s.Platform, no)
+		if prev, ok := seen[key]; ok {
+			errs = append(errs, fmt.Errorf("row %d: lobby %s is also on row %d", line, key, prev))
+		}
+		seen[key] = line
+		if s.Start != "" && !slices.Contains(lobbyStarts, s.Start) {
+			errs = append(errs, fmt.Errorf("row %d: start %q is not one of %v", line, s.Start, lobbyStarts))
+		}
+		rule := map[string]uint16{}
+		for _, k := range ruleKeys {
+			v := cell(k)
+			if v == "" {
+				continue
+			}
+			n, err := strconv.ParseUint(v, 10, 16)
+			if err != nil || !model.NewRule().SetByKey(k, uint16(n)) {
+				errs = append(errs, fmt.Errorf("row %d: %s %q is not one of %v", line, k, v, model.RuleValues(k)))
+				continue
+			}
+			rule[k] = uint16(n)
+		}
+		if len(rule) > 0 {
+			b, _ := json.Marshal(rule)
+			s.Rule = string(b)
+		}
+		settings = append(settings, s)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return settings, nil
 }

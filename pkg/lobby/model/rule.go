@@ -132,23 +132,6 @@ func (r *Rule) Set(ruleID, elemID byte) {
 	}
 }
 
-// SetBattleGauge selects the 戦力ゲージ element whose value is v; a value not in the menu is ignored.
-func (r *Rule) SetBattleGauge(v uint16) { r.setValue(ruleBattleGauge, v) }
-
-// SetBattleTime selects the 作戦時間 element of v seconds; a value not in the menu is ignored.
-func (r *Rule) SetBattleTime(v uint16) { r.setValue(ruleBattleTime, v) }
-
-// SetBattleCount selects the 連続対戦数 element of v battles; a value not in the menu is ignored.
-func (r *Rule) SetBattleCount(v uint16) { r.setValue(ruleBattleCount, v) }
-
-func (r *Rule) setValue(ruleID byte, v uint16) {
-	for i, e := range ruleList[ruleID].List {
-		if e.Value == v {
-			r.Set(ruleID, byte(i))
-		}
-	}
-}
-
 func (r *Rule) Get(ruleID byte) byte {
 	v, ok := r.selected[ruleID]
 	if ok {
@@ -230,4 +213,45 @@ func setupDefaultRule() {
 		awakeIncRatio: ruleList[ruleAwakeIncRatio].List[ruleList[ruleAwakeIncRatio].Default].Value,
 		awakeDecRatio: ruleList[ruleAwakeDecRatio].List[ruleList[ruleAwakeDecRatio].Default].Value,
 	}
+}
+
+// RuleKeys are the rule names a lobby setting may fix, with the menu each value must be in.
+var RuleKeys = map[string]byte{
+	"battle_count":    ruleBattleCount,
+	"visible_team":    ruleVisibleTeam,
+	"battle_time":     ruleBattleTime,
+	"battle_gauge":    ruleBattleGauge,
+	"reload_type":     ruleReloadType,
+	"damage_level":    ruleDamageLevel,
+	"awake_type":      ruleAwakeType,
+	"awake_inc_ratio": ruleAwakeIncRatio,
+	"awake_dec_ratio": ruleAwakeDecRatio,
+}
+
+// SetByKey selects the element of value v of the rule named key (RuleKeys); false when either is unknown.
+func (r *Rule) SetByKey(key string, v uint16) bool {
+	id, ok := RuleKeys[key]
+	if !ok {
+		return false
+	}
+	for i, e := range ruleList[id].List {
+		if e.Value == v {
+			r.Set(id, byte(i))
+			return true
+		}
+	}
+	return false
+}
+
+// RuleValues lists the menu values of the rule named key.
+func RuleValues(key string) []uint16 {
+	id, ok := RuleKeys[key]
+	if !ok {
+		return nil
+	}
+	var vs []uint16
+	for _, e := range ruleList[id].List {
+		vs = append(vs, e.Value)
+	}
+	return vs
 }
