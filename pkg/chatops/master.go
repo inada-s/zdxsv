@@ -283,7 +283,32 @@ const RuleTable = "m_rule"
 
 var lobbyStarts = []string{model.Start2v2, model.Start1v1, model.StartSolo}
 
-var lobbyHacks = []string{model.HackNone, model.HackPadDelay, model.HackWideScreen}
+var lobbyHacks = []string{model.HackNone, model.HackPadDelay, model.HackWideScreen, model.HackZproxyTest, model.HackChatCommand}
+
+// parseLobbyHack checks a comma separated hack cell and returns it without spaces.
+func parseLobbyHack(cell string) (string, error) {
+	if cell == "" {
+		return "", nil
+	}
+	var hacks []string
+	for _, h := range strings.Split(cell, ",") {
+		h = strings.TrimSpace(h)
+		if !slices.Contains(lobbyHacks, h) {
+			return "", fmt.Errorf("hack %q is not one of %v", h, lobbyHacks)
+		}
+		if slices.Contains(hacks, h) {
+			return "", fmt.Errorf("hack %q appears twice", h)
+		}
+		hacks = append(hacks, h)
+	}
+	if len(hacks) > 1 && slices.Contains(hacks, model.HackNone) {
+		return "", fmt.Errorf("hack %s cannot be combined", model.HackNone)
+	}
+	if slices.Contains(hacks, model.HackPadDelay) && slices.Contains(hacks, model.HackWideScreen) {
+		return "", fmt.Errorf("hack %s and %s cannot be combined", model.HackPadDelay, model.HackWideScreen)
+	}
+	return strings.Join(hacks, ","), nil
+}
 
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
 // and no (lobby number) are required; start, explain, rule_id and hack optional.
@@ -315,8 +340,8 @@ func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
 		if s.Start != "" && !slices.Contains(lobbyStarts, s.Start) {
 			errs = append(errs, fmt.Errorf("row %d: start %q is not one of %v", line, s.Start, lobbyStarts))
 		}
-		if s.Hack != "" && !slices.Contains(lobbyHacks, s.Hack) {
-			errs = append(errs, fmt.Errorf("row %d: hack %q is not one of %v", line, s.Hack, lobbyHacks))
+		if s.Hack, err = parseLobbyHack(s.Hack); err != nil {
+			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
 		settings = append(settings, s)
 	}
@@ -359,7 +384,7 @@ func ParseRules(table [][]string) ([]*db.Rule, error) {
 			}
 			n, err := strconv.ParseUint(v, 10, 16)
 			if err != nil || !model.NewRule().SetByKey(k, uint16(n)) {
-				errs = append(errs, fmt.Errorf("row %d: %s %q is not one of %v", line, k, v, model.RuleValues(k)))
+				errs = append(errs, fmt.Errorf("row %d: %s %q is out of range", line, k, v))
 				continue
 			}
 			*values[k] = uint16(n)

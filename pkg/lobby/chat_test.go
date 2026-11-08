@@ -110,10 +110,13 @@ func TestLobbyChatScope(t *testing.T) {
 	say("room removed", 1, "l3", line(1, "l3"), line(1, "l3"), line(1, "l3"))
 }
 
-// Lobby 1 starts a one player test battle on entry, which needs a UDP proxy
+// A zproxy_test lobby starts a one player test battle on entry, which needs a UDP proxy
 // registered within the last 20 seconds.
 func TestLobbyTestBattleWithoutProxy(t *testing.T) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
+		t.Fatal(err)
+	}
 	addr := startLobby(t, battlerpc.NewBattleRpc())
 
 	c := dialLobby(t, addr)

@@ -79,7 +79,7 @@ type LobbySetting struct {
 	Explain  string `db:"explain"`
 	// RuleID is the m_rule of the lobby's battles; empty: the default rule.
 	RuleID string `db:"rule_id"`
-	// Hack is the code the lobby's explain runs in the client; empty: the lobby's built-in one.
+	// Hack lists the lobby's special uses (model.Hack*), comma separated; empty: none.
 	Hack string `db:"hack"`
 }
 

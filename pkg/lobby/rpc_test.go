@@ -51,7 +51,10 @@ func findUser(users []lobbyrpc.User, userID string) *lobbyrpc.User {
 // TestLobbyRPCProxyFlow is what zproxy does: register while its user is in a
 // lobby, then ask for the battle once the user went to the battle server.
 func TestLobbyRPCProxyFlow(t *testing.T) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
+		t.Fatal(err)
+	}
 	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
 	rpcc := startLobbyRPC(t, app)
 

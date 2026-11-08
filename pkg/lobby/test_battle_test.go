@@ -18,7 +18,10 @@ import (
 // lobby1Proxy logs a user in, enters lobby 1 and registers its proxy over RPC.
 func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
 	t.Helper()
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
+		t.Fatal(err)
+	}
 	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
 	rpcc := startLobbyRPC(t, app)
 	ac := registerAccount(t)

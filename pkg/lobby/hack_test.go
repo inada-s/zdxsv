@@ -69,8 +69,14 @@ func hackPayload(t *testing.T, c *testClient, lobbyID uint16) []byte {
 func le32(b []byte, off int) uint32 { return binary.LittleEndian.Uint32(b[off:]) }
 
 func TestLobbyExplainHacks(t *testing.T) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
 	addr := startLobby(t, battlerpc.NewBattleRpc())
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES
+		('console', 1, '', '', '', 'zproxy_test,chat_command'),
+		('console', 3, '', '', '', 'pad_delay'),
+		('console', 4, '', '', '', 'widescreen')`); err != nil {
+		t.Fatal(err)
+	}
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
 	userID, _, _ := c.login(ac, "******", "pilot")

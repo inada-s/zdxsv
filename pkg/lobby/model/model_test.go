@@ -189,18 +189,33 @@ func TestLobbyEntry(t *testing.T) {
 	}
 }
 
-func TestLobbyCanBattleStartByID(t *testing.T) {
+func TestRuleSetByKey(t *testing.T) {
+	r := NewRule()
+	if !r.SetByKey("battle_count", 2) || r.battleCount != 2 {
+		t.Errorf("battle_count outside the room menu: %d", r.battleCount)
+	}
+	if !r.SetByKey("battle_gauge", 450) || r.battleGauge != 450 {
+		t.Errorf("battle_gauge outside the room menu: %d", r.battleGauge)
+	}
+	if r.SetByKey("battle_count", 256) || r.SetByKey("damage_level", 0) || r.SetByKey("nosuch", 1) {
+		t.Error("a value that does not fit was set")
+	}
+}
+
+func TestLobbyCanBattleStart(t *testing.T) {
 	cases := []struct {
-		lobbyID uint16
-		a, b    int
-		want    bool
+		start string
+		a, b  int
+		want  bool
 	}{
-		{2, 1, 1, true}, {2, 1, 0, false},
-		{3, 1, 0, true}, {3, 0, 1, true}, {3, 0, 0, false},
-		{4, 1, 1, false}, {4, 2, 1, false}, {4, 2, 2, true},
+		{Start1v1, 1, 1, true}, {Start1v1, 1, 0, false},
+		{StartSolo, 1, 0, true}, {StartSolo, 0, 1, true}, {StartSolo, 0, 0, false},
+		{Start2v2, 1, 1, false}, {Start2v2, 2, 1, false}, {Start2v2, 2, 2, true},
+		{"", 1, 1, false}, {"", 1, 0, false}, {"", 2, 2, true},
 	}
 	for _, c := range cases {
-		l := NewLobby("ps2", c.lobbyID)
+		l := NewLobby("ps2", 2)
+		l.Start = c.start
 		add := func(n int, side byte, p string) {
 			for i := 0; i < n; i++ {
 				u := newUser(p + string(rune('0'+i)))
@@ -211,7 +226,7 @@ func TestLobbyCanBattleStartByID(t *testing.T) {
 		add(c.a, EntryAeug, "a")
 		add(c.b, EntryTitans, "t")
 		if got := l.CanBattleStart(); got != c.want {
-			t.Errorf("lobby %d, %d vs %d: CanBattleStart = %v", c.lobbyID, c.a, c.b, got)
+			t.Errorf("start %q, %d vs %d: CanBattleStart = %v", c.start, c.a, c.b, got)
 		}
 	}
 }

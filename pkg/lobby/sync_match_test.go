@@ -11,7 +11,10 @@ import (
 )
 
 func TestLobbyBattleSameSyncOnly(t *testing.T) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 2, '1v1', '', '', '')`); err != nil {
+		t.Fatal(err)
+	}
 	addr := startLobby(t, battlerpc.NewBattleRpc())
 	const lobbyID = 2
 	enter := func(i int, sync string, side byte) *testClient {

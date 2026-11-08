@@ -76,16 +76,33 @@ func TestLobbySetting(t *testing.T) {
 	if s := explain(a6, 6); s != "<B>Lobby 06<END>" {
 		t.Errorf("lobby 6 explain %q", s)
 	}
-	if s := explain(a6, 5); s != "<B>Lobby 05<BR>one on one<END>" {
+	if s := explain(a6, 5); s != "<B>Lobby 05<B><BR><B>one on one<END>" {
 		t.Errorf("lobby 5 explain %q", s)
 	}
-	if s := explain(a6, 4); s != "<B>Lobby 04<BR>no widescreen<END>" {
+	if s := explain(a6, 4); s != "<B>Lobby 04<B><BR><B>no widescreen<END>" {
 		t.Errorf("lobby 4 with hack none: explain %q", s)
+	}
+	if s := explain(a6, 1); s != "<B>Lobby 01<END>" {
+		t.Errorf("lobby 1 without a hack: explain %q", s)
+	}
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 1, '', '', '', 'zproxy_test,chat_command')`); err != nil {
+		t.Fatal(err)
+	}
+	if s := explain(a6, 1); s != "<B>Lobby 01<END>" {
+		t.Errorf("zproxy_test lobby without an explain: %q", s)
+	}
+	if _, err := conn.Exec(`UPDATE m_lobby_setting SET explain = 'connection test' WHERE platform = 'emu' AND no = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if s := explain(a6, 1); s != "<B>Lobby 01<B><BR><B>connection test<END>" {
+		t.Errorf("zproxy_test lobby with an explain: %q", s)
 	}
 	if b := hackPayload(t, a6, 8); le32(b, len(b)-4) != 0x00c22cc0+0x68 {
 		t.Errorf("lobby 8 with hack widescreen: return address %08x", le32(b, len(b)-4))
 	}
-	hackPayload(t, a6, 3)
+	if s := explain(a6, 3); s != "<B>Lobby 03<END>" {
+		t.Errorf("lobby 3 without a hack: explain %q", s)
+	}
 
 	battleRule(5, 1, 90)
 	battleRule(7, 600, 210)
@@ -94,7 +111,10 @@ func TestLobbySetting(t *testing.T) {
 func TestLobbyHackNoticeOff(t *testing.T) {
 	conn := dbtest.Use(t)
 	addr := startLobby(t, battlerpc.NewBattleRpc())
-	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 4, '', '', '', 'none')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES
+		('console', 1, '', '', '', 'zproxy_test,chat_command'),
+		('emu', 1, '', '', '', 'zproxy_test,chat_command'),
+		('console', 4, '', '', '', 'widescreen')`); err != nil {
 		t.Fatal(err)
 	}
 	serverLines := func(c *testClient) []string {

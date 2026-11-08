@@ -55,43 +55,20 @@ Optional:
   on `ZDXSV_LOBBY_API_ADDR`: proxy `/auth/*` there like `/lbs/*`. Keep the secret in a root-only
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
-- Master data (bans `m_ban`, server settings `m_server_setting`, lobby settings `m_lobby_setting`, rules `m_rule`) from a Google Spreadsheet by a Discord slash command
-  for moderators: `ZDXSV_DISCORD_PUBLIC_KEY` (the Discord app's public key),
-  `ZDXSV_DISCORD_COMMAND_ALLOW` (comma separated Discord user and moderator role ids that may run
-  it; empty: nobody), `ZDXSV_MASTER_SPREADSHEET_ID`; Google credentials as for the bucket, the
-  spreadsheet shared with that service account (viewer). Set the app's Interactions Endpoint URL
-  to `https://<host>/discord/interactions` (proxy it to `ZDXSV_LOBBY_API_ADDR`) and register the
-  command `/op` once with the bot token (`default_member_permissions` 4: shown only to members who
-  can ban):
-  `curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' https://discord.com/api/v10/applications/<app id>/commands`.
-  `/op master` answers the spreadsheet link. `/op master-up` reads the table under a cell `@m_ban` (any sheet, the gdxsv layout; other
-  `@m_` tables are ignored): header row `key` (a user id), `until`, optional `reason`,
-  `created`; data rows down to the first empty row. In every table, a column whose header starts with `#` is
-  ignored. Times like `2026/11/06 12:00:00` are UTC
-  unless they carry an offset (`2026-11-06T21:00:00+09:00`). It replaces `m_ban` only when every
-  row is valid (known user, no duplicate, a time), else answers the errors. A banned user's
-  account is refused at its next login until `until`, with no restart. `m_ban` is the only ban
-  list (the old `ban` table is dropped by `migratedb`).
-  A table under `@m_server_setting` (header `key`, `value`), when present, replaces all of
-  `m_server_setting` (absent: kept): `min_pcsx2_version` (`zdxsv-X.Y.Z`; empty: no minimum),
-  `pcsx2_allow`. Read at each login, so it applies at once. Keys missing from the table are removed.
-  A table under `@m_lobby_setting`, when present, replaces all of `m_lobby_setting` (absent: kept;
-  only valid rows: else nothing changes). One row per lobby: `platform` (`console` or `emu`), `no`
-  (0-25); optional `start` (`2v2`, `1v1`, `solo`: players per side a lobby battle needs), `explain`
-  (text under "Lobby NN" in the lobby list), `rule_id` (an `m_rule` id) and `hack` (code the lobby
-  list runs in the game: `none`, `pad_delay` (fixed pad delay), `widescreen` (the `ｗ０`/`ｗ１`
-  patch)). An empty cell or a lobby without a row keeps the default (start: 1v1 in lobby 2, solo
-  in 3, else 2v2; rule: the default rule, the menu defaults with the `ZDXSV_LOBBY_BATTLE_*` values;
-  hack: `pad_delay` in lobby 3, `widescreen` in 4, else `none`). A hack replaces the explain;
-  lobby 1 keeps its own. A platform with no `widescreen` lobby gets no `ｗ０`/`ｗ１` notice or
-  command in lobby 1. A `rule_id` missing from `m_rule` at battle start: the default rule.
-  A table under `@m_rule`, when present, replaces all of `m_rule` (same rules as above). One row
-  per rule: `id`; optional values from the in-game menu (empty: the menu default; the
-  `ZDXSV_LOBBY_BATTLE_*` values do not apply): `battle_count`, `battle_time` (seconds),
-  `battle_gauge`, `visible_team`, `reload_type`, `damage_level`, `awake_type`, `awake_inc_ratio`,
-  `awake_dec_ratio`. Every `rule_id` must be in `m_rule` (the sheet's, else the DB's), else
-  nothing changes. Read at each battle start and lobby list view, so it applies at once.
+- Master data from a Google Spreadsheet by a Discord slash command: see [Master data](#master-data)
 - Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
+
+## Master data
+
+Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link. Tables and columns: `pkg/chatops/master.go`.
+
+Setup: set `ZDXSV_DISCORD_PUBLIC_KEY`, `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (user and role ids), share the sheet with the service account (viewer), point the Discord Interactions Endpoint at `/discord/interactions` on `ZDXSV_LOBBY_API_ADDR`, and register `/op` once:
+
+```sh
+curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"op","description":"Moderator commands","default_member_permissions":"4","options":[{"type":1,"name":"master","description":"The master data spreadsheet"},{"type":1,"name":"master-up","description":"Read the spreadsheet and update the master data"}]}' \
+  https://discord.com/api/v10/applications/<app id>/commands
+```
 
 ## Commands
 

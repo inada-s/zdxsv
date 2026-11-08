@@ -89,6 +89,21 @@ func TestBattleInfoNotice(t *testing.T) {
 	}
 }
 
+func TestBattleInfoNoticeAlone(t *testing.T) {
+	alone := func(info map[string]string) *proto.P2PMatching {
+		p := newUDPTestPeer(info, false)
+		p.Battle.Users = p.Battle.Users[1:]
+		return battleInfo(t, battleInfoNotice(p, func(string) map[string]string { return info }))
+	}
+	m := alone(map[string]string{"emulator": "pcsx2", "udp": "1", "ggpo": "7100"})
+	if m.SessionId == nil || m.PingTestDuration != nil || len(m.Users) != 1 {
+		t.Errorf("alone with a GGPO port: %v", prototext.Format(m))
+	}
+	if m := alone(map[string]string{"emulator": "pcsx2", "udp": "1"}); m.SessionId != nil {
+		t.Errorf("alone without a GGPO port: %v", prototext.Format(m))
+	}
+}
+
 // testdata/p2p_matching.bin is the body this test builds; the client's battle info
 // decoder is tested against the same bytes.
 func TestBattleInfoNoticeP2P(t *testing.T) {

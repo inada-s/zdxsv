@@ -8,7 +8,7 @@ import (
 
 const carryCommand = "ｄｃ"
 
-// SetCarryCodeIssuer turns the carry-over chat command on (lobby 1 only): issue returns a code that
+// SetCarryCodeIssuer turns the carry-over chat command on (chat_command lobbies): issue returns a code that
 // links the account to a Discord sign-in in the emulator.
 func (a *App) SetCarryCodeIssuer(issue func(loginKey string) string) {
 	a.carryCode = issue

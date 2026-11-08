@@ -256,7 +256,10 @@ func TestLobbyBattleRoundTrip(t *testing.T) {
 }
 
 func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, shared int) {
-	dbtest.Use(t)
+	conn := dbtest.Use(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
+		t.Fatal(err)
+	}
 	brpc := battlerpc.NewBattleRpc()
 	addr := startLobby(t, brpc)
 

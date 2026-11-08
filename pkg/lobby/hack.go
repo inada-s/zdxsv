@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/lobby/model"
 )
 
-func SendLobbyChatHackNotice(p *AppPeer) {
-	NoticeChatMessage(p, "SERVER", "＞", "自動選抜に入ることでＵＤＰプロキシの")
-	NoticeChatMessage(p, "SERVER", "＞", "接続テスト対戦を行うことができます。")
+func SendLobbyChatHackNotice(p *AppPeer, s *db.LobbySetting) {
+	if lobbyHasHack(s, model.HackZproxyTest) {
+		NoticeChatMessage(p, "SERVER", "＞", "自動選抜に入ることでＵＤＰプロキシの")
+		NoticeChatMessage(p, "SERVER", "＞", "接続テスト対戦を行うことができます。")
+	}
+	if !lobbyHasHack(s, model.HackChatCommand) {
+		return
+	}
 	var cmds []string
 	if platformHasWideScreen(p.Platform) {
 		cmds = append(cmds, "ｗ０：ワイドスクリーンパッチ無効化", "ｗ１：ワイドスクリーンパッチ有効化")

@@ -136,7 +136,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // users[].ggpo_port: platform info "ggpo": the client runs the battle over GGPO at
 // those ports and the candidates' IPs when every other player has one, else over the bridge;
 // session_id, ping_test_duration: set with any ggpo_port (the battle's id in the clients'
-// ping test packets, its length in ms);
+// ping test packets, its length in ms); a player alone with a GGPO port gets a session and no ping test;
 // relays: the lobby's relay server (relayServers), when every player supports it;
 // users[].team: the entry side (1 / 2);
 // users[].sync: platform info "sync", self included: the client cuts the battle when one
@@ -215,11 +215,17 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 			ggpo = true
 		}
 	}
+	alone := len(users) == 1
+	if port, err := strconv.Atoi(p.PlatformInfo["ggpo"]); alone && err == nil && 0 < port && port < 65536 {
+		ggpo = true
+	}
 	if ggpo {
 		// The session id is random, not derived from the battle code: the code is
 		// public (live list, replays), and the session authorizes the battle's live upload.
 		m.SessionId = pb.Uint32(b.GgpoSession)
-		m.PingTestDuration = pb.Int32(7500)
+		if !alone {
+			m.PingTestDuration = pb.Int32(7500)
+		}
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
 			m.SpectatorUplink = pb.Bool(true)
