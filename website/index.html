@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8">
-<meta name="description" content="Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対サーバです。">
+<meta name="description" content="Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバです。PS2 実機と PCSX2 で遊べます。">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="canonical" href="https://www.zdxsv.net/">
 
@@ -23,8 +23,8 @@
 <div class="container">
 <div class="btn-group btn-group-justified links">
   <a href="#top" class="btn btn-default" data-toggle="tab">トップ</a>
-  <a href="#guide" class="btn btn-default" data-toggle="tab">接続方法</a>
-  <a href="#zproxy" class="btn btn-default" data-toggle="tab">UDPプロキシ</a>
+  <a href="#ps2" class="btn btn-default" data-toggle="tab">PS2</a>
+  <a href="#pcsx2" class="btn btn-default" data-toggle="tab">PCSX2</a>
   <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank" class="btn btn-default">Discord</a>
 </div>
 </div>
@@ -40,8 +40,8 @@
   <p>Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバです。</p>
   <p class="danger">※公式の通信対戦サービスは2011年6月30日に終了しています。非公式サーバに関するお問い合わせは絶対しないでください。 </p>
   <p>
-    接続方法については <a href=#guide data-toggle="tab">接続方法</a> をご覧ください。<br>
-    UDPプロキシの使い方は <a href="#zproxy" data-toggle="tab">UDPプロキシ</a> をご覧ください。<br>
+    PS2 実機での接続方法と UDPプロキシの使い方は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。<br>
+    PC (PCSX2) で遊ぶ方法は <a href="#pcsx2" data-toggle="tab">PCSX2</a> をご覧ください。PCSX2 版は現在検証中です。<br>
     対戦の募集やボイスチャットは <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank">Discord</a> を使用します。使い方は <a href="//eeharumt.github.io/how2usediscordjp/basicoperation.html">こちら</a>をご覧ください。<br>
   <p>
 
@@ -61,8 +61,9 @@
   </ul>
 </div>  <!-- end of top -->
 
-<div class="tab-pane" id="guide">
-  <h2>接続方法</h2>
+<div class="tab-pane" id="ps2">
+  <h2>PS2 で遊ぶ</h2>
+  <p>PlayStation2 実機 (又は初期型 PlayStation3) で接続する方法です。PC で遊ぶ場合は <a href="#pcsx2" data-toggle="tab">PCSX2</a> をご覧ください。</p>
   <h3>必要なもの</h3>
   <ul>
   <li>PlayStation2本体 又は 初期型PlayStation3本体</li>
@@ -94,10 +95,9 @@
 	<li>カプコンユーザ登録/変更は「登録しない」を選択</li>
 	<li>HNを決定し戦場選択画面へ</li>
   </ul>
-</div>  <!-- end of guide -->
 
-<div class="tab-pane" id="zproxy">
-  <h2>UDPプロキシ</h2>
+<div id="zproxy">
+  <h2>UDPプロキシ (PS2 向け)</h2>
   <h3>概要</h3>
   <p>対戦中の通信方式を変換することによって、対戦中のラグを軽減します。</p>
   <p>対戦中の通信は、TCPという通信方式が使われています。TCPは高機能ですが、ゲームのようなリアルタイム通信には向いていません。</p>
@@ -110,7 +110,7 @@
   <ul>
   <li>PS2と同じネットワーク(ルータ)に接続しているPC(有線接続推奨)</li>
   <li>プロキシソフト zproxy
-    <div class="zproxy-download">
+    <div class="download">
       <a id="zproxy-download" class="btn btn-primary" href="https://github.com/inada-s/zdxsv/releases/latest">
         <span class="glyphicon glyphicon-download-alt"></span> zproxy をダウンロード <span id="zproxy-platform"></span></a>
       <div><small id="zproxy-file" class="text-muted">GitHub Releases から zdxsv_&lt;版&gt;_&lt;OS&gt;_&lt;CPU&gt;.zip を選んでください</small></div>
@@ -150,6 +150,37 @@
 	<img src="/static/img/win3.png" alt="警告例1" class="img-thumbnail">
 
 </div>  <!-- end of zproxy -->
+</div>  <!-- end of ps2 -->
+
+<div class="tab-pane" id="pcsx2">
+  <h2>PCSX2 で遊ぶ (検証中)</h2>
+  <p class="danger">※PCSX2 版は現在検証中です。不具合や動作の変更があり得ます。</p>
+  <p>PC 上のエミュレーター PCSX2 で接続する方法です。PS2 実機で遊ぶ場合は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。</p>
+
+  <h3>必要なもの</h3>
+  <ul>
+  <li>Windows (64bit) の PC</li>
+  <li>PS2 の BIOS (PS2 本体から吸い出したもの)</li>
+  <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
+  <li>Discord アカウント (サインインに使います)</li>
+  <li>コントローラー</li>
+  <li>PCSX2 for zdxsv
+    <div class="download">
+      <a id="pcsx2-download" class="btn btn-primary" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
+        <span class="glyphicon glyphicon-download-alt"></span> PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
+      <div><small id="pcsx2-file" class="text-muted">pcsx2-zdxsv-windows-x64.zip (最新版)</small></div>
+      <div><small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small></div>
+    </div>
+  </li>
+  </ul>
+
+  <h3>使い方</h3>
+  <ul>
+	<li>zip を解凍して中の pcsx2-qt.exe を実行します</li>
+	<li>初回起動時のセットアップで BIOS とゲームの場所を設定し、Discordでサインインします</li>
+	<li>ゲームを起動し、通信対戦を選択します</li>
+  </ul>
+</div>  <!-- end of pcsx2 -->
 
 </div>  <!-- end of tab-content -->
 </div>  <!-- end of col  -->
@@ -165,7 +196,7 @@
     <p id="ps2-battle-user-count"></p>
     <table class="table mini-font mini-table table-inverse" id="ps2-battle-users-table"></table>
     <div id="emu-section">
-    <h5>エミュレーター <span class="label label-warning">検証中</span></h5>
+    <h5>PCSX2</h5>
     <p id="emu-lobby-user-count"></p>
     <table class="table mini-font mini-table table-inverse" id="emu-lobby-users-table"></table>
     <p id="emu-battle-user-count"></p>
@@ -287,6 +318,18 @@ if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
 } else {
   setZproxyDownload();
 }
+
+$.getJSON('https://api.github.com/repos/inada-s/pcsx2/releases/latest', function(r) {
+  var assets = r.assets || [];
+  for (var j = 0; j < assets.length; j++) {
+    if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
+      document.getElementById("pcsx2-download").href = assets[j].browser_download_url;
+      document.getElementById("pcsx2-file").innerHTML = r.tag_name + " / " + assets[j].name;
+      document.getElementById("pcsx2-release").href = r.html_url;
+      return;
+    }
+  }
+});
 })
 </script>
 </body></html>
