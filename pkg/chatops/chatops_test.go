@@ -253,6 +253,10 @@ func TestReloadMasterBan(t *testing.T) {
 	if got := masterBans(t); !got[0].Until.Equal(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("until with an offset: %v", got[0].Until)
 	}
+	r.sheets.sheets = map[string][][]string{"s": {{"@m_ban"}, {"#memo", "key", "#", "until", "#memo"}, {"x", b.UserID, "y", "2099-01-01", "z"}}}
+	if msg = r.run("ops-user"); msg != "m_ban updated: 1 rows" || !banned(t, b) || banned(t, c) {
+		t.Errorf("# columns: %q", msg)
+	}
 	r.sheets.sheets = banSheets()
 	if msg = r.run("ops-user"); msg != "m_ban updated: 0 rows" || banned(t, c) {
 		t.Errorf("empty table: %q %v", msg, masterBans(t))

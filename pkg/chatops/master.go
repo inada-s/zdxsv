@@ -237,6 +237,9 @@ func columns(table [][]string, required, optional []string) (map[string]int, []e
 	col := map[string]int{}
 	var errs []error
 	for i, name := range table[0] {
+		if strings.HasPrefix(name, "#") {
+			continue
+		}
 		if !known[name] {
 			errs = append(errs, fmt.Errorf("unknown column %q", name))
 			continue
