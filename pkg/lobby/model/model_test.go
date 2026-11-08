@@ -80,8 +80,8 @@ func TestRuleSerialize(t *testing.T) {
 	if u16(72) != 900 || u16(74) != 900 || u16(76) != 100 || u16(78) != 100 || u16(80) != 270 {
 		t.Errorf("gauge/awake/time = %d %d %d %d %d", u16(72), u16(74), u16(76), u16(78), u16(80))
 	}
-	if b[86] != 3 || b[87] != 3 || u16(100) != 1 {
-		t.Errorf("damage %d, battle count %d, zz pilot %d", b[86], b[87], u16(100))
+	if b[86] != 3 || b[87] != 3 || b[100] != 0 || b[101] != 1 {
+		t.Errorf("damage %d, battle count %d, lose points %d, zz pilot %d", b[86], b[87], b[100], b[101])
 	}
 }
 

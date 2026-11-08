@@ -62,8 +62,17 @@ func (r *Rule) Serialize() []byte {
 	b := new(bytes.Buffer)
 	var zero16 uint16
 	var zero8 byte
+	var (
+		// Shop points a battle earns, in tenths: own score x pointScore, then
+		// +500 x pointWin or -500 x pointLose; clamped to 0-100000.
+		pointScore byte
+		pointWin   byte
+		pointLose  byte
+		zzPilot    byte = 1
+	)
 	binary.Write(b, binary.BigEndian, uint16(100)) // Rule Length
-	binary.Write(b, binary.BigEndian, zero16)      // Unknown
+	binary.Write(b, binary.BigEndian, zero8)       // Unknown
+	binary.Write(b, binary.BigEndian, zero8)       // Unknown
 	binary.Write(b, binary.BigEndian, zero8)       // Unknown
 	binary.Write(b, binary.BigEndian, zero8)       // Unknown
 	for i := 0; i < 16*4; i++ {
@@ -87,9 +96,11 @@ func (r *Rule) Serialize() []byte {
 	binary.Write(b, binary.BigEndian, zero16) // Unknown
 	binary.Write(b, binary.BigEndian, zero16) // Unknown
 	binary.Write(b, binary.BigEndian, r.awakeType)
-	binary.Write(b, binary.BigEndian, zero8)     // Weapon Visible
-	binary.Write(b, binary.BigEndian, zero16)    // Unknown
-	binary.Write(b, binary.BigEndian, uint16(1)) // Enable ZZ Pilot
+	binary.Write(b, binary.BigEndian, zero8) // Weapon Visible
+	binary.Write(b, binary.BigEndian, pointScore)
+	binary.Write(b, binary.BigEndian, pointWin)
+	binary.Write(b, binary.BigEndian, pointLose)
+	binary.Write(b, binary.BigEndian, zzPilot)
 	return b.Bytes()
 }
 
