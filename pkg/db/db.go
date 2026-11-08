@@ -2,7 +2,6 @@ package db
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -69,6 +68,8 @@ type Master struct {
 	ServerSettings map[string]string
 	// LobbySettings replaces m_lobby_setting; nil keeps it.
 	LobbySettings []*LobbySetting
+	// Rules replaces m_rule; nil keeps it.
+	Rules []*Rule
 }
 
 type LobbySetting struct {
@@ -76,18 +77,38 @@ type LobbySetting struct {
 	No       int    `db:"no"`
 	Start    string `db:"start"`
 	Explain  string `db:"explain"`
-	// Rule is a JSON object of rule key to value, e.g. {"battle_gauge":600}.
-	Rule string `db:"rule"`
+	// RuleID is the m_rule of the lobby's battles; empty: the default rule.
+	RuleID string `db:"rule_id"`
+	// Hack is the code the lobby's explain runs in the client; empty: the lobby's built-in one.
+	Hack string `db:"hack"`
 }
 
-// RuleValues decodes Rule; an empty Rule has none.
-func (s *LobbySetting) RuleValues() (map[string]uint16, error) {
-	m := map[string]uint16{}
-	if s.Rule == "" {
-		return m, nil
+type Rule struct {
+	ID            string `db:"id"`
+	BattleCount   uint16 `db:"battle_count"`
+	VisibleTeam   uint16 `db:"visible_team"`
+	BattleTime    uint16 `db:"battle_time"`
+	BattleGauge   uint16 `db:"battle_gauge"`
+	ReloadType    uint16 `db:"reload_type"`
+	DamageLevel   uint16 `db:"damage_level"`
+	AwakeType     uint16 `db:"awake_type"`
+	AwakeIncRatio uint16 `db:"awake_inc_ratio"`
+	AwakeDecRatio uint16 `db:"awake_dec_ratio"`
+}
+
+// Values maps each rule key (model.RuleKeys) to its field.
+func (r *Rule) Values() map[string]*uint16 {
+	return map[string]*uint16{
+		"battle_count":    &r.BattleCount,
+		"visible_team":    &r.VisibleTeam,
+		"battle_time":     &r.BattleTime,
+		"battle_gauge":    &r.BattleGauge,
+		"reload_type":     &r.ReloadType,
+		"damage_level":    &r.DamageLevel,
+		"awake_type":      &r.AwakeType,
+		"awake_inc_ratio": &r.AwakeIncRatio,
+		"awake_dec_ratio": &r.AwakeDecRatio,
 	}
-	err := json.Unmarshal([]byte(s.Rule), &m)
-	return m, err
 }
 
 type User struct {
@@ -243,6 +264,10 @@ type DB interface {
 	GetServerSetting(key string) (string, error)
 	// GetLobbySetting returns the m_lobby_setting of a lobby, nil if none.
 	GetLobbySetting(platform string, no int) (*LobbySetting, error)
+	// GetLobbySettings returns all of m_lobby_setting.
+	GetLobbySettings() ([]*LobbySetting, error)
+	// GetRule returns the m_rule of id, nil if none.
+	GetRule(id string) (*Rule, error)
 	// ReplaceMaster replaces every m_ table of m in one transaction.
 	ReplaceMaster(m *Master) error
 	GetMasterBans() ([]*MasterBan, error)

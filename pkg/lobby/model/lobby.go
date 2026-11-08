@@ -167,3 +167,10 @@ func (l *Lobby) StartBattleUsers() []*User {
 	}
 	return ret
 }
+
+// Hack values: the code a lobby's explain runs in the client. Empty: the lobby's built-in one.
+const (
+	HackNone       = "none"
+	HackPadDelay   = "pad_delay"
+	HackWideScreen = "widescreen"
+)
