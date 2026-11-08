@@ -71,10 +71,10 @@ func (r *Rule) Serialize() []byte {
 		zzPilot    byte = 1
 	)
 	binary.Write(b, binary.BigEndian, uint16(100)) // Rule Length
+	binary.Write(b, binary.BigEndian, zero8)       // CPU difficulty, 0-7
 	binary.Write(b, binary.BigEndian, zero8)       // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
+	binary.Write(b, binary.BigEndian, zero8)       // Stage mode: 2 = stage ID below, 3 = random
+	binary.Write(b, binary.BigEndian, zero8)       // Stage ID, used by stage mode 2
 	for i := 0; i < 16*4; i++ {
 		binary.Write(b, binary.BigEndian, byte(0xFF)) // Available MS Mask
 	}
@@ -88,7 +88,7 @@ func (r *Rule) Serialize() []byte {
 	binary.Write(b, binary.BigEndian, zero8) // Unknown
 	binary.Write(b, binary.BigEndian, r.reloadType)
 	binary.Write(b, binary.BigEndian, zero8) // Unknown
-	binary.Write(b, binary.BigEndian, zero8) // Unknown
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
 	binary.Write(b, binary.BigEndian, r.damageLevel-1)
 	binary.Write(b, binary.BigEndian, r.battleCount)
 	binary.Write(b, binary.BigEndian, zero16) // Unknown
