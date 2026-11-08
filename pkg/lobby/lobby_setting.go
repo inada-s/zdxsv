@@ -67,3 +67,12 @@ func lobbyHack(s *db.LobbySetting) string {
 	}
 	return model.HackNone
 }
+
+func platformHasWideScreen(platform string) bool {
+	for i := 0; i < model.LobbyCount; i++ {
+		if lobbyHack(lobbySetting(platform, uint16(i))) == model.HackWideScreen {
+			return true
+		}
+	}
+	return false
+}

@@ -9,15 +9,26 @@ import (
 func SendLobbyChatHackNotice(p *AppPeer) {
 	NoticeChatMessage(p, "SERVER", "＞", "自動選抜に入ることでＵＤＰプロキシの")
 	NoticeChatMessage(p, "SERVER", "＞", "接続テスト対戦を行うことができます。")
-	NoticeChatMessage(p, "SERVER", "＞", "利用可能コマンド")
-	NoticeChatMessage(p, "SERVER", "＞", "ｗ０：ワイドスクリーンパッチ無効化")
-	NoticeChatMessage(p, "SERVER", "＞", "ｗ１：ワイドスクリーンパッチ有効化")
+	var cmds []string
+	if platformHasWideScreen(p.Platform) {
+		cmds = append(cmds, "ｗ０：ワイドスクリーンパッチ無効化", "ｗ１：ワイドスクリーンパッチ有効化")
+	}
 	if p.app.carryCode != nil {
-		NoticeChatMessage(p, "SERVER", "＞", "ｄｃ：エミュレーター用引き継ぎコード")
+		cmds = append(cmds, "ｄｃ：エミュレーター用引き継ぎコード")
+	}
+	if len(cmds) == 0 {
+		return
+	}
+	NoticeChatMessage(p, "SERVER", "＞", "利用可能コマンド")
+	for _, c := range cmds {
+		NoticeChatMessage(p, "SERVER", "＞", c)
 	}
 }
 
 func LobbyChatHack(p *AppPeer, str string) {
+	if (str != "ｗ０" && str != "ｗ１") || !platformHasWideScreen(p.Platform) {
+		return
+	}
 	switch str {
 	case "ｗ０":
 		p.System = (p.System & uint32(0xffffff00)) | 0x00
