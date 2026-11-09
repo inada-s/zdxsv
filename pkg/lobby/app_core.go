@@ -32,6 +32,16 @@ func (a *App) OnClose(p *AppPeer) {
 	a.removeUser(p)
 }
 
+// takeOver logs out p for a later login of its user. A line drop without FIN keeps p
+// until peerRecvTimeout, so p may be dead or still live; either way it is closed. Its
+// messages still queued are dropped: lobby and room members are keyed by user id, so
+// they would act on the new client's place.
+func (a *App) takeOver(p *AppPeer) {
+	a.OnClose(p)
+	p.replaced = true
+	p.conn.conn.Close()
+}
+
 // removeUser forgets p as its user unless a peer that logged in later holds the user id.
 func (a *App) removeUser(p *AppPeer) {
 	if a.users[p.UserID] == p {
@@ -154,9 +164,8 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 	}
 
 	if other, ok := a.users[p.UserID]; ok && other != p {
-		glog.Infoln("user already logged in refused", p.UserID, p.SessionID)
-		SendUserInUse(p)
-		return false
+		glog.Infoln("user logged in again, closing its previous client", p.UserID, other.conn.Address())
+		a.takeOver(other)
 	}
 
 	err := db.DefaultDB.LoginUser(&p.User.User)
