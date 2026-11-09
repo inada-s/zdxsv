@@ -2,12 +2,17 @@ package db
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
 )
 
 var DefaultDB DB
+
+const MaxUsersPerAccount = 3
+
+var ErrUserLimit = errors.New("account already has the maximum number of users")
 
 // randomString draws from crypto/rand: login keys and session ids are credentials.
 func randomString(length int, source string) string {
