@@ -94,6 +94,10 @@ func (a *App) OnFirstData(p *AppPeer) {
 	if ok {
 		for _, u := range battle.Users {
 			if u.SessionID == p.SessionID {
+				if u.LoginKey != p.LoginKey {
+					glog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+					return
+				}
 				p.User = u
 				break
 			}
@@ -125,8 +129,10 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 		p.Name = name
 		p.SessionID = sessionID
 	} else if _, ok := a.battles[p.SessionID]; ok {
-		// after battle user
-		// do nothing.
+		if p.UserID == "" {
+			glog.Errorln("no battle user for session", p.SessionID)
+			return false
+		}
 	} else if len(name) == 0 || userID == string([]byte{0, 0, 0, 0, 0, 0}) {
 		// use last login user_id
 		ac, err := db.DefaultDB.GetAccountByLoginKey(p.LoginKey)
