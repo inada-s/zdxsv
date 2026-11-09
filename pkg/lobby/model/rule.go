@@ -72,8 +72,8 @@ func (r *Rule) Serialize() []byte {
 	)
 	binary.Write(b, binary.BigEndian, uint16(100)) // Rule Length
 	binary.Write(b, binary.BigEndian, zero8)       // CPU difficulty, 0-7
-	binary.Write(b, binary.BigEndian, zero8)       // Unknown
-	binary.Write(b, binary.BigEndian, zero8)       // Stage mode: 2 = stage ID below, 3 = random
+	binary.Write(b, binary.BigEndian, zero8)       // Empty slots: 0xff = no CPUs, other values fill them with CPUs
+	binary.Write(b, binary.BigEndian, zero8)       // Stage mode: 0 = random without space stages, 2 = stage ID below, 3/4 = random
 	binary.Write(b, binary.BigEndian, zero8)       // Stage ID, used by stage mode 2
 	for i := 0; i < 16*4; i++ {
 		binary.Write(b, binary.BigEndian, byte(0xFF)) // Available MS Mask
