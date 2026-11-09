@@ -173,6 +173,13 @@ func NoticeChatMessage(p *AppPeer, userID, name, message string) {
 	w.WriteString(userID)
 	w.WriteString(name)
 	w.WriteString(message)
+	// The client reads 4 bytes after the text (type; ID, name, text color: '0'-'7'
+	// picks a color) with no length check. Left out, it reads stale bytes of an
+	// earlier message and may draw the line in another color.
+	w.Write8(0)
+	w.Write8(0)
+	w.Write8(0)
+	w.Write8(0)
 	p.SendMessage(n)
 }
 
