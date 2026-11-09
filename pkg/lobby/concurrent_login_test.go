@@ -1,12 +1,10 @@
 package lobby
 
 import (
-	"strings"
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
 )
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {
@@ -33,25 +31,28 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 	// The first client still holds its session after the account's later logins.
 	dialLobby(t, addr).login(ac, "******", "three")
 
-	dup := dialLobby(t, addr)
-	dup.chooseUser(loginAgain(ac.LoginKey), u1, "one")
-	if msg := dup.expect(0x6003, CategoryNotice).Reader().ReadString(); !strings.Contains(msg, sjis(t, "使用中")) {
-		t.Fatalf("refusal %q", msg)
+	// A client whose line dropped without FIN still holds its user; the user's next login takes over.
+	const lobbyID = 4
+	c1.ask(0x6305, u16(lobbyID))
+	again := dialLobby(t, addr)
+	if u, _, _ := again.login(loginAgain(ac.LoginKey), u1, "one"); u != u1 {
+		t.Fatalf("login again as %s: %s", u1, u)
 	}
-	dup.ask(0x600E, nil)
-	for _, m := range dup.queue {
-		if m.Command == 0x6104 || m.Command == 0x6132 {
-			t.Fatalf("login of a user in use went on: 0x%04x", m.Command)
-		}
-	}
-	dup.conn.Close()
-	waitFor(t, "the lobby to drop the refused client", func() (gone bool) {
+	expectClosed(t, c1)
+	again.ask(0x6305, u16(lobbyID))
+	waitFor(t, "the lobby to drop the replaced client", func() (gone bool) {
 		app.Locked(func(a *App) { gone = len(a.peers) == 3 })
 		return
 	})
-	if loggedIn(u1) != first {
-		t.Fatal("the refused client logged out the user in use")
-	}
+	app.Locked(func(a *App) {
+		p := a.users[u1]
+		if p == nil || p == first {
+			t.Fatalf("%s held by %v after the takeover", u1, p)
+		}
+		if p.Lobby == nil || p.Lobby.Users[u1] == nil || first.Lobby != nil {
+			t.Fatal("the replaced client's close took the new client out of the lobby")
+		}
+	})
 
 	other := dialLobby(t, addr)
 	other.chooseUser(registerAccount(t), u2, "two")
@@ -62,7 +63,7 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 		}
 	}
 
-	c1.conn.Close()
+	again.conn.Close()
 	waitFor(t, "the lobby to drop "+u1, func() bool { return loggedIn(u1) == nil })
 	dialLobby(t, addr).login(loginAgain(ac.LoginKey), u1, "one")
 }

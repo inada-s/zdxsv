@@ -40,12 +40,6 @@ func SendBanned(p *AppPeer) {
 	p.SendMessage(n)
 }
 
-func SendUserInUse(p *AppPeer) {
-	n := NewServerNotice(0x6003)
-	n.Writer().WriteString("<BODY><LF=5><CENTER>このIDは使用中です<END>")
-	p.SendMessage(n)
-}
-
 func SendPleaseUpdate(p *AppPeer) {
 	n := NewServerNotice(0x6003)
 	n.Writer().WriteString("<BODY><LF=5><CENTER>PLEASE UPDATE PCSX2<END>")
