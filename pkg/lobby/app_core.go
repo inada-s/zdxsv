@@ -568,9 +568,26 @@ func (a *App) OnEnterLobby(p *AppPeer, lobbyID uint16) {
 		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
 			p.User.Sync = s
 		}
+		a.dropBattlesOf(p.UserID)
 		p.Lobby = l
 		p.Lobby.Enter(&p.User)
 		a.noticeLobbyUserCountAll(l.Platform, l.ID)
+	}
+}
+
+// dropBattlesOf forgets the battles a user left without coming back to the battle after room
+// (a new login, a broken battle): the user is no longer in them.
+func (a *App) dropBattlesOf(userID string) {
+	for sid, battle := range a.battles {
+		for _, u := range battle.Users {
+			if u.SessionID == sid && u.UserID == userID {
+				delete(a.battles, sid)
+				if battle.LobbyID != 0 {
+					a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
+				}
+				break
+			}
+		}
 	}
 }
 
