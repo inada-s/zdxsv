@@ -67,6 +67,7 @@ type Conn struct {
 	peer Peer
 
 	chWrite    chan bool
+	chClose    chan bool
 	chDispatch chan bool
 	chQuit     chan interface{}
 
@@ -81,6 +82,7 @@ func NewConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:       conn,
 		chWrite:    make(chan bool, 1),
+		chClose:    make(chan bool, 1),
 		chDispatch: make(chan bool, 1),
 		outbuf:     make([]byte, 0, 1024),
 		inbuf:      make([]byte, 0, 1024),
@@ -152,33 +154,43 @@ func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
 	defer cancel()
 
 	buf := make([]byte, 0, 128)
+	flush := func() {
+		c.mOutbuf.Lock()
+		buf = append(buf, c.outbuf...)
+		c.outbuf = c.outbuf[:0]
+		c.mOutbuf.Unlock()
+
+		sum := 0
+		size := len(buf)
+		for sum < size {
+			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
+			n, err := c.conn.Write(buf[sum:])
+			if err != nil {
+				glog.Errorf("%v write error: %v\n", c.Address(), err)
+				break
+			}
+			sum += n
+		}
+		buf = buf[:0]
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-c.chWrite:
-			c.mOutbuf.Lock()
-			if len(c.outbuf) == 0 {
-				c.mOutbuf.Unlock()
-				continue
-			}
-			buf = append(buf, c.outbuf...)
-			c.outbuf = c.outbuf[:0]
-			c.mOutbuf.Unlock()
-
-			sum := 0
-			size := len(buf)
-			for sum < size {
-				c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
-				n, err := c.conn.Write(buf[sum:])
-				if err != nil {
-					glog.Errorf("%v write error: %v\n", c.Address(), err)
-					break
-				}
-				sum += n
-			}
-			buf = buf[:0]
+			flush()
+		case <-c.chClose:
+			flush()
+			return
 		}
+	}
+}
+
+// Close closes the connection once the messages sent before it are written.
+func (c *Conn) Close() {
+	select {
+	case c.chClose <- true:
+	default:
 	}
 }
 
