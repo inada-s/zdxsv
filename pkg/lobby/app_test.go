@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"net"
 	"testing"
 	"time"
 	"zdxsv/pkg/config"
@@ -39,7 +40,10 @@ func TestDispatchMessage(t *testing.T) {
 	go app.Serve()
 	defer app.Quit()
 
-	p := &AppPeer{app: app}
+	server, client := net.Pipe()
+	defer client.Close()
+	p := &AppPeer{app: app, conn: NewConn(server)}
+	app.chEvent <- eventPeerCome{peer: p}
 	app.AddHandler(0x0123, "testHandler", func(peer *AppPeer, msg *message.Message) {
 		t.Logf("%+v %+v\n", peer, msg)
 		c.Call(msg)

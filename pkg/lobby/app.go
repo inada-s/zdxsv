@@ -67,7 +67,6 @@ type AppPeer struct {
 	proxyUseTime time.Time
 
 	lastRecvTime time.Time
-	replaced     bool
 }
 
 func (p *AppPeer) OnOpen() {
@@ -247,7 +246,7 @@ func (a *App) Serve() {
 				a.peers[args.peer.conn.Address()] = args.peer
 				a.OnOpen(args.peer)
 			case eventPeerMessage:
-				if args.peer.replaced {
+				if a.peers[args.peer.conn.Address()] != args.peer {
 					continue
 				}
 				args.peer.lastRecvTime = time.Now()

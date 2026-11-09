@@ -1,10 +1,12 @@
 package lobby
 
 import (
+	"strings"
 	"testing"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/db/dbtest"
+	. "zdxsv/pkg/lobby/message"
 )
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {
@@ -31,28 +33,33 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 	// The first client still holds its session after the account's later logins.
 	dialLobby(t, addr).login(ac, "******", "three")
 
-	// A client whose line dropped without FIN still holds its user; the user's next login takes over.
+	// A client whose line dropped without FIN still holds its user; the user's next login closes it.
 	const lobbyID = 4
 	c1.ask(0x6305, u16(lobbyID))
 	again := dialLobby(t, addr)
 	if u, _, _ := again.login(loginAgain(ac.LoginKey), u1, "one"); u != u1 {
 		t.Fatalf("login again as %s: %s", u1, u)
 	}
+	if msg := c1.expect(0x6003, CategoryNotice).Reader().ReadString(); !strings.Contains(msg, sjis(t, "シャットダウン")) {
+		t.Fatalf("notice to the closed client %q", msg)
+	}
 	expectClosed(t, c1)
 	again.ask(0x6305, u16(lobbyID))
-	waitFor(t, "the lobby to drop the replaced client", func() (gone bool) {
-		app.Locked(func(a *App) { gone = len(a.peers) == 3 })
-		return
-	})
+	queued := NewClientQuestion(0x6305)
+	queued.Writer().Write(u16(lobbyID))
+	app.chEvent <- eventPeerMessage{peer: first, msg: queued}
+	var p *AppPeer
+	var inLobby bool
 	app.Locked(func(a *App) {
-		p := a.users[u1]
-		if p == nil || p == first {
-			t.Fatalf("%s held by %v after the takeover", u1, p)
-		}
-		if p.Lobby == nil || p.Lobby.Users[u1] == nil || first.Lobby != nil {
-			t.Fatal("the replaced client's close took the new client out of the lobby")
-		}
+		p = a.users[u1]
+		inLobby = p != nil && p.Lobby != nil && p.Lobby.Users[u1] == &p.User && first.Lobby == nil
 	})
+	if p == nil || p == first {
+		t.Fatalf("%s held by %v after its new login", u1, p)
+	}
+	if !inLobby {
+		t.Fatal("the closed client took the new client's place in the lobby")
+	}
 
 	other := dialLobby(t, addr)
 	other.chooseUser(registerAccount(t), u2, "two")
