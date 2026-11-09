@@ -60,7 +60,6 @@ func NewRule() *Rule {
 
 func (r *Rule) Serialize() []byte {
 	b := new(bytes.Buffer)
-	var zero16 uint16
 	var zero8 byte
 	var (
 		// Shop points a battle earns, in tenths: own score x pointScore, then
@@ -85,16 +84,13 @@ func (r *Rule) Serialize() []byte {
 	binary.Write(b, binary.BigEndian, r.awakeIncRatio)
 	binary.Write(b, binary.BigEndian, r.awakeDecRatio)
 	binary.Write(b, binary.BigEndian, r.battleTime)
-	binary.Write(b, binary.BigEndian, zero8) // Unknown
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: boost gauge does not drain; only in a game mode a lobby battle is not in
 	binary.Write(b, binary.BigEndian, r.reloadType)
 	binary.Write(b, binary.BigEndian, zero8) // Nonzero: radar off
 	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
 	binary.Write(b, binary.BigEndian, r.damageLevel-1)
 	binary.Write(b, binary.BigEndian, r.battleCount)
-	binary.Write(b, binary.BigEndian, zero16) // Unknown
-	binary.Write(b, binary.BigEndian, zero16) // Unknown
-	binary.Write(b, binary.BigEndian, zero16) // Unknown
-	binary.Write(b, binary.BigEndian, zero16) // Unknown
+	binary.Write(b, binary.BigEndian, uint64(0)) // Stored by the game, never read
 	binary.Write(b, binary.BigEndian, r.awakeType)
 	binary.Write(b, binary.BigEndian, zero8) // Weapon Visible
 	binary.Write(b, binary.BigEndian, pointScore)
