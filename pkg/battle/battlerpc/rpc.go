@@ -3,7 +3,7 @@ package battlerpc
 import (
 	"sync"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 const MaxRoom = 128
@@ -64,7 +64,7 @@ func (m *BattleRpc) NotifyBattleUsers(args *BattleInfoArgs, reply *int) error {
 		RoomID: rid,
 	}
 
-	glog.Infoln("Receive BattleInfo", *info)
+	zlog.Infoln("Receive BattleInfo", *info)
 	m.mMap.Lock()
 	for _, u := range info.Users {
 		m.sessionMap[u.SessionID] = info

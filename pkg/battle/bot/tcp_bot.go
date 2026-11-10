@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 type TCPBot struct {
@@ -49,7 +49,7 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 	}
 
 	if 12 < n {
-		glog.Fatalln("Too long first data", recvbuf[:n])
+		zlog.Fatalln("Too long first data", recvbuf[:n])
 	} else {
 		firstData := []byte{130, 2, 16, 49, 0, 10, 0, 1, 0, 255, 255, 255}
 		firstData = append(firstData, []byte(EncodeSessionID(bot.sessionID))...)
@@ -92,8 +92,8 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 
 				k := int(incoming[0])
 				for k <= len(incoming) {
-					if glog.V(2) {
-						glog.Infof("[TCP] id:%v SV>CL:%v", bot.id, incoming[:k])
+					if zlog.DebugEnabled() {
+						zlog.Infof("[TCP] id:%v SV>CL:%v", bot.id, incoming[:k])
 					}
 					msg := readMsg(incoming[:k])
 					ms := (time.Now().UnixNano() - msg.unixnano)
@@ -116,5 +116,5 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 }
 
 func (bot *TCPBot) Summary() {
-	glog.Infof("[TCP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
+	zlog.Infof("[TCP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
 }

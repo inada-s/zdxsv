@@ -11,7 +11,7 @@ import (
 	"zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 type MessageHandler func(*AppPeer, *message.Message)
@@ -208,9 +208,9 @@ func (a *App) SetBattleServer(b *battlerpc.BattleRpc) {
 func (a *App) connectToBattleServer() {
 	client, err := rpc.DialHTTP("tcp", config.Conf.Battle.RPCAddr)
 	if err != nil {
-		glog.Errorln("Faild to connect BattleServer. ", err)
+		zlog.Errorln("Faild to connect BattleServer. ", err)
 	} else {
-		glog.Infoln("Succeeded to connect BattleServer")
+		zlog.Infoln("Succeeded to connect BattleServer")
 		a.battleServer = rpcBattleServer{client}
 	}
 }
@@ -218,7 +218,7 @@ func (a *App) connectToBattleServer() {
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		glog.Fatal("err in splitPort", err)
+		zlog.Fatalln("err in splitPort", err)
 	}
 	return ":" + fmt.Sprint(port)
 }
@@ -228,7 +228,7 @@ func (a *App) Serve() {
 	defer aliveCheck.Stop()
 	err := newLobbyRPCServer(a, stripHost(config.Conf.Lobby.RPCAddr)).Start()
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 	}
 	if a.battleServer == nil {
 		a.connectToBattleServer()
@@ -241,7 +241,7 @@ func (a *App) Serve() {
 		case e := <-a.chEvent:
 			switch args := e.(type) {
 			case eventPeerCome:
-				glog.Infoln("eventPeerCome")
+				zlog.Infoln("eventPeerCome")
 				args.peer.lastRecvTime = time.Now()
 				a.peers[args.peer.conn.Address()] = args.peer
 				a.OnOpen(args.peer)
@@ -253,19 +253,19 @@ func (a *App) Serve() {
 				if f, ok := a.handlers[args.msg.Command]; ok {
 					f(args.peer, args.msg)
 				} else {
-					glog.Errorf("======================================")
-					glog.Errorf("======================================")
-					glog.Errorf("======================================")
-					glog.Errorf("Handler not found: name = %v msg = %v", symbolMap[args.msg.Command], args.msg)
-					glog.Errorf("======================================")
-					glog.Errorf("======================================")
-					glog.Errorf("======================================")
+					zlog.Errorf("======================================")
+					zlog.Errorf("======================================")
+					zlog.Errorf("======================================")
+					zlog.Errorf("Handler not found: name = %v msg = %v", symbolMap[args.msg.Command], args.msg)
+					zlog.Errorf("======================================")
+					zlog.Errorf("======================================")
+					zlog.Errorf("======================================")
 					if args.msg.Category == message.CategoryQuestion {
 						args.peer.SendMessage(message.NewServerAnswer(args.msg))
 					}
 				}
 			case eventPeerLeave:
-				glog.Infoln("eventPeerLeave")
+				zlog.Infoln("eventPeerLeave")
 				a.OnClose(args.peer)
 				delete(a.peers, args.peer.conn.Address())
 			case eventFunc:
@@ -285,7 +285,7 @@ func (a *App) Serve() {
 func (a *App) checkAlive(now time.Time) {
 	for _, p := range a.peers {
 		if now.Sub(p.lastRecvTime) >= peerRecvTimeout {
-			glog.Infoln("Recv Timeout", p)
+			zlog.Infoln("Recv Timeout", p)
 			p.conn.conn.Close()
 		} else {
 			RequestLineCheck(p)
@@ -295,7 +295,7 @@ func (a *App) checkAlive(now time.Time) {
 	for sid, battle := range a.battles {
 		if now.Sub(battle.StartTime) >= battleTimeout {
 			delete(a.battles, sid)
-			glog.Infoln("Battle user timeout.", sid, battle)
+			zlog.Infoln("Battle user timeout.", sid, battle)
 		}
 	}
 
@@ -305,7 +305,7 @@ func (a *App) checkAlive(now time.Time) {
 		ping, reply := "Ping", ""
 		err := a.battleServer.PingPong(&ping, &reply)
 		if err != nil {
-			glog.Errorln("PingPong failed. ", err)
+			zlog.Errorln("PingPong failed. ", err)
 			a.battleServer.Close()
 			a.battleServer = nil
 			a.connectToBattleServer()

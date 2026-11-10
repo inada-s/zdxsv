@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/config"
 
@@ -22,12 +22,12 @@ func makeDNSHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
 		m.SetReply(r)
 		rr, err := dns.NewRR(record)
 		if err != nil {
-			log.Println(err)
+			zlog.Infoln(err)
 		}
 		m.Answer = append(m.Answer, rr)
 		err = w.WriteMsg(m)
 		if err != nil {
-			log.Println(err)
+			zlog.Infoln(err)
 		}
 	}
 }
@@ -73,9 +73,9 @@ func newDNSServer() (*dns.Server, error) {
 		return nil, err
 	}
 
-	log.Println("DNAS server ", dnassvIP)
-	log.Println("Login server ", loginPublicIP)
-	log.Println("gdx server", gdxsvPublicIP)
+	zlog.Infoln("DNAS server ", dnassvIP)
+	zlog.Infoln("Login server ", loginPublicIP)
+	zlog.Infoln("gdx server", gdxsvPublicIP)
 
 	return &dns.Server{Addr: config.Conf.DNS.Addr, Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}, nil
 }
@@ -83,8 +83,8 @@ func newDNSServer() (*dns.Server, error) {
 func mainDNS() {
 	server, err := newDNSServer()
 	if err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
-	log.Println("DNS listen", config.Conf.DNS.Addr)
-	log.Fatal(server.ListenAndServe())
+	zlog.Infoln("DNS listen", config.Conf.DNS.Addr)
+	zlog.Fatalln(server.ListenAndServe())
 }

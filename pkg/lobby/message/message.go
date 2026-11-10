@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/golang/glog"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+	"zdxsv/pkg/zlog"
 )
 
 const (
@@ -228,11 +228,11 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 	chksum := m.Read16()
 	n, err := m.r.Read(buf)
 	if err != nil {
-		glog.Errorln("read encstr faild. read error:", err)
+		zlog.Errorln("read encstr faild. read error:", err)
 		return ""
 	}
 	if n != int(size-2) {
-		glog.Errorln("read encstr faild. mismatch read size")
+		zlog.Errorln("read encstr faild. mismatch read size")
 		return ""
 	}
 	sum := uint16(0)
@@ -245,13 +245,13 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		sum += uint16(buf[i])
 	}
 	if sum != chksum {
-		glog.Errorln("decrypt faild mismatch checksum")
+		zlog.Errorln("decrypt faild mismatch checksum")
 		return ""
 	}
 
 	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 	}
 	return string(bytes.Trim(ret, "\x00"))
 }
@@ -318,7 +318,7 @@ func (m *MessageBodyWriter) Write32LE(v uint32) *MessageBodyWriter {
 func (m *MessageBodyWriter) WriteString(v string) *MessageBodyWriter {
 	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(v), japanese.ShiftJIS.NewEncoder()))
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 	}
 	binary.Write(m.buf, binary.BigEndian, uint16(len(ret)))
 	m.buf.Write(ret)

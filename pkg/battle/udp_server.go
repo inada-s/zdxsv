@@ -5,8 +5,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
 )
@@ -27,8 +27,8 @@ func NewUDPServer(logic *Logic) *UDPServer {
 }
 
 func (s *UDPServer) readLoop() error {
-	glog.Infoln("UDP readLoop()")
-	defer glog.Infoln("UDP readLoop() return")
+	zlog.Infoln("UDP readLoop()")
+	defer zlog.Infoln("UDP readLoop() return")
 	pkt := proto.GetPacket()
 	buf := make([]byte, 4096)
 	pbuf := pb.NewBuffer(nil)
@@ -39,7 +39,7 @@ func (s *UDPServer) readLoop() error {
 			return err
 		}
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 			continue
 		}
 		if n == 0 {
@@ -54,7 +54,7 @@ func (s *UDPServer) readLoop() error {
 		pkt.Reset()
 		pbuf.SetBuf(buf[:n])
 		if err := pbuf.Unmarshal(pkt); err != nil {
-			glog.Errorf("failed to unmarshal udp packet from %v data %v", key, buf[:n])
+			zlog.Errorf("failed to unmarshal udp packet from %v data %v", key, buf[:n])
 			continue
 		}
 
@@ -66,7 +66,7 @@ func (s *UDPServer) readLoop() error {
 			sessionID := pkt.GetHelloServerData().GetSessionId()
 			user, valid := s.logic.FindWaitingUser(sessionID)
 			if !found && valid {
-				glog.Infoln("join udp peer", key)
+				zlog.Infoln("join udp peer", key)
 				peer := NewUDPPeer(s.conn, addr, user.UserID)
 
 				s.Lock()
@@ -75,7 +75,7 @@ func (s *UDPServer) readLoop() error {
 
 				go func(key string) {
 					peer.Serve(s.logic)
-					glog.Infoln("leave udp peer", key)
+					zlog.Infoln("leave udp peer", key)
 					if peer.room != nil {
 						peer.room.Leave(peer)
 					}
@@ -91,18 +91,18 @@ func (s *UDPServer) readLoop() error {
 				SessionId: pb.String(sessionID),
 			}
 			if data, err := pb.Marshal(pkt); err != nil {
-				glog.Errorln(err)
+				zlog.Errorln(err)
 			} else {
 				s.conn.WriteToUDP(data, addr)
 			}
 		case proto.MessageType_Battle:
 			if !found {
-				glog.Errorln("battle data received but peer not found", pkt)
+				zlog.Errorln("battle data received but peer not found", pkt)
 				continue
 			}
 			peer.OnReceive(pkt)
 		default:
-			glog.Errorf("received unexpected pkt type packet %v", pkt)
+			zlog.Errorf("received unexpected pkt type packet %v", pkt)
 		}
 	}
 }

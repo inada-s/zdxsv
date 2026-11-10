@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
 )
@@ -54,8 +54,8 @@ func (u *UDPPeer) SetUserID(id string) {
 }
 
 func (u *UDPPeer) Serve(logic *Logic) {
-	glog.Infoln("[UDP]", u.Address(), "Serve Start")
-	defer glog.Infoln("[UDP]", u.Address(), "Serve End")
+	zlog.Infoln("[UDP]", u.Address(), "Serve Start")
+	defer zlog.Infoln("[UDP]", u.Address(), "Serve End")
 	ctx, cancel := context.WithCancel(context.Background())
 	u.closeFunc = cancel
 	defer cancel()
@@ -73,7 +73,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 		case <-ticker.C:
 			timeout := time.Since(lastRecv).Seconds() > 5.0
 			if timeout {
-				glog.Infoln("udp peer timeout", u.Address())
+				zlog.Infoln("udp peer timeout", u.Address())
 				return
 			}
 			if time.Since(lastSend).Seconds() >= 0.016 {
@@ -94,7 +94,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			err := pbuf.Marshal(pkt)
 			proto.PutPacket(pkt)
 			if err != nil {
-				glog.Errorf("Marshal error : %v", err)
+				zlog.Errorf("Marshal error : %v", err)
 				return
 			}
 			u.conn.WriteTo(pbuf.Bytes(), u.addr)
@@ -107,21 +107,21 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			for _, msg := range u.reading2 {
 				if u.room == nil {
 					if len(msg.GetBody()) != 22 {
-						glog.Errorln("unexpected length:", msg)
+						zlog.Errorln("unexpected length:", msg)
 						u.Close()
 						break
 					}
 					value := string(msg.GetBody()[12:22])
 					sessionID, err := ParseSessionID(value)
 					if err != nil {
-						glog.Error(err)
+						zlog.Errorln(err)
 						u.Close()
 						break
 					}
-					glog.Infoln("UDPSessionID:", sessionID)
+					zlog.Infoln("UDPSessionID:", sessionID)
 					room := logic.Join(u, sessionID)
 					if room == nil {
-						glog.Error("failed to join room")
+						zlog.Errorln("failed to join room")
 						u.Close()
 						break
 					}
@@ -159,7 +159,7 @@ func (u *UDPPeer) Address() string {
 }
 
 func (u *UDPPeer) AddSendData(data []byte) {
-	glog.Fatalln("AddSendData called", data)
+	zlog.Fatalln("AddSendData called", data)
 }
 
 func (u *UDPPeer) AddSendMessage(msg *proto.BattleMessage) {

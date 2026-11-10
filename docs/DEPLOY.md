@@ -78,6 +78,20 @@ zdxsv             # the server
 zdxsv migratedb   # server stopped, when a release changes the schema; prints "Migration done"
 ```
 
+## Logging
+
+Flags go before the command: `zdxsv -prodlog -logfile /var/log/zdxsv.log`.
+
+| Flag | Default | |
+|---|---|---|
+| `-prodlog` | off | JSON lines with the Cloud Logging keys (`severity`, `eventTime`, `message`, `caller`) and `zdxsv_version`/`zdxsv_revision`; off: console text |
+| `-logfile` | stderr | file to append to; reopen after rotation with a restart or logrotate `copytruncate` |
+| `-v` | 0 | 2 or more adds debug lines |
+
+Every IP address in a log line is masked: an IPv4 address keeps its first octet (`203.x.xxx.xx`),
+an IPv6 address its first three groups; loopback and unspecified addresses stay.
+`-logtostderr` and `-alsologtostderr` are accepted and ignored.
+
 ## Update
 
 Replace the binary, run `zdxsv migratedb` if the release changes the schema, restart.

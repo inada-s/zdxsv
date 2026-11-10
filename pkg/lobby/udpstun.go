@@ -5,8 +5,8 @@ import (
 
 	"zdxsv/pkg/proto"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
+	"zdxsv/pkg/zlog"
 )
 
 // UDPTestUserID in a Ping to the main STUN socket asks for the reachability test:
@@ -19,7 +19,7 @@ const UDPTestUserID = "udptest"
 // on addr's port + 1 (the test socket). Clients compare both public addresses to tell
 // a cone NAT (same mapped port) from a symmetric one.
 func (s *Server) ServeUDPStunServer(addr string) error {
-	glog.Infoln("Start UDPStun", addr)
+	zlog.Infoln("Start UDPStun", addr)
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		return err
@@ -33,10 +33,10 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 	testAddr := &net.UDPAddr{IP: udpAddr.IP, Port: udpAddr.Port + 1}
 	test, err := net.ListenUDP("udp4", testAddr)
 	if err != nil {
-		glog.Errorln("UDPStun test socket:", err)
+		zlog.Errorln("UDPStun test socket:", err)
 		test = nil
 	} else {
-		glog.Infoln("Start UDPStun test", testAddr)
+		zlog.Infoln("Start UDPStun test", testAddr)
 		defer test.Close()
 		go serveUDPStun(test, nil)
 	}
@@ -47,7 +47,7 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 
 // ServeUDPStun answers Ping with Pong on addr, without the test socket.
 func (s *Server) ServeUDPStun(addr string) error {
-	glog.Infoln("Start UDPStun", addr)
+	zlog.Infoln("Start UDPStun", addr)
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 			if ne, ok := err.(net.Error); ok && !ne.Timeout() && !ne.Temporary() {
 				return
 			}
@@ -75,7 +75,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 		}
 		req := new(proto.Packet)
 		if err := pb.Unmarshal(buf[:n], req); err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 			continue
 		}
 		data, test2 := udpStunAnswer(req, addr)
@@ -93,7 +93,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 // whether the Ping asked for the reachability test.
 func udpStunAnswer(req *proto.Packet, addr *net.UDPAddr) ([]byte, bool) {
 	if req.GetType() != proto.MessageType_Ping {
-		glog.Warningln("unexpected packet received", req)
+		zlog.Warnln("unexpected packet received", req)
 		return nil, false
 	}
 	res := &proto.Packet{
@@ -106,7 +106,7 @@ func udpStunAnswer(req *proto.Packet, addr *net.UDPAddr) ([]byte, bool) {
 	}
 	data, err := pb.Marshal(res)
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		return nil, false
 	}
 	return data, req.GetPingData().GetUserId() == UDPTestUserID

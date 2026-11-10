@@ -11,10 +11,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"time"
+	"zdxsv/pkg/zlog"
 )
 
 // A Router decides where each accepted connection goes.
@@ -70,7 +70,7 @@ func IsGameConsoleHello(r io.Reader) bool {
 		return false
 	}
 
-	log.Println("hdr:", hdr)
+	zlog.Infoln("hdr:", hdr)
 
 	// FIXME: more strict validation.
 	return hdr.Type == 128 && hdr.Major == 100 && hdr.Minor == 1 && hdr.Length == 769
@@ -87,7 +87,7 @@ type Conn struct {
 
 func (c *Conn) logf(msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
-	log.Printf("%s <> %s: %s", c.RemoteAddr(), c.LocalAddr(), msg)
+	zlog.Infof("%s <> %s: %s", c.RemoteAddr(), c.LocalAddr(), msg)
 }
 
 func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
@@ -165,7 +165,7 @@ func (c *Conn) proxy() {
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.
 	n, err := io.Copy(backend, &tmpBuf)
-	log.Println("written ", n, "bytes")
+	zlog.Infoln("written ", n, "bytes")
 	if err != nil {
 		c.internalError("failed to replay handshake to %q: %s", c.backend, err)
 		return
@@ -196,7 +196,7 @@ type halfCloser interface {
 func proxy(wg *sync.WaitGroup, a, b net.Conn) {
 	defer wg.Done()
 	if _, err := io.Copy(a, b); err != nil {
-		log.Printf("%s<>%s -> %s<>%s: %s", a.RemoteAddr(), a.LocalAddr(), b.LocalAddr(), b.RemoteAddr(), err)
+		zlog.Infof("%s<>%s -> %s<>%s: %s", a.RemoteAddr(), a.LocalAddr(), b.LocalAddr(), b.RemoteAddr(), err)
 	}
 	if h, ok := a.(halfCloser); ok {
 		h.CloseWrite()

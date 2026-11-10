@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 // HandshakeTimeout bounds a client's TLS handshake; Accept never waits for one.
@@ -99,7 +99,7 @@ func (l *listener) run(cfg *tls.Config) {
 				return
 			default:
 			}
-			glog.Errorln("tls accept:", err)
+			zlog.Errorln("tls accept:", err)
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -110,7 +110,7 @@ func (l *listener) run(cfg *tls.Config) {
 func (l *listener) handshake(c *tls.Conn) {
 	c.SetDeadline(time.Now().Add(HandshakeTimeout))
 	if err := c.Handshake(); err != nil {
-		glog.Infoln("tls handshake", c.RemoteAddr(), err)
+		zlog.Infoln("tls handshake", c.RemoteAddr(), err)
 		c.Close()
 		return
 	}

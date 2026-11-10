@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 const (
@@ -52,10 +52,10 @@ func (c CommandProvisioner) StartRelay(region string) {
 		defer cancel()
 		out, err := exec.CommandContext(ctx, c.Command, region).CombinedOutput()
 		if err != nil {
-			glog.Errorln("relay start failed", region, err, string(out))
+			zlog.Errorln("relay start failed", region, err, string(out))
 			return
 		}
-		glog.Infoln("relay start", region, string(out))
+		zlog.Infoln("relay start", region, string(out))
 	}()
 }
 
@@ -137,7 +137,7 @@ func (a *App) updateRelays(now time.Time) {
 		}
 		if needed && !running[region] && now.Sub(rp.lastStart[region]) >= relayStartRetry {
 			rp.lastStart[region] = now
-			glog.Infoln("relay needed, starting one in", region)
+			zlog.Infoln("relay needed, starting one in", region)
 			rp.prov.StartRelay(region)
 		}
 	}
@@ -149,7 +149,7 @@ func (a *App) updateRelays(now time.Time) {
 		if !ok || now.Sub(last) < relayIdleShutdown || r.activeSessions != 0 || r.shutdown == nil {
 			continue
 		}
-		glog.Infoln("relay no longer needed, shutting it down", r.Region, r.PublicAddr)
+		zlog.Infoln("relay no longer needed, shutting it down", r.Region, r.PublicAddr)
 		r.shutdown()
 		r.shutdown = nil
 	}

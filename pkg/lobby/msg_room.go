@@ -3,7 +3,7 @@ package lobby
 import (
 	. "zdxsv/pkg/lobby/message"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 var _ = register(0x6401, "GetRoomCount", func(p *AppPeer, m *Message) {
@@ -212,7 +212,7 @@ var _ = register(0x660A, "DecideRoomPassword", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	pass := r.ReadEncryptedString()
 	p.app.OnDecideRoomPassword(p, pass)
-	glog.Infoln(pass)
+	zlog.Infoln(pass)
 	p.SendMessage(NewServerAnswer(m))
 })
 
@@ -284,7 +284,7 @@ var _ = register(0x6406, "EnterRoom", func(p *AppPeer, m *Message) {
 	unk1 := r.Read16()
 	unk2 := r.Read16()
 	p.app.OnEnterRoom(p, roomID, unk1, unk2)
-	glog.Infoln("EnterRoom", roomID, unk1, unk2)
+	zlog.Infoln("EnterRoom", roomID, unk1, unk2)
 	p.SendMessage(NewServerAnswer(m))
 })
 

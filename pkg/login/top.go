@@ -16,9 +16,9 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/session"
 
-	"github.com/golang/glog"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+	"zdxsv/pkg/zlog"
 )
 
 var (
@@ -33,32 +33,32 @@ func Prepare() {
 
 	bin, err = assets.Asset("assets/top.tpl")
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 
 	tplTop, err = template.New("top").Parse(string(bin))
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 
 	bin, err = assets.Asset("assets/login.tpl")
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 
 	tplLogin, err = template.New("login").Parse(string(bin))
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 
 	bin, err = assets.Asset("assets/message.tpl")
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 
 	tplMessage, err = template.New("message").Parse(string(bin))
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 }
 
@@ -93,7 +93,7 @@ func HandleTopPage(w http.ResponseWriter, r *http.Request) {
 func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	p := commonParam{}
 	r.ParseForm()
-	glog.Infoln(r.Form)
+	zlog.Infoln(r.Form)
 	loginKey := r.FormValue("login_key")
 
 	if loginKey == "" {
@@ -105,7 +105,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	a, err := loginAccount(loginKey)
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, messageLoginFail)
@@ -183,11 +183,11 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if e != nil {
-			glog.Errorln("token login: new account:", e)
+			zlog.Errorln("token login: new account:", e)
 			http.Error(w, "login failed", http.StatusForbidden)
 			return
 		}
-		glog.Infoln("token login: new account", a.LoginKey)
+		zlog.Infoln("token login: new account", a.LoginKey)
 		loginKey, keys = a.LoginKey, append(keys, a.LoginKey)
 	} else if err == nil && n != "" {
 		if i, e := strconv.Atoi(n); e == nil && 1 <= i && i <= len(keys) {
@@ -197,7 +197,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil || (loginKey == "" && len(keys) > 0) {
-		glog.Errorln("token login refused", err)
+		zlog.Errorln("token login refused", err)
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
@@ -207,7 +207,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := loginAccount(loginKey)
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
@@ -231,7 +231,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
 	a, err := db.DefaultDB.RegisterAccount(r.RemoteAddr)
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, "登録に失敗しました")
@@ -254,10 +254,10 @@ func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 // HandleTestPage handles a test page for editing HTML.
 // Not used in production environments.
 func HandleTestPage(w http.ResponseWriter, r *http.Request) {
-	glog.Infoln("HandleTestPage")
+	zlog.Infoln("HandleTestPage")
 	file, err := os.Open("work/src/testpage.html")
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, "Page not found")

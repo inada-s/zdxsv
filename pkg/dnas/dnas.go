@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 // data: DNASrep (8e8dad3) etc/dnas (certificates) and www/dnas/<gateway>/{error.raw,packets}.
@@ -177,11 +177,11 @@ func handleDNAS(w http.ResponseWriter, r *http.Request) {
 		ans, note = Answer(gw, false, q)
 	}
 	if ans == nil {
-		glog.Infof("dnas 404 %s %s", r.Method, r.URL)
+		zlog.Infof("dnas 404 %s %s", r.Method, r.URL)
 		http.NotFound(w, r)
 		return
 	}
-	glog.Infof("dnas %s %s q=%d -> %s (%d B)", r.Method, r.URL.Path, len(q), note, len(ans))
+	zlog.Infof("dnas %s %s q=%d -> %s (%d B)", r.Method, r.URL.Path, len(q), note, len(ans))
 	w.Header().Set("Content-Type", "image/gif")
 	w.Write(ans)
 }
@@ -213,7 +213,7 @@ func (s *Server) serveConn(c net.Conn) {
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	tc := &tlsConn{Conn: c, cfg: s.tls}
 	if err := tc.handshake(); err != nil {
-		glog.Infof("dnas %s handshake: %v", c.RemoteAddr(), err)
+		zlog.Infof("dnas %s handshake: %v", c.RemoteAddr(), err)
 		return
 	}
 	c.SetDeadline(time.Time{})
@@ -230,11 +230,11 @@ func (s *Server) serveHTTP(c net.Conn) {
 		req, err := http.ReadRequest(br)
 		if err != nil {
 			if err != io.EOF {
-				glog.Infof("dnas %s read request: %v", c.RemoteAddr(), err)
+				zlog.Infof("dnas %s read request: %v", c.RemoteAddr(), err)
 			}
 			return
 		}
-		glog.Infof("dnas %s %s %s ua=%q", c.RemoteAddr(), req.Method, req.URL, req.UserAgent())
+		zlog.Infof("dnas %s %s %s ua=%q", c.RemoteAddr(), req.Method, req.URL, req.UserAgent())
 		rw := &respWriter{h: http.Header{}}
 		s.mux.ServeHTTP(rw, req)
 		if _, err := c.Write(rw.bytes()); err != nil || req.Close || req.ProtoMinor == 0 {

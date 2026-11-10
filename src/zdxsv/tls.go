@@ -11,7 +11,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/tlsconf"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 var loadTLS = sync.OnceValues(func() (*tls.Config, error) {
@@ -26,13 +26,13 @@ func tlsListen(name, addr string) net.Listener {
 	}
 	cfg, err := loadTLS()
 	if err != nil {
-		glog.Fatalln("tls:", err)
+		zlog.Fatalln("tls:", err)
 	}
 	l, err := net.Listen("tcp", stripHost(addr))
 	if err != nil {
-		glog.Fatalln(name, "tls:", err)
+		zlog.Fatalln(name, "tls:", err)
 	}
-	glog.Infoln(name, "tls listen", addr)
+	zlog.Infoln(name, "tls listen", addr)
 	return tlsconf.NewListener(l, cfg)
 }
 

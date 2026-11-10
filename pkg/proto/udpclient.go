@@ -2,11 +2,11 @@ package proto
 
 import (
 	"context"
-	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
+	"zdxsv/pkg/zlog"
 
 	pb "github.com/golang/protobuf/proto"
 )
@@ -35,7 +35,7 @@ func (c *UDPClient) SubscribePacket(key string, onPacket func(*Packet, *net.UDPA
 		defer PutPacket(pkt)
 		pbuf.SetBuf(b)
 		if err := pbuf.Unmarshal(pkt); err != nil {
-			log.Println("SubscribePacket proto.Unmarshal error", err)
+			zlog.Infoln("SubscribePacket proto.Unmarshal error", err)
 			return
 		}
 		// onRead は 呼び出し元で mtx.Lock している
@@ -67,7 +67,7 @@ func (c *UDPClient) ReadLoop(ctx context.Context) {
 			n, addr, err := c.conn.ReadFromUDP(buf)
 			if err != nil {
 				if strings.Contains(err.Error(), "use of closed network connection") {
-					log.Println("udp conn closed", err)
+					zlog.Infoln("udp conn closed", err)
 					return
 				}
 				if err, ok := err.(net.Error); ok {
@@ -75,7 +75,7 @@ func (c *UDPClient) ReadLoop(ctx context.Context) {
 						continue
 					}
 				}
-				log.Println(err)
+				zlog.Infoln(err)
 			} else if 0 < n {
 				c.mtx.Lock()
 				for _, f := range c.onRead {
@@ -92,14 +92,14 @@ func (c *UDPClient) SendPacket(pkt *Packet) {
 	c.pbuf.Reset()
 	defer c.pbufMtx.Unlock()
 	if err := c.pbuf.Marshal(pkt); err != nil {
-		log.Println("Failed to send packet. Marshal error", err)
+		zlog.Infoln("Failed to send packet. Marshal error", err)
 		return
 	}
 	n, err := c.conn.Write(c.pbuf.Bytes())
 	if err != nil {
-		log.Println("Failed to write packet.", err)
+		zlog.Infoln("Failed to write packet.", err)
 	} else if n != len(c.pbuf.Bytes()) {
-		log.Println("Attempt to write", len(c.pbuf.Bytes()), "bytes but", n, "byte wrote")
+		zlog.Infoln("Attempt to write", len(c.pbuf.Bytes()), "bytes but", n, "byte wrote")
 	}
 }
 
@@ -108,12 +108,12 @@ func (c *UDPClient) SendPacketTo(pkt *Packet, addr *net.UDPAddr) {
 	c.pbuf.Reset()
 	defer c.pbufMtx.Unlock()
 	if err := c.pbuf.Marshal(pkt); err != nil {
-		log.Println("Failed to send packet. Marshal error", err)
+		zlog.Infoln("Failed to send packet. Marshal error", err)
 		return
 	}
 	if n, err := c.conn.WriteToUDP(c.pbuf.Bytes(), addr); err != nil {
 	} else if n != len(c.pbuf.Bytes()) {
-		log.Println("Attempt to write", len(c.pbuf.Bytes()), "bytes but", n, "byte wrote")
+		zlog.Infoln("Attempt to write", len(c.pbuf.Bytes()), "bytes but", n, "byte wrote")
 	}
 }
 
@@ -142,7 +142,7 @@ func (c *UDPClient) SendPingTo(userID string, addr *net.UDPAddr) {
 func (c *UDPClient) SendPingToAddr(userID string, addr string) {
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
-		log.Println("Failed to resolve udp address", err)
+		zlog.Infoln("Failed to resolve udp address", err)
 		return
 	}
 	c.SendPingTo(userID, udpAddr)

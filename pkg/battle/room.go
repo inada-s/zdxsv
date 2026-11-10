@@ -3,7 +3,7 @@ package battle
 import (
 	"sync"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
 )
@@ -30,8 +30,8 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 
 		other := r.peers[i]
 		if other != nil {
-			if glog.V(2) {
-				glog.Infof("[ROOM] %v>%v %v", peer.UserID(), other.UserID(), msg.GetBody())
+			if zlog.DebugEnabled() {
+				zlog.Infof("[ROOM] %v>%v %v", peer.UserID(), other.UserID(), msg.GetBody())
 			}
 			other.AddSendMessage(msg)
 		}
@@ -75,5 +75,5 @@ func (r *Room) Leave(p Peer) {
 		r.Clear()
 	}
 
-	glog.Infof("leave peer %v", p.Address())
+	zlog.Infof("leave peer %v", p.Address())
 }

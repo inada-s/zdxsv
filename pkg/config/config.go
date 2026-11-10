@@ -1,10 +1,8 @@
 package config
 
 import (
-	"log"
-
 	"github.com/caarlos0/env/v6"
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 var Conf Config
@@ -12,30 +10,30 @@ var Conf Config
 func LoadConfig() {
 	var c Config
 	if err := env.Parse(&c.DNS); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.DNAS); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.Login); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.Lobby); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.Battle); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.TLS); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.Relay); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	if err := env.Parse(&c.DB); err != nil {
-		log.Fatal(err)
+		zlog.Fatalln(err)
 	}
-	glog.Infof("%+v", c)
+	zlog.Infof("%+v", c)
 	Conf = c
 }
 
