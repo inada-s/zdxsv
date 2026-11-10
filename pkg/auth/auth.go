@@ -37,6 +37,7 @@ import (
 
 	"zdxsv/pkg/db"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -298,7 +299,7 @@ func (s *Server) serveCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := s.providerUser(q.Get("code"))
 	if err != nil {
-		zlog.Errorln("auth provider:", err)
+		zlog.Error("auth provider failure", zap.Error(err))
 		s.fail(w, r, func(p *page) string { return p.ProviderError })
 		return
 	}
@@ -379,7 +380,7 @@ func (s *Server) serveToken(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := s.Store.IssueAuthToken(s.Provider.Name, c.userID)
 	if err != nil {
-		zlog.Errorln("auth token:", err)
+		zlog.Error("auth token failure", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -399,7 +400,7 @@ func (s *Server) serveRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Store.RevokeAuthToken(token); err != nil {
-		zlog.Errorln("auth revoke:", err)
+		zlog.Error("auth revoke failure", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -508,10 +509,10 @@ func (s *Server) carryAccount(w http.ResponseWriter, r *http.Request, token stri
 		http.Error(w, "account linked already", http.StatusUnprocessableEntity)
 		return ""
 	case err != nil:
-		zlog.Errorln("auth carry:", err)
+		zlog.Error("auth carry failure", zap.Error(err))
 		http.Error(w, "", http.StatusForbidden)
 		return ""
 	}
-	zlog.Infoln("auth: carried account", c.loginKey)
+	zlog.Info("auth: carried account", zap.String("login_key", c.loginKey))
 	return c.loginKey
 }

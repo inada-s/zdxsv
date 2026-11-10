@@ -12,6 +12,7 @@ import (
 	"zdxsv/pkg/lobby/lobbyrpc"
 	"zdxsv/pkg/login"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -156,7 +157,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	replays, err := find(q)
 	if err != nil {
-		zlog.Warnln("lbs/replay: FindReplay failure", err)
+		zlog.Warn("lbs/replay: FindReplay failure", zap.Error(err))
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -166,7 +167,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(replays); err != nil {
-		zlog.Warnln("lbs/replay: JSON encode failure", err)
+		zlog.Warn("lbs/replay: JSON encode failure", zap.Error(err))
 	}
 }
 
@@ -185,7 +186,7 @@ func (h *APIHandler) serveReplayPlayed(w http.ResponseWriter, r *http.Request) {
 		played = db.DefaultDB.IncrementReplayPlayCount
 	}
 	if err := played(battleCode); err != nil {
-		zlog.Warnln("lbs/replay_played: IncrementReplayPlayCount failure", battleCode, err)
+		zlog.Warn("lbs/replay_played: IncrementReplayPlayCount failure", zap.Any("battle_code", battleCode), zap.Error(err))
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -202,7 +203,7 @@ func (h *APIHandler) serveStatus(w http.ResponseWriter) {
 		}
 		body, err := json.Marshal(MakeStatus(res, now))
 		if err != nil {
-			zlog.Warnln("lbs/status: JSON encode failure", err)
+			zlog.Warn("lbs/status: JSON encode failure", zap.Error(err))
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
@@ -223,6 +224,6 @@ func (h *APIHandler) serveLive(w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(battles); err != nil {
-		zlog.Warnln("lbs/live: JSON encode failure", err)
+		zlog.Warn("lbs/live: JSON encode failure", zap.Error(err))
 	}
 }

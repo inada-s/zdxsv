@@ -11,6 +11,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/tlsconf"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -26,13 +27,13 @@ func tlsListen(name, addr string) net.Listener {
 	}
 	cfg, err := loadTLS()
 	if err != nil {
-		zlog.Fatalln("tls:", err)
+		zlog.Fatal("tls", zap.Error(err))
 	}
 	l, err := net.Listen("tcp", stripHost(addr))
 	if err != nil {
-		zlog.Fatalln(name, "tls:", err)
+		zlog.Fatal("tls", zap.String("name", name), zap.Error(err))
 	}
-	zlog.Infoln(name, "tls listen", addr)
+	zlog.Info("tls listen", zap.String("name", name), zap.Any("addr", addr))
 	return tlsconf.NewListener(l, cfg)
 }
 

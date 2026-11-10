@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net"
 	"sync"
@@ -70,7 +71,7 @@ func IsGameConsoleHello(r io.Reader) bool {
 		return false
 	}
 
-	zlog.Infoln("hdr:", hdr)
+	zlog.Info("router header", zap.Any("hdr", hdr))
 
 	// FIXME: more strict validation.
 	return hdr.Type == 128 && hdr.Major == 100 && hdr.Minor == 1 && hdr.Length == 769
@@ -87,7 +88,7 @@ type Conn struct {
 
 func (c *Conn) logf(msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
-	zlog.Infof("%s <> %s: %s", c.RemoteAddr(), c.LocalAddr(), msg)
+	zlog.Info("router", zap.Stringer("remote", c.RemoteAddr()), zap.Stringer("local", c.LocalAddr()), zap.Any("msg", msg))
 }
 
 func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
@@ -165,7 +166,7 @@ func (c *Conn) proxy() {
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.
 	n, err := io.Copy(backend, &tmpBuf)
-	zlog.Infoln("written ", n, "bytes")
+	zlog.Info("router written", zap.Int64("bytes", n))
 	if err != nil {
 		c.internalError("failed to replay handshake to %q: %s", c.backend, err)
 		return
@@ -196,7 +197,7 @@ type halfCloser interface {
 func proxy(wg *sync.WaitGroup, a, b net.Conn) {
 	defer wg.Done()
 	if _, err := io.Copy(a, b); err != nil {
-		zlog.Infof("%s<>%s -> %s<>%s: %s", a.RemoteAddr(), a.LocalAddr(), b.LocalAddr(), b.RemoteAddr(), err)
+		zlog.Info("router pipe closed", zap.Stringer("a_remote", a.RemoteAddr()), zap.Stringer("a_local", a.LocalAddr()), zap.Stringer("b_local", b.LocalAddr()), zap.Stringer("b_remote", b.RemoteAddr()), zap.Error(err))
 	}
 	if h, ok := a.(halfCloser); ok {
 		h.CloseWrite()

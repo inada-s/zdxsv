@@ -16,6 +16,7 @@ import (
 	"zdxsv/pkg/db"
 
 	"cloud.google.com/go/storage"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -155,7 +156,7 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		zlog.Warnln("replay_upload: store failure", battleCode, err)
+		zlog.Warn("replay_upload: store failure", zap.Any("battle_code", battleCode), zap.Error(err))
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
@@ -164,10 +165,10 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		set = db.DefaultDB.SetReplayURL
 	}
 	if err := set(battleCode, url); err != nil {
-		zlog.Warnln("replay_upload: SetReplayURL failure", battleCode, err)
+		zlog.Warn("replay_upload: SetReplayURL failure", zap.Any("battle_code", battleCode), zap.Error(err))
 		http.Error(w, "Failed to record replay", http.StatusInternalServerError)
 		return
 	}
-	zlog.Infoln("replay uploaded", battleCode, fh.Size, url)
+	zlog.Info("replay uploaded", zap.Any("battle_code", battleCode), zap.Int64("size", fh.Size), zap.Any("url", url))
 	fmt.Fprintf(w, "File uploaded: %q (%v bytes)\n", fh.Filename, fh.Size)
 }

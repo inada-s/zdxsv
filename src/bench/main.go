@@ -9,6 +9,7 @@ import (
 
 	"zdxsv/pkg/battle/bot"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -26,13 +27,13 @@ func main() {
 	players := *tcp_players + *udp_players
 	sessionIDs, err := bot.PrepareServer(players, *rpcsv)
 	if err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("bench", zap.Error(err))
 	}
 	var bridges []string
 	if *bridge != "" {
 		bridges = strings.Split(*bridge, ",")
 	}
-	zlog.Infoln("Start Bots")
+	zlog.Info("start bots")
 	var wg sync.WaitGroup
 	fin := make(chan interface{})
 	for i := 0; i < players; i++ {
@@ -51,7 +52,7 @@ func main() {
 			err := b.Run(fin)
 			b.Summary()
 			if err != nil {
-				zlog.Errorln(err)
+				zlog.Error("bot failed", zap.Error(err))
 			}
 			wg.Done()
 		}()

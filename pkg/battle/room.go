@@ -3,6 +3,7 @@ package battle
 import (
 	"sync"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
@@ -31,7 +32,7 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 		other := r.peers[i]
 		if other != nil {
 			if zlog.DebugEnabled() {
-				zlog.Infof("[ROOM] %v>%v %v", peer.UserID(), other.UserID(), msg.GetBody())
+				zlog.Debug("room message", zap.Any("from", peer.UserID()), zap.Any("to", other.UserID()), zap.Binary("body", msg.GetBody()))
 			}
 			other.AddSendMessage(msg)
 		}
@@ -75,5 +76,5 @@ func (r *Room) Leave(p Peer) {
 		r.Clear()
 	}
 
-	zlog.Infof("leave peer %v", p.Address())
+	zlog.Info("leave peer", zap.Any("addr", p.Address()))
 }

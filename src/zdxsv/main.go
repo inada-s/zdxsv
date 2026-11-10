@@ -66,7 +66,7 @@ func pprofPort(mode string) int {
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		zlog.Fatalln("err in splitPort ", addr, err)
+		zlog.Fatal("splitPort failed", zap.String("addr", addr), zap.Error(err))
 	}
 	return ":" + fmt.Sprint(port)
 }
@@ -78,7 +78,7 @@ func printUsage() {
 func prepareDB() {
 	conn, err := sqlx.Open("sqlite3", config.Conf.DB.Name)
 	if err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("startup failed", zap.Error(err))
 	}
 	db.DefaultDB = db.SQLiteDB{
 		DB:          conn,
@@ -92,7 +92,7 @@ func prepareOption(command string) {
 		go func() {
 			port := pprofPort(command)
 			addr := fmt.Sprintf("127.0.0.1:%v", port)
-			zlog.Errorln(http.ListenAndServe(addr, nil))
+			zlog.Error("pprof server stopped", zap.Error(http.ListenAndServe(addr, nil)))
 		}()
 	}
 	if *profile >= 2 {
@@ -107,10 +107,10 @@ func main() {
 	defer zlog.Sync()
 	rand.Seed(time.Now().UnixNano())
 
-	zlog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.", releaseVersion, releaseCommit, releaseDate)
+	zlog.Info("zdxsv - Gundam vs Zeta Gundam private game server", zap.String("version", releaseVersion), zap.String("commit", releaseCommit), zap.String("date", releaseDate))
 
 	args := flag.Args()
-	zlog.Infoln(args, len(args))
+	zlog.Info("args", zap.Strings("args", args))
 
 	// No command runs every server in this process (the systemd service runs it so).
 	command := "all"
@@ -158,9 +158,9 @@ func main() {
 		prepareDB()
 		err := db.DefaultDB.Migrate()
 		if err != nil {
-			zlog.Errorln("Migration failed:", err)
+			zlog.Error("migration failed", zap.Error(err))
 		} else {
-			zlog.Errorln("Migration done")
+			zlog.Info("migration done")
 		}
 	default:
 		printUsage()

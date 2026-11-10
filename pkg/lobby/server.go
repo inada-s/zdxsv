@@ -8,6 +8,7 @@ import (
 	"time"
 	"zdxsv/pkg/lobby/message"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -52,10 +53,10 @@ func (s *Server) Serve(l net.Listener) error {
 			return err
 		}
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("accept failed", zap.Error(err))
 			continue
 		}
-		zlog.Infoln("A new tcp connection open.", tcpConn.RemoteAddr())
+		zlog.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
 		conn := NewConn(tcpConn)
 		conn.peer = s.pf.NewPeer(conn)
 		go conn.serve()
@@ -104,7 +105,7 @@ func (c *Conn) serve() {
 }
 
 func (c *Conn) SendMessage(msg *message.Message) {
-	zlog.Debugf("\t->%v %v \n", c.Address(), msg)
+	zlog.Debug("send", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 	c.mOutbuf.Lock()
 	c.outbuf = append(c.outbuf, msg.Serialize()...)
 	c.mOutbuf.Unlock()
@@ -132,11 +133,11 @@ func (c *Conn) readLoop(ctx context.Context, cancel func()) {
 		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 30))
 		n, err := c.conn.Read(buf)
 		if err != nil {
-			zlog.Infoln("TCP conn error:", err)
+			zlog.Info("tcp conn error", zap.Error(err))
 			return
 		}
 		if n == 0 {
-			zlog.Infoln("TCP read zero")
+			zlog.Info("tcp read zero")
 			return
 		}
 		c.mInbuf.Lock()
@@ -166,7 +167,7 @@ func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
 			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 			n, err := c.conn.Write(buf[sum:])
 			if err != nil {
-				zlog.Errorf("%v write error: %v\n", c.Address(), err)
+				zlog.Error("tcp write error", zap.Any("addr", c.Address()), zap.Error(err))
 				break
 			}
 			sum += n
@@ -208,11 +209,11 @@ func (c *Conn) dispatchLoop(ctx context.Context, cancel func()) {
 				c.inbuf = c.inbuf[n:]
 
 				if msg != nil {
-					zlog.Debugf("\t<-%v %v\n", c.Address(), msg)
+					zlog.Debug("recv", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 					c.peer.OnMessage(msg)
 				}
 				if n == 0 {
-					zlog.Errorf("Got zero byte msg %v", c.Address())
+					zlog.Error("got zero byte msg", zap.Any("addr", c.Address()))
 					return
 				}
 			}

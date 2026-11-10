@@ -18,6 +18,7 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby"
 
+	"go.uber.org/zap"
 	"golang.org/x/oauth2/google"
 	"zdxsv/pkg/zlog"
 )
@@ -26,7 +27,7 @@ import (
 func serveLobby(app *lobby.App) {
 	if c := config.Conf.Lobby; c.RelayRegions != "" {
 		if c.RelayControlAddr == "" || c.RelayStartCommand == "" {
-			zlog.Fatalln("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_LOBBY_RELAY_CONTROL_ADDR and ZDXSV_LOBBY_RELAY_START_COMMAND")
+			zlog.Fatal("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_LOBBY_RELAY_CONTROL_ADDR and ZDXSV_LOBBY_RELAY_START_COMMAND")
 		}
 		var regions []string
 		for _, r := range strings.Split(c.RelayRegions, ",") {
@@ -58,28 +59,28 @@ func serveLobby(app *lobby.App) {
 		}
 		go func() {
 			if err := lobby.ServeRelay(c.RelayAddr, public, c.RelayPublicAddr6); err != nil {
-				zlog.Errorln("relay:", err)
+				zlog.Error("relay failure", zap.Error(err))
 			}
 		}()
 	}
 	if c := config.Conf.Lobby; c.RelayControlAddr != "" {
 		if c.RelaySecret == "" {
-			zlog.Fatalln("ZDXSV_LOBBY_RELAY_CONTROL_ADDR needs ZDXSV_RELAY_SECRET")
+			zlog.Fatal("ZDXSV_LOBBY_RELAY_CONTROL_ADDR needs ZDXSV_RELAY_SECRET")
 		}
 		l, err := net.Listen("tcp", c.RelayControlAddr)
 		if err != nil {
-			zlog.Fatalln("relay control:", err)
+			zlog.Fatal("relay control listen failed", zap.Error(err))
 		}
-		zlog.Infoln("Start relay control", c.RelayControlAddr)
+		zlog.Info("start relay control", zap.Any("addr", c.RelayControlAddr))
 		go func() {
-			zlog.Errorln("relay control:", lobby.ServeRelayControl(l, string(c.RelaySecret)))
+			zlog.Error("relay control stopped", zap.Error(lobby.ServeRelayControl(l, string(c.RelaySecret))))
 		}()
 	}
 	// The HTTP API binds the host given in its address,
 	// unlike the game ports, whose host part is only advertised.
 	if c := config.Conf.Lobby; c.APIAddr != "" {
 		go func() {
-			zlog.Infoln("Start public api", c.APIAddr)
+			zlog.Info("start public api", zap.Any("addr", c.APIAddr))
 			api := &lobby.APIHandler{Status: app.Status}
 			if authServer != nil {
 				api.Auth = authServer
@@ -90,14 +91,14 @@ func serveLobby(app *lobby.App) {
 			if c.ReplayBucket != "" {
 				store, err := lobby.NewGCSReplayStore(context.Background(), c.ReplayBucket)
 				if err != nil {
-					zlog.Fatalln("replay bucket client:", c.ReplayBucket, err)
+					zlog.Fatal("replay bucket client", zap.Any("bucket", c.ReplayBucket), zap.Error(err))
 				}
 				api.ReplayStore = store
 			} else if c.ReplayDir != "" {
 				api.ReplayStore = &lobby.DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
 			}
 			if err := http.ListenAndServe(c.APIAddr, api); err != nil {
-				zlog.Errorln("public api:", err)
+				zlog.Error("public api stopped", zap.Error(err))
 			}
 		}()
 	}
@@ -113,29 +114,29 @@ func newAuthServer() *auth.Server {
 	c := config.Conf.Lobby
 	if c.AuthDev {
 		if c.DiscordClientID != "" || c.APIAddr == "" {
-			zlog.Fatalln("ZDXSV_AUTH_DEV needs ZDXSV_LOBBY_API_ADDR and no ZDXSV_DISCORD_CLIENT_ID")
+			zlog.Fatal("ZDXSV_AUTH_DEV needs ZDXSV_LOBBY_API_ADDR and no ZDXSV_DISCORD_CLIENT_ID")
 		}
 		public := c.AuthPublicURL
 		if public == "" {
 			public = "http://" + c.APIAddr
 		}
-		zlog.Warnln("ZDXSV_AUTH_DEV set: any user ID signs in at", public+"/auth/; local development only")
+		zlog.Warn("ZDXSV_AUTH_DEV set: any user ID signs in; local development only", zap.String("url", public+"/auth/"))
 		return &auth.Server{Provider: auth.DevProvider(), PublicURL: public, Store: db.DefaultDB}
 	}
 	if c.DiscordClientID == "" {
 		return nil
 	}
 	if c.APIAddr == "" || c.AuthPublicURL == "" || c.DiscordClientSecret == "" {
-		zlog.Fatalln("ZDXSV_DISCORD_CLIENT_ID needs ZDXSV_LOBBY_API_ADDR, ZDXSV_AUTH_PUBLIC_URL and ZDXSV_DISCORD_CLIENT_SECRET")
+		zlog.Fatal("ZDXSV_DISCORD_CLIENT_ID needs ZDXSV_LOBBY_API_ADDR, ZDXSV_AUTH_PUBLIC_URL and ZDXSV_DISCORD_CLIENT_SECRET")
 	}
 	p := auth.Discord(c.DiscordClientID, string(c.DiscordClientSecret))
 	if base := strings.TrimSuffix(c.AuthProviderURL, "/"); base != "" {
-		zlog.Warnln("ZDXSV_AUTH_PROVIDER_URL set: sign-in goes to", base, "instead of Discord")
+		zlog.Warn("ZDXSV_AUTH_PROVIDER_URL set: sign-in goes there instead of Discord", zap.Any("url", base))
 		for _, u := range []*string{&p.AuthURL, &p.TokenURL, &p.UserURL} {
 			*u = strings.Replace(*u, "https://discord.com", base, 1)
 		}
 	}
-	zlog.Infoln("Start auth", c.AuthPublicURL+"/auth/")
+	zlog.Info("start auth", zap.String("url", c.AuthPublicURL+"/auth/"))
 	return &auth.Server{Provider: p, PublicURL: c.AuthPublicURL, Store: db.DefaultDB}
 }
 
@@ -143,21 +144,21 @@ func newAuthServer() *auth.Server {
 // ZDXSV_LOBBY_RELAY_ADDR (default :8223) with one session, for rigs without a lobby.
 func mainRelayTest(args []string) {
 	if len(args) != 2 {
-		zlog.Fatalln("usage: zdxsv relay <session id> <hex token>")
+		zlog.Fatal("usage: zdxsv relay <session id> <hex token>")
 	}
 	id, err := strconv.ParseUint(args[0], 10, 32)
 	if err != nil {
-		zlog.Fatalln("session id:", err)
+		zlog.Fatal("bad session id", zap.Error(err))
 	}
 	token, err := strconv.ParseUint(args[1], 16, 64)
 	if err != nil {
-		zlog.Fatalln("token:", err)
+		zlog.Fatal("bad token", zap.Error(err))
 	}
 	addr := config.Conf.Lobby.RelayAddr
 	if addr == "" {
 		addr = ":8223"
 	}
-	zlog.Fatalln(lobby.ServeTestRelay(addr, uint32(id), token))
+	zlog.Fatal("test relay stopped", zap.Error(lobby.ServeTestRelay(addr, uint32(id), token)))
 }
 
 // mainRelay: `zdxsv relay` runs a regional relay (config.RelayConfig) registered with the lobby
@@ -165,15 +166,15 @@ func mainRelayTest(args []string) {
 func mainRelay() {
 	c := config.Conf.Relay
 	if c.Region == "" || c.PublicAddr == "" || c.LobbyAddr == "" || config.Conf.Lobby.RelaySecret == "" {
-		zlog.Fatalln("zdxsv relay needs ZDXSV_RELAY_REGION, ZDXSV_RELAY_PUBLIC_ADDR, ZDXSV_RELAY_LOBBY_ADDR and ZDXSV_RELAY_SECRET")
+		zlog.Fatal("zdxsv relay needs ZDXSV_RELAY_REGION, ZDXSV_RELAY_PUBLIC_ADDR, ZDXSV_RELAY_LOBBY_ADDR and ZDXSV_RELAY_SECRET")
 	}
 	udpAddr, err := net.ResolveUDPAddr("udp", c.Addr)
 	if err != nil {
-		zlog.Fatalln("relay addr:", err)
+		zlog.Fatal("bad relay addr", zap.Error(err))
 	}
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		zlog.Fatalln("relay listen:", err)
+		zlog.Fatal("relay listen failed", zap.Error(err))
 	}
 	defer conn.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -181,7 +182,7 @@ func mainRelay() {
 	err = lobby.RunRegionalRelay(ctx, conn, c.LobbyAddr, lobby.RelayStatus{
 		Region: c.Region, PublicAddr: c.PublicAddr, PublicAddr6: c.PublicAddr6, Secret: string(config.Conf.Lobby.RelaySecret),
 	})
-	zlog.Infoln("relay stopped:", err)
+	zlog.Info("relay stopped", zap.Error(err))
 }
 
 func newDiscord() *chatops.Discord {
@@ -191,14 +192,14 @@ func newDiscord() *chatops.Discord {
 	}
 	key, err := hex.DecodeString(c.DiscordPublicKey)
 	if err != nil || len(key) != ed25519.PublicKeySize {
-		zlog.Fatalln("ZDXSV_DISCORD_PUBLIC_KEY is not an ed25519 public key in hex")
+		zlog.Fatal("ZDXSV_DISCORD_PUBLIC_KEY is not an ed25519 public key in hex")
 	}
 	if c.APIAddr == "" || c.MasterSpreadsheetID == "" {
-		zlog.Fatalln("ZDXSV_DISCORD_PUBLIC_KEY needs ZDXSV_LOBBY_API_ADDR and ZDXSV_MASTER_SPREADSHEET_ID")
+		zlog.Fatal("ZDXSV_DISCORD_PUBLIC_KEY needs ZDXSV_LOBBY_API_ADDR and ZDXSV_MASTER_SPREADSHEET_ID")
 	}
 	client, err := google.DefaultClient(context.Background(), "https://www.googleapis.com/auth/spreadsheets.readonly")
 	if err != nil {
-		zlog.Fatalln("google credentials for the spreadsheet:", err)
+		zlog.Fatal("google credentials for the spreadsheet", zap.Error(err))
 	}
 	allow := map[string]bool{}
 	for _, id := range strings.Split(c.DiscordCommandAllow, ",") {

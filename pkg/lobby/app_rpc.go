@@ -7,6 +7,7 @@ import (
 	. "zdxsv/pkg/lobby/lobbyrpc"
 
 	"github.com/valyala/gorpc"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -39,7 +40,7 @@ func newLobbyRPCServer(app *App, addr string) *gorpc.Server {
 }
 
 func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *RegisterProxyResponse {
-	zlog.Infof("RegisterProxyRequest %v %+v\n", remoteAddr, req)
+	zlog.Info("RegisterProxyRequest", zap.Any("addr", remoteAddr), zap.Any("req", req))
 	res := new(RegisterProxyResponse)
 
 	if req.CurrentVersion < requiredVersion {
@@ -115,13 +116,13 @@ func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *
 			res.LobbyUsers = append(res.LobbyUsers, user)
 		}
 		res.Message = "登録成功"
-		zlog.Infoln("Register zproxy", userPeer.UserID, userPeer.SessionID)
+		zlog.Info("register zproxy", zap.String("user_id", userPeer.UserID), zap.Any("session_id", userPeer.SessionID))
 	})
 	return res
 }
 
 func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *BattleInfoResponse {
-	zlog.Infof("BattleInfoRequest %v %+v\n", remoteAddr, req)
+	zlog.Info("BattleInfoRequest", zap.Any("addr", remoteAddr), zap.Any("req", req))
 	res := new(BattleInfoResponse)
 
 	if req.SessionID == "" {

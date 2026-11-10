@@ -7,6 +7,7 @@ import (
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/sessionid"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -88,10 +89,10 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
-	zlog.Infoln(key1)
+	zlog.Info("login key", zap.Any("key1", key1))
 	sessionID, err := sessionid.Decode(key1)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("login failed", zap.Error(err))
 		return
 	}
 	p.app.OnKeePair(p, loginKey, sessionID)
@@ -106,7 +107,7 @@ var _ = register(0x6103, "FirstData", func(p *AppPeer, _ *Message) {
 	// r := m.Reader()
 	// TODO:レスポンスの詳細を調査する
 	if p.LoginKey == "" {
-		zlog.Errorln("loginKey not set")
+		zlog.Error("loginKey not set")
 		return
 	}
 	p.app.OnFirstData(p)

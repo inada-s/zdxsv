@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 
 	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -68,7 +69,7 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
 		w.WriteString(user.Bin)
 		w.Write8(pos) // 不明
 	} else {
-		zlog.Infoln("UserPos not found", pos)
+		zlog.Info("UserPos not found", zap.Any("pos", pos))
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
@@ -81,7 +82,7 @@ var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message)
 	user := p.app.OnGetBattleOpponentUser(p, pos)
 	w.Write8(pos)
 	if user == nil {
-		zlog.Infoln("UserPos not found", pos)
+		zlog.Info("UserPos not found", zap.Any("pos", pos))
 		a.Status = StatusError
 		p.SendMessage(a)
 		return
@@ -122,7 +123,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 		w := a.Writer()
 		w.WriteString(battleCode)
 	} else {
-		zlog.Infoln("Failed to get battle code")
+		zlog.Info("failed to get battle code")
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
@@ -234,7 +235,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	}
 	body, err := pb.Marshal(m)
 	if err != nil {
-		zlog.Errorln("battle info:", err)
+		zlog.Error("battle info failed", zap.Error(err))
 		return nil
 	}
 	n := NewServerNotice(0x9951)
@@ -382,15 +383,15 @@ func pilotName(bin string) string {
 // battle ran. Custom category, no answer: logged for server-side stats and troubleshooting.
 var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	if p.PlatformInfo == nil {
-		zlog.Warnln("p2p matching report without platform info ignored", p.UserID)
+		zlog.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
 		return
 	}
 	report := &proto.P2PMatchingReport{}
 	if err := pb.Unmarshal(m.Body, report); err != nil {
-		zlog.Warnln("p2p matching report:", p.UserID, err)
+		zlog.Warn("p2p matching report: bad request", zap.String("user_id", p.UserID), zap.Error(err))
 		return
 	}
-	zlog.Infoln(p2pMatchingReportLine(report))
+	zlog.Info("p2p matching report", p2pMatchingReportFields(report)...)
 	sender := p.UserID
 	if sender == "" { // the report comes before the user login
 		sender = report.GetUserId()
@@ -407,7 +408,7 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 	}
 	records, err := db.DefaultDB.GetBattleRecords(report.GetBattleCode())
 	if err != nil {
-		zlog.Warnln("p2p matching report: GetBattleRecords:", err)
+		zlog.Warn("p2p matching report: GetBattleRecords failure", zap.Error(err))
 		return
 	}
 	if !slices.ContainsFunc(records, func(r *db.BattleRecord) bool { return r.UserID == sender }) {
@@ -430,20 +431,18 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 			}
 		}
 		if err := db.DefaultDB.SetUsedMs(r.BattleCode, r.UserID, mask, strings.Join(list, ",")); err != nil {
-			zlog.Warnln("p2p matching report: SetUsedMs:", err)
+			zlog.Warn("p2p matching report: SetUsedMs failure", zap.Error(err))
 		}
 	}
 }
 
-// p2pMatchingReportLine formats a report as one log line of name="value": battle_code,
-// user_id and result first, then the set fields in field order.
-func p2pMatchingReportLine(report *proto.P2PMatchingReport) string {
+func p2pMatchingReportFields(report *proto.P2PMatchingReport) []zap.Field {
 	m := report.ProtoReflect()
 	fields := m.Descriptor().Fields()
 	head := []protoreflect.Name{"battle_code", "user_id", "result"}
-	line := "p2p matching report:"
+	var line []zap.Field
 	for _, name := range head {
-		line += " " + string(name) + "=" + strconv.Quote(m.Get(fields.ByName(name)).String())
+		line = append(line, zap.String(string(name), m.Get(fields.ByName(name)).String()))
 	}
 	for i := 0; i < fields.Len(); i++ {
 		fd := fields.Get(i)
@@ -462,7 +461,7 @@ func p2pMatchingReportLine(report *proto.P2PMatchingReport) string {
 			}
 			s = strings.Join(items, ", ")
 		}
-		line += " " + string(fd.Name()) + "=" + strconv.Quote(s)
+		line = append(line, zap.String(string(fd.Name()), s))
 	}
 	return line
 }
@@ -488,7 +487,7 @@ var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) 
 		info = func(userID string) map[string]string { return b.PlatformInfo[userID] }
 	}
 	if n := battleInfoNotice(p, info); n != nil {
-		zlog.Infoln("udp bridge battle info", p.UserID)
+		zlog.Info("udp bridge battle info", zap.String("user_id", p.UserID))
 		p.SendMessage(n)
 	}
 	a := NewServerAnswer(m)
@@ -583,13 +582,9 @@ func parseBattleResult(m *Message) *model.BattleResult {
 }
 
 var _ = register(0x6138, "AnswerBattleResult", func(p *AppPeer, m *Message) {
-	zlog.Infoln("== BattleResult ==")
-	zlog.Infoln("ID:", p.User.UserID)
-	zlog.Infoln("Name:", p.User.Name)
 	result := parseBattleResult(m)
 	js, _ := json.MarshalIndent(result, "", "  ")
-	zlog.Infoln(string(js))
-	zlog.Infoln("==================")
+	zlog.Info("battle result", zap.String("user_id", p.User.UserID), zap.String("name", p.User.Name), zap.String("result", string(js)))
 
 	p.app.OnGetBattleResult(p, result)
 })

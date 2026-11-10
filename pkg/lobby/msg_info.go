@@ -13,6 +13,7 @@ import (
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 
+	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 	"zdxsv/pkg/zlog"
@@ -89,7 +90,7 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		ranking, err := db.DefaultDB.GetWinCountRanking(side)
 		users, maxPage := rankingPage(ranking, page, 10)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("info message failed", zap.Error(err))
 		}
 		rp := rankingParams{
 			HasPrev: 0 < page,
@@ -144,12 +145,12 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		}
 		err = tplRanking.Execute(tw, rp)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("info message failed", zap.Error(err))
 		}
 	case strings.Contains(path, "P_RANK"): //撃墜数ランキング
 		ranking, err := db.DefaultDB.GetKillCountRanking(side)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("info message failed", zap.Error(err))
 		}
 		users, maxPage := rankingPage(ranking, page, 10)
 		rp := rankingParams{
@@ -181,13 +182,13 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		}
 		err = tplRanking.Execute(tw, rp)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("info page failed", zap.Error(err))
 		}
 	default:
-		zlog.Errorln("page request", path)
+		zlog.Error("page request", zap.Any("path", path))
 		err := tplUnderConstruction.Execute(tw, nil)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("info page failed", zap.Error(err))
 		}
 	}
 

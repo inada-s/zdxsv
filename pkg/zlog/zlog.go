@@ -10,7 +10,7 @@ import (
 
 var (
 	logger = newDefault()
-	sugar  = logger.WithOptions(zap.AddCallerSkip(1)).Sugar()
+	skip   = logger.WithOptions(zap.AddCallerSkip(1))
 )
 
 type Options struct {
@@ -25,7 +25,7 @@ type Options struct {
 
 func newDefault() *zap.Logger {
 	enc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
-	core := zapcore.NewCore(maskEncoder{enc}, zapcore.Lock(os.Stderr), zap.InfoLevel)
+	core := zapcore.NewCore(enc, zapcore.Lock(os.Stderr), zap.InfoLevel)
 	return zap.New(core, zap.AddCaller())
 }
 
@@ -48,13 +48,13 @@ func Setup(o Options) error {
 	if err != nil {
 		return err
 	}
-	core := zapcore.NewCore(maskEncoder{enc}, sink, level)
+	core := zapcore.NewCore(enc, sink, level)
 	l := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel), zap.ErrorOutput(zapcore.Lock(os.Stderr)))
 	if len(o.Fields) != 0 {
 		l = l.With(o.Fields...)
 	}
 	logger = l
-	sugar = l.WithOptions(zap.AddCallerSkip(1)).Sugar()
+	skip = l.WithOptions(zap.AddCallerSkip(1))
 	return nil
 }
 
@@ -64,13 +64,8 @@ func Sync() { _ = logger.Sync() }
 
 func DebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
 
-func Debugf(format string, args ...interface{}) { sugar.Debugf(format, args...) }
-func Debugln(args ...interface{})               { sugar.Debugln(args...) }
-func Infof(format string, args ...interface{})  { sugar.Infof(format, args...) }
-func Infoln(args ...interface{})                { sugar.Infoln(args...) }
-func Warnf(format string, args ...interface{})  { sugar.Warnf(format, args...) }
-func Warnln(args ...interface{})                { sugar.Warnln(args...) }
-func Errorf(format string, args ...interface{}) { sugar.Errorf(format, args...) }
-func Errorln(args ...interface{})               { sugar.Errorln(args...) }
-func Fatalf(format string, args ...interface{}) { sugar.Fatalf(format, args...) }
-func Fatalln(args ...interface{})               { sugar.Fatalln(args...) }
+func Debug(msg string, fields ...zap.Field) { skip.Debug(msg, fields...) }
+func Info(msg string, fields ...zap.Field)  { skip.Info(msg, fields...) }
+func Warn(msg string, fields ...zap.Field)  { skip.Warn(msg, fields...) }
+func Error(msg string, fields ...zap.Field) { skip.Error(msg, fields...) }
+func Fatal(msg string, fields ...zap.Field) { skip.Fatal(msg, fields...) }

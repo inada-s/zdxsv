@@ -201,10 +201,17 @@ func TestP2PMatchingReport(t *testing.T) {
 	if !pb.Equal(got, want) {
 		t.Errorf("report\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
 	}
-	if line := p2pMatchingReportLine(got); !strings.HasPrefix(line, `p2p matching report: battle_code="1696492800000" user_id="BBBBBB" result="ggpo" player_count="2" peer_id="1" close_reason="net battle end"`) ||
-		strings.ContainsRune(line, 10) || !strings.Contains(line, ` mismatches="0" disconnected="true" disconnected_peer_ids="0"`) || !strings.Contains(line, `ping_median_ms:215`) ||
+	var kv []string
+	for _, f := range p2pMatchingReportFields(got) {
+		if strings.ContainsRune(f.String, 10) {
+			t.Errorf("field %s has a newline: %q", f.Key, f.String)
+		}
+		kv = append(kv, fmt.Sprintf("%s=%q", f.Key, f.String))
+	}
+	if line := strings.Join(kv, " "); !strings.HasPrefix(line, `battle_code="1696492800000" user_id="BBBBBB" result="ggpo" player_count="2" peer_id="1" close_reason="net battle end"`) ||
+		!strings.Contains(line, ` mismatches="0" disconnected="true" disconnected_peer_ids="0"`) || !strings.Contains(line, `ping_median_ms:215`) ||
 		!strings.Contains(line, ` total_timesync="17" input_block_count="42" fps_history="60, 59, 60"`) {
-		t.Errorf("log line %q", line)
+		t.Errorf("report fields %q", line)
 	}
 }
 

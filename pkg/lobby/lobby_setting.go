@@ -7,13 +7,14 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
 func lobbySetting(platform string, lobbyID uint16) *db.LobbySetting {
 	s, err := db.DefaultDB.GetLobbySetting(platform, int(lobbyID))
 	if err != nil {
-		zlog.Warnln("GetLobbySetting failure", platform, lobbyID, err)
+		zlog.Warn("GetLobbySetting failure", zap.Any("platform", platform), zap.Any("lobby_id", lobbyID), zap.Error(err))
 	}
 	if s == nil {
 		return &db.LobbySetting{Platform: platform, No: int(lobbyID)}
@@ -28,13 +29,13 @@ func lobbyBattleRule(s *db.LobbySetting) *model.Rule {
 	}
 	r, err := db.DefaultDB.GetRule(s.RuleID)
 	if err != nil || r == nil {
-		zlog.Warnln("m_lobby_setting rule_id", s.Platform, s.No, s.RuleID, r, err)
+		zlog.Warn("m_lobby_setting rule_id", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("rule_id", s.RuleID), zap.Any("rule", r), zap.Error(err))
 		return nil
 	}
 	rule := model.NewRule()
 	for k, v := range r.Values() {
 		if !rule.SetByKey(k, *v) {
-			zlog.Warnln("m_rule", r.ID, k, *v, "is out of range")
+			zlog.Warn("m_rule value out of range", zap.Any("rule_id", r.ID), zap.Any("key", k), zap.Any("value", *v))
 		}
 	}
 	return rule
