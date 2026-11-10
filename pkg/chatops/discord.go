@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -111,7 +112,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, "another command is running")
 		return
 	}
-	zlog.Infoln("discord command", name, "by", in.userID())
+	zlog.Info("discord command", zap.Any("name", name), zap.Any("user_id", in.userID()))
 	answered := make(chan struct{})
 	defer close(answered)
 	d.wg.Add(1)
@@ -124,7 +125,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		msg, err := run(ctx)
 		if err != nil {
-			zlog.Errorln("discord command", name, err)
+			zlog.Error("discord command failed", zap.Any("name", name), zap.Error(err))
 			msg = name + " failed, nothing changed:\n" + err.Error()
 		}
 		d.editOriginal(ctx, &in, msg)
@@ -179,7 +180,7 @@ func (d *Discord) editOriginal(ctx context.Context, in *interaction, msg string)
 	u := api + "/webhooks/" + url.PathEscape(in.ApplicationID) + "/" + url.PathEscape(in.Token) + "/messages/@original"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
 	if err != nil {
-		zlog.Errorln("discord edit message:", err)
+		zlog.Error("discord edit message failed", zap.Error(err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -189,12 +190,12 @@ func (d *Discord) editOriginal(ctx context.Context, in *interaction, msg string)
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		zlog.Errorln("discord edit message:", err)
+		zlog.Error("discord edit message failed", zap.Error(err))
 		return
 	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		zlog.Errorln("discord edit message:", res.Status)
+		zlog.Error("discord edit message failed", zap.String("status", res.Status))
 	}
 }
 

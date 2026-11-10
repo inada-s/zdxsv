@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/config"
@@ -22,12 +23,12 @@ func makeDNSHandler(record string) func(dns.ResponseWriter, *dns.Msg) {
 		m.SetReply(r)
 		rr, err := dns.NewRR(record)
 		if err != nil {
-			zlog.Infoln(err)
+			zlog.Info("dns record", zap.Error(err))
 		}
 		m.Answer = append(m.Answer, rr)
 		err = w.WriteMsg(m)
 		if err != nil {
-			zlog.Infoln(err)
+			zlog.Info("dns write", zap.Error(err))
 		}
 	}
 }
@@ -73,9 +74,9 @@ func newDNSServer() (*dns.Server, error) {
 		return nil, err
 	}
 
-	zlog.Infoln("DNAS server ", dnassvIP)
-	zlog.Infoln("Login server ", loginPublicIP)
-	zlog.Infoln("gdx server", gdxsvPublicIP)
+	zlog.Info("DNAS server", zap.Any("ip", dnassvIP))
+	zlog.Info("login server", zap.Any("ip", loginPublicIP))
+	zlog.Info("gdx server", zap.Any("ip", gdxsvPublicIP))
 
 	return &dns.Server{Addr: config.Conf.DNS.Addr, Net: "udp", Handler: newDNSMux(loginPublicIP, dnassvIP, gdxsvPublicIP)}, nil
 }
@@ -83,8 +84,8 @@ func newDNSServer() (*dns.Server, error) {
 func mainDNS() {
 	server, err := newDNSServer()
 	if err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("dns", zap.Error(err))
 	}
-	zlog.Infoln("DNS listen", config.Conf.DNS.Addr)
-	zlog.Fatalln(server.ListenAndServe())
+	zlog.Info("DNS listen", zap.String("addr", config.Conf.DNS.Addr))
+	zlog.Fatal("dns server stopped", zap.Error(server.ListenAndServe()))
 }

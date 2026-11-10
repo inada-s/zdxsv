@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
@@ -34,8 +35,8 @@ func (u *TCPPeer) Close() error {
 }
 
 func (u *TCPPeer) Serve(logic *Logic) {
-	zlog.Infoln("[TCP]", u.Address(), "Serve Start")
-	defer zlog.Infoln("[TCP]", u.Address(), "Serve End")
+	zlog.Info("tcp serve start", zap.Any("addr", u.Address()))
+	defer zlog.Info("tcp serve end", zap.Any("addr", u.Address()))
 	data, _ := hex.DecodeString("280110310000000100ffffff")
 	u.AddSendData(data)
 	u.readLoop(logic)
@@ -56,7 +57,7 @@ func (u *TCPPeer) AddSendData(data []byte) {
 	for sum := 0; sum < len(data); {
 		n, err := u.conn.Write(data[sum:])
 		if err != nil {
-			zlog.Errorf("%v write error: %v\n", u.Address(), err)
+			zlog.Error("tcp write error", zap.Any("addr", u.Address()), zap.Error(err))
 			break
 		}
 		sum += n
@@ -76,7 +77,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 		n, err := u.conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
-				zlog.Errorf("%v read error: %v\n", u.Address(), err)
+				zlog.Error("tcp read error", zap.Any("addr", u.Address()), zap.Error(err))
 			}
 			return
 		}
@@ -86,28 +87,28 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 		inbuf = append(inbuf, buf[:n]...)
 
 		if u.room == nil {
-			zlog.Infoln("room nil: ", u.Address())
+			zlog.Info("room nil", zap.Any("addr", u.Address()))
 			if len(inbuf) < 22 {
 				continue
 			}
 			value := string(inbuf[12:22])
 			inbuf = inbuf[:0]
 			sessionID, err := ParseSessionID(value)
-			zlog.Infoln("[TCP] SessionID", sessionID, err)
+			zlog.Info("tcp session id", zap.Any("session_id", sessionID), zap.Error(err))
 			u.room = logic.Join(u, sessionID)
 			if u.room == nil {
-				zlog.Infoln("failed to join room: ", u.UserID(), u.Address())
+				zlog.Info("failed to join room", zap.Any("user_id", u.UserID()), zap.Any("addr", u.Address()))
 				u.conn.Close()
 				break
 			}
-			zlog.Infoln("join success", u.Address())
+			zlog.Info("join success", zap.Any("addr", u.Address()))
 		} else {
 			var tmp []byte
 			for 0 < len(inbuf) {
 				size := int(inbuf[0])
 				if size == 0 {
 					// a zero size frame never advances; the stream cannot be resynced
-					zlog.Errorln("[TCP] zero size frame", u.Address())
+					zlog.Error("tcp zero size frame", zap.Any("addr", u.Address()))
 					return
 				}
 				if size <= len(inbuf) {

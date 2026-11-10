@@ -88,8 +88,7 @@ Flags go before the command: `zdxsv -prodlog -logfile /var/log/zdxsv.log`.
 | `-logfile` | stderr | file to append to; reopen after rotation with a restart or logrotate `copytruncate` |
 | `-v` | 0 | 2 or more adds debug lines |
 
-Every IP address in a log line is masked: an IPv4 address keeps its first octet (`203.x.xxx.xx`),
-an IPv6 address its first three groups; loopback and unspecified addresses stay.
+Each line is a fixed `message` plus fields (`addr`, `user_id`, `battle_code`, `error`, ...); IP addresses are logged in full.
 `-logtostderr` and `-alsologtostderr` are accepted and ignored.
 
 ## Update

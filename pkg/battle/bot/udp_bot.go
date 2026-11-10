@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
@@ -70,11 +71,11 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 			if pkt.GetHelloServerData().GetOk() {
 				start.Store(true)
 			} else {
-				zlog.Errorln("HelloServer failed")
+				zlog.Error("HelloServer failed")
 			}
 		case proto.MessageType_Battle:
 			if zlog.DebugEnabled() {
-				zlog.Infof("[UDP] id:%v SV>CL:%v", bot.id, pkt)
+				zlog.Debug("udp bot recv", zap.Any("id", bot.id), zap.Any("pkt", pkt))
 			}
 			bb.ApplySeqAck(pkt.GetSeq(), pkt.GetAck())
 			for _, msg := range pkt.GetBattleData() {
@@ -84,7 +85,7 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 					for 0 < len(frame) {
 						k := int(frame[0])
 						if zlog.DebugEnabled() {
-							zlog.Infof("[UDP] id:%v SV>CL:%v", bot.id, frame)
+							zlog.Debug("udp bot recv", zap.Any("id", bot.id), zap.Any("frame", frame))
 						}
 						msg := readMsg(frame[:k])
 						ms := (time.Now().UnixNano() - msg.unixnano)
@@ -157,5 +158,5 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 }
 
 func (bot *UDPBot) Summary() {
-	zlog.Infof("[UDP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
+	zlog.Info("udp bot stats", zap.Any("id", bot.id), zap.Any("sendcnt", bot.sendcnt), zap.Any("recvcnt", bot.recvcnt), zap.Any("readcnt", bot.readcnt), zap.Any("maxrtt_ns", bot.maxrtt))
 }

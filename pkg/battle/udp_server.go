@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
@@ -27,8 +28,8 @@ func NewUDPServer(logic *Logic) *UDPServer {
 }
 
 func (s *UDPServer) readLoop() error {
-	zlog.Infoln("UDP readLoop()")
-	defer zlog.Infoln("UDP readLoop() return")
+	zlog.Info("udp readLoop start")
+	defer zlog.Info("udp readLoop end")
 	pkt := proto.GetPacket()
 	buf := make([]byte, 4096)
 	pbuf := pb.NewBuffer(nil)
@@ -39,7 +40,7 @@ func (s *UDPServer) readLoop() error {
 			return err
 		}
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("udp read failed", zap.Error(err))
 			continue
 		}
 		if n == 0 {
@@ -54,7 +55,7 @@ func (s *UDPServer) readLoop() error {
 		pkt.Reset()
 		pbuf.SetBuf(buf[:n])
 		if err := pbuf.Unmarshal(pkt); err != nil {
-			zlog.Errorf("failed to unmarshal udp packet from %v data %v", key, buf[:n])
+			zlog.Error("failed to unmarshal udp packet", zap.Any("addr", key), zap.Binary("data", buf[:n]))
 			continue
 		}
 
@@ -66,7 +67,7 @@ func (s *UDPServer) readLoop() error {
 			sessionID := pkt.GetHelloServerData().GetSessionId()
 			user, valid := s.logic.FindWaitingUser(sessionID)
 			if !found && valid {
-				zlog.Infoln("join udp peer", key)
+				zlog.Info("join udp peer", zap.Any("addr", key))
 				peer := NewUDPPeer(s.conn, addr, user.UserID)
 
 				s.Lock()
@@ -75,7 +76,7 @@ func (s *UDPServer) readLoop() error {
 
 				go func(key string) {
 					peer.Serve(s.logic)
-					zlog.Infoln("leave udp peer", key)
+					zlog.Info("leave udp peer", zap.Any("addr", key))
 					if peer.room != nil {
 						peer.room.Leave(peer)
 					}
@@ -91,18 +92,18 @@ func (s *UDPServer) readLoop() error {
 				SessionId: pb.String(sessionID),
 			}
 			if data, err := pb.Marshal(pkt); err != nil {
-				zlog.Errorln(err)
+				zlog.Error("udp packet failure", zap.Error(err))
 			} else {
 				s.conn.WriteToUDP(data, addr)
 			}
 		case proto.MessageType_Battle:
 			if !found {
-				zlog.Errorln("battle data received but peer not found", pkt)
+				zlog.Error("battle data received but peer not found", zap.Any("pkt", pkt))
 				continue
 			}
 			peer.OnReceive(pkt)
 		default:
-			zlog.Errorf("received unexpected pkt type packet %v", pkt)
+			zlog.Error("received unexpected packet type", zap.Any("pkt", pkt))
 		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -110,7 +111,7 @@ func ServeRelay(addr, publicAddr, publicAddr6 string) error {
 	r := NewRelay()
 	RelayPublicAddr, RelayPublicAddr6 = publicAddr, publicAddr6
 	LobbyRelay = r
-	zlog.Infoln("Start relay", addr, "public", publicAddr, publicAddr6)
+	zlog.Info("start relay", zap.Any("addr", addr), zap.Any("public", publicAddr), zap.Any("public6", publicAddr6))
 	r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
 	return nil
 }
@@ -149,7 +150,7 @@ func (r *Relay) SessionToken(id uint32) uint64 {
 	token := binary.LittleEndian.Uint64(b[:])
 	now := r.now()
 	r.sessions[id] = &relaySession{id: id, token: token, created: now, lastActive: now}
-	zlog.Infoln("relay session registered", id)
+	zlog.Info("relay session registered", zap.Any("session_id", id))
 	return token
 }
 
@@ -166,7 +167,7 @@ func ServeTestRelay(addr string, id uint32, token uint64) error {
 	}
 	defer conn.Close()
 	r, maintain := newTestRelay(id, token)
-	zlog.Infoln("Start test relay", addr)
+	zlog.Info("start test relay", zap.Any("addr", addr))
 	r.serveMaintained(conn, relayMaintainInterval, maintain)
 	return nil
 }
@@ -181,14 +182,14 @@ func newTestRelay(id uint32, token uint64) (*Relay, func()) {
 		if _, ok := r.sessions[id]; !ok {
 			now := r.now()
 			r.sessions[id] = &relaySession{id: id, token: token, created: now, lastActive: now}
-			zlog.Infoln("relay test session registered", id)
+			zlog.Info("relay test session registered", zap.Any("session_id", id))
 		}
 	}
 	register()
 	return r, func() {
 		r.mtx.Lock()
 		if s, ok := r.sessions[id]; ok {
-			zlog.Infoln("relay test session", id, "forwarded", s.forwarded)
+			zlog.Info("relay test session", zap.Any("session_id", id), zap.Any("forwarded", s.forwarded))
 		}
 		r.mtx.Unlock()
 		r.RemoveStaleSessions()
@@ -205,7 +206,7 @@ func (r *Relay) removeSessionLocked(s *relaySession) {
 		}
 	}
 	delete(r.sessions, s.id)
-	zlog.Infoln("relay session removed", s.id, "forwarded", s.forwarded)
+	zlog.Info("relay session removed", zap.Any("session_id", s.id), zap.Any("forwarded", s.forwarded))
 }
 
 func (r *Relay) RemoveStaleSessions() {
@@ -224,7 +225,7 @@ func (r *Relay) Serve(conn *net.UDPConn) {
 	for {
 		n, from, err := conn.ReadFromUDPAddrPort(buf)
 		if err != nil {
-			zlog.Errorln("relay read failed", err)
+			zlog.Error("relay read failed", zap.Error(err))
 			return
 		}
 		from = netip.AddrPortFrom(from.Addr().Unmap(), from.Port())
@@ -280,7 +281,7 @@ func (r *Relay) handlePing(p []byte, from netip.AddrPort) (netip.AddrPort, []byt
 		}
 		sp.addrs[relayFamily(from)] = from
 		r.bindings[from] = relayBinding{session: s, peer: peer}
-		zlog.Infoln("relay peer bound", sessionID, peer, from)
+		zlog.Info("relay peer bound", zap.Any("session_id", sessionID), zap.Any("peer", peer), zap.Stringer("addr", from))
 	}
 	// a ping only moves the player while it is not sending game packets yet: a ping over
 	// the other family must not steal the path its game packets use

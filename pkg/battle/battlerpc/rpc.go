@@ -3,6 +3,7 @@ package battlerpc
 import (
 	"sync"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -64,7 +65,7 @@ func (m *BattleRpc) NotifyBattleUsers(args *BattleInfoArgs, reply *int) error {
 		RoomID: rid,
 	}
 
-	zlog.Infoln("Receive BattleInfo", *info)
+	zlog.Info("receive BattleInfo", zap.Any("info", *info))
 	m.mMap.Lock()
 	for _, u := range info.Users {
 		m.sessionMap[u.SessionID] = info

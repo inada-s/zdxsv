@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -99,7 +100,7 @@ func (l *listener) run(cfg *tls.Config) {
 				return
 			default:
 			}
-			zlog.Errorln("tls accept:", err)
+			zlog.Error("tls accept failed", zap.Error(err))
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -110,7 +111,7 @@ func (l *listener) run(cfg *tls.Config) {
 func (l *listener) handshake(c *tls.Conn) {
 	c.SetDeadline(time.Now().Add(HandshakeTimeout))
 	if err := c.Handshake(); err != nil {
-		zlog.Infoln("tls handshake", c.RemoteAddr(), err)
+		zlog.Info("tls handshake", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
 		c.Close()
 		return
 	}

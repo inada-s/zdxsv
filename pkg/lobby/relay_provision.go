@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -52,10 +53,10 @@ func (c CommandProvisioner) StartRelay(region string) {
 		defer cancel()
 		out, err := exec.CommandContext(ctx, c.Command, region).CombinedOutput()
 		if err != nil {
-			zlog.Errorln("relay start failed", region, err, string(out))
+			zlog.Error("relay start failed", zap.Any("region", region), zap.Error(err), zap.String("output", string(out)))
 			return
 		}
-		zlog.Infoln("relay start", region, string(out))
+		zlog.Info("relay start", zap.Any("region", region), zap.String("output", string(out)))
 	}()
 }
 
@@ -137,7 +138,7 @@ func (a *App) updateRelays(now time.Time) {
 		}
 		if needed && !running[region] && now.Sub(rp.lastStart[region]) >= relayStartRetry {
 			rp.lastStart[region] = now
-			zlog.Infoln("relay needed, starting one in", region)
+			zlog.Info("relay needed, starting one", zap.Any("region", region))
 			rp.prov.StartRelay(region)
 		}
 	}
@@ -149,7 +150,7 @@ func (a *App) updateRelays(now time.Time) {
 		if !ok || now.Sub(last) < relayIdleShutdown || r.activeSessions != 0 || r.shutdown == nil {
 			continue
 		}
-		zlog.Infoln("relay no longer needed, shutting it down", r.Region, r.PublicAddr)
+		zlog.Info("relay no longer needed, shutting it down", zap.String("region", r.Region), zap.String("public", r.PublicAddr))
 		r.shutdown()
 		r.shutdown = nil
 	}

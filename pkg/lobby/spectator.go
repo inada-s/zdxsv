@@ -15,6 +15,7 @@ import (
 
 	"zdxsv/pkg/db"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -89,7 +90,7 @@ func (r *SpectatorRegistry) Open(code string, session uint32, users []*db.Replay
 		return
 	}
 	r.battles[code] = &liveBattle{code: code, session: int32(session), opened: now, users: users}
-	zlog.Infoln("live open", code)
+	zlog.Info("live open", zap.Any("battle_code", code))
 }
 
 // Run writes to the spectators until stop is closed (nil: forever).
@@ -193,7 +194,7 @@ func (r *SpectatorRegistry) Tick(now time.Time) {
 	for code, b := range r.battles {
 		if (!b.done.IsZero() && now.Sub(b.done) > liveRetention) || (!b.uploaded && now.Sub(b.opened) > liveIdle) {
 			delete(r.battles, code)
-			zlog.Infoln("live drop", code)
+			zlog.Info("live drop", zap.Any("battle_code", code))
 		}
 	}
 }
@@ -209,7 +210,7 @@ func (r *SpectatorRegistry) startUpload(code string, session int32) (*liveBattle
 		return nil, http.StatusConflict
 	}
 	b.uploaded, b.uploading = true, true
-	zlog.Infoln("live upload", code)
+	zlog.Info("live upload", zap.Any("battle_code", code))
 	return b, 0
 }
 
@@ -229,7 +230,7 @@ func (r *SpectatorRegistry) endUpload(b *liveBattle, why string, now time.Time) 
 	defer r.mu.Unlock()
 	b.uploading = false
 	b.done = now
-	zlog.Infoln("live end", b.code, why, "bytes", len(b.buf))
+	zlog.Info("live end", zap.Any("battle_code", b.code), zap.Any("why", why), zap.Int("bytes", len(b.buf)))
 }
 
 // pick returns the battle a GET watches and counts the watcher; 0 or an HTTP status.

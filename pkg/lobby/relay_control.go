@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -84,7 +85,7 @@ func (s *remoteRelaySessions) SessionToken(id uint32) uint64 {
 	select {
 	case s.out <- RelayControl{Sessions: []RelayControlSession{{SessionID: id, Token: token}}}:
 	default:
-		zlog.Errorln("relay control queue full, session dropped", id)
+		zlog.Error("relay control queue full, session dropped", zap.Any("session_id", id))
 	}
 	return token
 }
@@ -107,7 +108,7 @@ func serveRelayControlConn(conn net.Conn, secret string) {
 	defer func() {
 		if registered != nil {
 			unregisterRelayIf(registered)
-			zlog.Infoln("relay unregistered", registered.Region, registered.PublicAddr)
+			zlog.Info("relay unregistered", zap.String("region", registered.Region), zap.String("public", registered.PublicAddr))
 		}
 	}()
 	done := make(chan struct{})
@@ -135,7 +136,7 @@ func serveRelayControlConn(conn net.Conn, secret string) {
 			return
 		}
 		if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
-			zlog.Warnln("relay status with a wrong secret from", conn.RemoteAddr(), st.PublicAddr)
+			zlog.Warn("relay status with a wrong secret", zap.Stringer("addr", conn.RemoteAddr()), zap.String("public", st.PublicAddr))
 			return
 		}
 		if registered == nil {
@@ -147,11 +148,11 @@ func serveRelayControlConn(conn net.Conn, secret string) {
 				select {
 				case sessions.out <- RelayControl{Shutdown: true}:
 				default:
-					zlog.Errorln("relay control queue full, shutdown dropped", st.PublicAddr)
+					zlog.Error("relay control queue full, shutdown dropped", zap.String("public", st.PublicAddr))
 				}
 			}
 			RegisterRelay(registered)
-			zlog.Infoln("relay registered", st.Region, st.PublicAddr, st.PublicAddr6, "from", conn.RemoteAddr())
+			zlog.Info("relay registered", zap.String("region", st.Region), zap.String("public", st.PublicAddr), zap.String("public6", st.PublicAddr6), zap.Stringer("addr", conn.RemoteAddr()))
 		}
 		regionalRelays.Lock()
 		registered.activeSessions = st.Sessions
@@ -179,7 +180,7 @@ func (r *Relay) SetSessionToken(id uint32, token uint64) {
 	}
 	now := r.now()
 	r.sessions[id] = &relaySession{id: id, token: token, created: now, lastActive: now}
-	zlog.Infoln("relay session registered", id)
+	zlog.Info("relay session registered", zap.Any("session_id", id))
 }
 
 func (r *Relay) sessionCount() int {
@@ -193,14 +194,14 @@ func (r *Relay) sessionCount() int {
 func RunRegionalRelay(ctx context.Context, conn *net.UDPConn, lobbyAddr string, status RelayStatus) error {
 	r := NewRelay()
 	go r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
-	zlog.Infoln("Start regional relay", conn.LocalAddr(), "region", status.Region, "public", status.PublicAddr, status.PublicAddr6, "lobby", lobbyAddr)
+	zlog.Info("start regional relay", zap.Stringer("addr", conn.LocalAddr()), zap.String("region", status.Region), zap.String("public", status.PublicAddr), zap.String("public6", status.PublicAddr6), zap.Any("lobby", lobbyAddr))
 	for {
 		shutdown, err := r.controlSession(ctx, lobbyAddr, status)
 		if shutdown {
-			zlog.Infoln("relay shutdown by the lobby")
+			zlog.Info("relay shutdown by the lobby")
 			return nil
 		}
-		zlog.Warnln("relay control:", err)
+		zlog.Warn("relay control failure", zap.Error(err))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

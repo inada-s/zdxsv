@@ -4,6 +4,7 @@ import (
 	"net"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -49,7 +50,7 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 	}
 
 	if 12 < n {
-		zlog.Fatalln("Too long first data", recvbuf[:n])
+		zlog.Fatal("too long first data", zap.Binary("data", recvbuf[:n]))
 	} else {
 		firstData := []byte{130, 2, 16, 49, 0, 10, 0, 1, 0, 255, 255, 255}
 		firstData = append(firstData, []byte(EncodeSessionID(bot.sessionID))...)
@@ -93,7 +94,7 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 				k := int(incoming[0])
 				for k <= len(incoming) {
 					if zlog.DebugEnabled() {
-						zlog.Infof("[TCP] id:%v SV>CL:%v", bot.id, incoming[:k])
+						zlog.Debug("tcp bot recv", zap.Any("id", bot.id), zap.Binary("data", incoming[:k]))
 					}
 					msg := readMsg(incoming[:k])
 					ms := (time.Now().UnixNano() - msg.unixnano)
@@ -116,5 +117,5 @@ func (bot *TCPBot) Run(fin <-chan interface{}) error {
 }
 
 func (bot *TCPBot) Summary() {
-	zlog.Infof("[TCP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
+	zlog.Info("tcp bot stats", zap.Any("id", bot.id), zap.Any("sendcnt", bot.sendcnt), zap.Any("recvcnt", bot.recvcnt), zap.Any("readcnt", bot.readcnt), zap.Any("maxrtt_ns", bot.maxrtt))
 }

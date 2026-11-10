@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/caarlos0/env/v6"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -10,30 +11,30 @@ var Conf Config
 func LoadConfig() {
 	var c Config
 	if err := env.Parse(&c.DNS); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.DNAS); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.Login); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.Lobby); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.Battle); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.TLS); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.Relay); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
 	if err := env.Parse(&c.DB); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("config", zap.Error(err))
 	}
-	zlog.Infof("%+v", c)
+	zlog.Info("config", zap.Any("config", c))
 	Conf = c
 }
 

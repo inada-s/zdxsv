@@ -6,6 +6,7 @@ import (
 	"zdxsv/pkg/db"
 
 	"github.com/blang/semver"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -25,7 +26,7 @@ func parsePcsx2Version(v string) (semver.Version, error) {
 func pcsx2Allowed(loginKey, machineID string) bool {
 	list, err := db.DefaultDB.GetServerSetting(pcsx2AllowKey)
 	if err != nil {
-		zlog.Warnln("GetServerSetting failure", pcsx2AllowKey, err)
+		zlog.Warn("GetServerSetting failure", zap.Any("key", pcsx2AllowKey), zap.Error(err))
 		return false
 	}
 	for _, v := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
@@ -44,7 +45,7 @@ func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
 	}
 	minVersion, err := db.DefaultDB.GetServerSetting(minPcsx2VersionKey)
 	if err != nil {
-		zlog.Warnln("GetServerSetting failure", minPcsx2VersionKey, err)
+		zlog.Warn("GetServerSetting failure", zap.Any("key", minPcsx2VersionKey), zap.Error(err))
 		return false
 	}
 	if minVersion == "" {
@@ -52,7 +53,7 @@ func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
 	}
 	min, err := parsePcsx2Version(minVersion)
 	if err != nil {
-		zlog.Warnln("invalid", minPcsx2VersionKey, minVersion, err)
+		zlog.Warn("invalid server setting", zap.Any("key", minPcsx2VersionKey), zap.Any("value", minVersion), zap.Error(err))
 		return false
 	}
 	v, err := parsePcsx2Version(info["pcsx2"])

@@ -7,6 +7,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/lobby"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -21,23 +22,23 @@ func mainAll() {
 	login := prepareLogin()
 	dnsServer, err := newDNSServer()
 	if err != nil {
-		zlog.Fatalln("dns:", err)
+		zlog.Fatal("dns", zap.Error(err))
 	}
 	dnasRouter, err := newDNASRouter(login)
 	if err != nil {
-		zlog.Fatalln("dnas:", err)
+		zlog.Fatal("dnas", zap.Error(err))
 	}
 	serve := func(name string, f func() error) {
-		go func() { zlog.Fatalln(name+":", f()) }()
+		go func() { zlog.Fatal("server stopped", zap.String("name", name), zap.Error(f())) }()
 	}
-	zlog.Infoln("dns listen", config.Conf.DNS.Addr)
+	zlog.Info("dns listen", zap.String("addr", config.Conf.DNS.Addr))
 	serve("dns", dnsServer.ListenAndServe)
-	zlog.Infoln("dnas listen", config.Conf.DNAS.Addr, "https backend", config.Conf.DNAS.HTTPSBackend)
+	zlog.Info("dnas listen", zap.String("addr", config.Conf.DNAS.Addr), zap.String("https_backend", config.Conf.DNAS.HTTPSBackend))
 	serve("dnas", func() error { return dnasRouter.ListenAndServe(config.Conf.DNAS.Addr) })
 
 	logic := battle.NewLogic()
 	battleAddr := stripHost(config.Conf.Battle.Addr)
-	zlog.Infoln("battle listen", battleAddr)
+	zlog.Info("battle listen", zap.Any("addr", battleAddr))
 	serve("battle udp", func() error { return battle.NewUDPServer(logic).ListenAndServe(battleAddr) })
 	serve("battle tcp", func() error { return battle.NewTCPServer(logic).ListenAndServe(battleAddr) })
 
@@ -49,7 +50,7 @@ func mainAll() {
 // prepareLogin readies the login pages and returns their handler.
 func prepareLogin() http.Handler {
 	if _, err := assetsCheck(); err != nil {
-		zlog.Fatalln(err)
+		zlog.Fatal("all", zap.Error(err))
 	}
 	return newLoginHandler()
 }

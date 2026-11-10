@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/battle/battlerpc"
@@ -52,12 +53,12 @@ func (a *App) removeUser(p *AppPeer) {
 func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 	accountKey, ok := session.Default.Use(sessionID, loginKey)
 	if !ok {
-		zlog.Errorln("no login session", sessionID)
+		zlog.Error("no login session", zap.Any("session_id", sessionID))
 		return
 	}
 	ac, err := db.DefaultDB.GetAccountByLoginKey(accountKey)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("login failed", zap.Error(err))
 		return
 	}
 
@@ -67,19 +68,19 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 		machineID = machineID[:maxMachineIDLen]
 	}
 	if err := db.DefaultDB.SetLoginEndpoint(ac.LoginKey, ip, machineID); err != nil {
-		zlog.Errorln("SetLoginEndpoint failure", err)
+		zlog.Error("SetLoginEndpoint failure", zap.Error(err))
 	}
 	ban, err := db.DefaultDB.FindBan(ac.LoginKey)
 	if err != nil {
-		zlog.Errorln("FindBan failure", err)
+		zlog.Error("FindBan failure", zap.Error(err))
 	}
 	if ban != nil {
-		zlog.Infoln("banned login refused", ac.LoginKey, ip, machineID, ban.Key, ban.Until)
+		zlog.Info("banned login refused", zap.Any("login_key", ac.LoginKey), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
 		SendBanned(p)
 		return
 	}
 	if pcsx2NeedsUpdate(p.PlatformInfo, ac.LoginKey, machineID) {
-		zlog.Infoln("outdated client refused", ac.LoginKey, machineID, p.PlatformInfo["pcsx2"])
+		zlog.Info("outdated client refused", zap.Any("login_key", ac.LoginKey), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
 		SendPleaseUpdate(p)
 		return
 	}
@@ -95,7 +96,7 @@ func (a *App) OnFirstData(p *AppPeer) {
 		for _, u := range battle.Users {
 			if u.SessionID == p.SessionID {
 				if u.LoginKey != p.LoginKey {
-					zlog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+					zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 					return
 				}
 				p.User = u
@@ -107,7 +108,7 @@ func (a *App) OnFirstData(p *AppPeer) {
 	} else {
 		users, err := db.DefaultDB.GetUserList(p.LoginKey)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("login failed", zap.Error(err))
 			return
 		}
 		NoticeUserIDList(p, users)
@@ -122,7 +123,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 	if userID == "******" {
 		u, err := db.DefaultDB.RegisterUser(p.LoginKey)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("login failed", zap.Error(err))
 			return false
 		}
 		p.User.User = *u
@@ -130,23 +131,23 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 		p.SessionID = sessionID
 	} else if _, ok := a.battles[p.SessionID]; ok {
 		if p.UserID == "" {
-			zlog.Errorln("no battle user for session", p.SessionID)
+			zlog.Error("no battle user for session", zap.Any("session_id", p.SessionID))
 			return false
 		}
 	} else if len(name) == 0 || userID == string([]byte{0, 0, 0, 0, 0, 0}) {
 		// use last login user_id
 		ac, err := db.DefaultDB.GetAccountByLoginKey(p.LoginKey)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("login failed", zap.Error(err))
 			return false
 		}
 		u, err := db.DefaultDB.GetUser(ac.LastUserID)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("login failed", zap.Error(err))
 			return false
 		}
 		if u.LoginKey != p.LoginKey {
-			zlog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+			zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
 		p.User.User = *u
@@ -154,35 +155,35 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 	} else if 0 < len(userID) && 0 < len(name) {
 		u, err := db.DefaultDB.GetUser(userID)
 		if err != nil {
-			zlog.Errorln(err)
+			zlog.Error("login failed", zap.Error(err))
 			return false
 		}
 		if u.LoginKey != p.LoginKey {
-			zlog.Errorln("user of another account refused", u.UserID, p.LoginKey)
+			zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
 		p.User.User = *u
 		p.Name = name
 		p.SessionID = sessionID
 	} else {
-		zlog.Errorln("Undefined UserID:", userID, "Name", name, "SessionID", sessionID)
+		zlog.Error("undefined user id", zap.Any("user_id", userID), zap.Any("name", name), zap.Any("session_id", sessionID))
 		return false
 	}
 
 	if other, ok := a.users[p.UserID]; ok && other != p {
-		zlog.Infoln("user logged in again, closing its previous client", p.UserID, other.conn.Address())
+		zlog.Info("user logged in again, closing its previous client", zap.String("user_id", p.UserID), zap.Any("addr", other.conn.Address()))
 		a.closePeer(other)
 	}
 
 	err := db.DefaultDB.LoginUser(&p.User.User)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("user login failed", zap.Error(err))
 		return false
 	}
 
 	err = db.DefaultDB.UpdateUser(&p.User.User)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("user login failed", zap.Error(err))
 		return false
 	}
 
@@ -195,15 +196,13 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 	js, err := json.Marshal(result)
 	if err != nil {
-		zlog.Errorln("Failed to marshal battle result", err)
-		zlog.Infoln(result)
+		zlog.Error("failed to marshal battle result", zap.Error(err), zap.Any("result", result))
 		return
 	}
 
 	record, err := db.DefaultDB.GetBattleRecordUser(result.BattleCode, p.UserID)
 	if err != nil {
-		zlog.Errorln("Failed to load battle record", err)
-		zlog.Infoln(string(js))
+		zlog.Error("failed to load battle record", zap.Error(err), zap.String("record", string(js)))
 		return
 	}
 
@@ -217,15 +216,14 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 
 	err = db.DefaultDB.UpdateBattleRecord(record)
 	if err != nil {
-		zlog.Errorln("Failed to save battle record", err)
-		zlog.Infoln(record)
+		zlog.Error("failed to save battle record", zap.Error(err), zap.Any("record", record))
 		return
 	}
 
-	zlog.Infoln("before", p.User.User)
+	zlog.Info("user before battle result", zap.Any("user", p.User.User))
 	rec, err := db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 0)
 	if err != nil {
-		zlog.Errorln("Failed to calculate battle count", err)
+		zlog.Error("failed to calculate battle count", zap.Error(err))
 		return
 	}
 
@@ -237,7 +235,7 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 
 	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 1)
 	if err != nil {
-		zlog.Errorln("Failed to calculate battle count", err)
+		zlog.Error("failed to calculate battle count", zap.Error(err))
 		return
 	}
 
@@ -249,7 +247,7 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 
 	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 2)
 	if err != nil {
-		zlog.Errorln("Failed to calculate battle count", err)
+		zlog.Error("failed to calculate battle count", zap.Error(err))
 		return
 	}
 
@@ -261,7 +259,7 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 
 	rec, err = db.DefaultDB.CalculateUserDailyBattleCount(p.UserID)
 	if err != nil {
-		zlog.Errorln("Failed to calculate battle count", err)
+		zlog.Error("failed to calculate battle count", zap.Error(err))
 		return
 	}
 
@@ -271,10 +269,10 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 
 	err = db.DefaultDB.UpdateUser(&p.User.User)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("failed to update user", zap.Error(err))
 		return
 	}
-	zlog.Infoln("after", p.User.User)
+	zlog.Info("user after battle result", zap.Any("user", p.User.User))
 }
 
 type RankingRecord struct {
@@ -291,7 +289,7 @@ type RankingRecord struct {
 func (a *App) getUserRanking(userID string, side byte) *RankingRecord {
 	res, err := db.DefaultDB.CalculateUserTotalBattleCount(userID, side)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("failed to update user", zap.Error(err))
 	}
 
 	// TODO: Consider a reasonable calculation method.
@@ -403,7 +401,7 @@ func (a *App) startTestBattle(platform string, lobbyID uint16, users []*model.Us
 
 func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, rule *model.Rule) bool {
 	if a.battleServer == nil {
-		zlog.Errorln("Failed to battle start because App.battleServer is nil")
+		zlog.Error("failed to start battle: no battle server")
 		return false
 	}
 
@@ -442,7 +440,7 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 					battle.P2PMap[p.UserID][other.UserID] = struct{}{}
 				}
 			}
-			zlog.Infoln("zproxy user", p.UserID, "P2PMap", battle.P2PMap[p.UserID])
+			zlog.Info("zproxy user", zap.String("user_id", p.UserID), zap.Any("p2p_map", battle.P2PMap[p.UserID]))
 		}
 	}
 
@@ -461,19 +459,19 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 
 	err := a.battleServer.NotifyBattleUsers(args, &reply)
 	if err != nil {
-		zlog.Errorln("Logic.NotifyBattleUsers failed. ", err)
+		zlog.Error("NotifyBattleUsers failed", zap.Error(err))
 		return false
 	}
 
 	host, port, err := net.SplitHostPort(config.Conf.Battle.PublicAddr)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("battle start failed", zap.Error(err))
 		return false
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("battle start failed", zap.Error(err))
 		return false
 	}
 
@@ -497,7 +495,7 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 				Side:       int(u.Entry),
 			})
 			if err != nil {
-				zlog.Infoln("Failed to add battle record", err)
+				zlog.Info("failed to add battle record", zap.Error(err))
 				return false
 			}
 		} else {
@@ -553,12 +551,12 @@ func (a *App) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 
 func (a *App) OnPlatformInfo(p *AppPeer, info map[string]string) {
 	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
-		zlog.Warnln("platform info after lobby entry ignored", p.UserID, info)
+		zlog.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
 		return
 	}
 	p.PlatformInfo = info
 	p.Platform = model.PlatformFromInfo(info)
-	zlog.Infoln("platform", p.Platform, info)
+	zlog.Info("platform", zap.Any("platform", p.Platform), zap.Any("info", info))
 }
 
 func (a *App) OnEnterLobby(p *AppPeer, lobbyID uint16) {
@@ -634,7 +632,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 					u.Entry = model.EntryNone
 				}
 			} else {
-				zlog.Errorln("Failed to start battle")
+				zlog.Error("failed to start battle")
 			}
 		} else if lobbyCanStart(lobby, setting) {
 			users := lobby.StartBattleUsers()
@@ -644,7 +642,7 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 					u.Entry = model.EntryNone
 				}
 			} else {
-				zlog.Errorln("Failed to start battle")
+				zlog.Error("failed to start battle")
 			}
 		}
 
@@ -903,7 +901,7 @@ func (a *App) OnGetRuleDefaultIndex(p *AppPeer, roomID uint16, ruleID byte) byte
 	}
 	room, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		zlog.Errorln("room not found")
+		zlog.Error("room not found")
 		return 0
 	}
 	return room.Rule.Get(ruleID)
@@ -1035,7 +1033,7 @@ func (a *App) OnEnterRoom(p *AppPeer, roomID, _, _ uint16) bool {
 	}
 	r, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		zlog.Errorln("Not found")
+		zlog.Error("not found")
 		return false
 	}
 	if r.Status == model.RoomStateFull {
@@ -1140,6 +1138,6 @@ func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {
 			}
 		}
 	} else {
-		zlog.Errorln("Failed to start battle")
+		zlog.Error("failed to start battle")
 	}
 }

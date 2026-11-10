@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
@@ -54,8 +55,8 @@ func (u *UDPPeer) SetUserID(id string) {
 }
 
 func (u *UDPPeer) Serve(logic *Logic) {
-	zlog.Infoln("[UDP]", u.Address(), "Serve Start")
-	defer zlog.Infoln("[UDP]", u.Address(), "Serve End")
+	zlog.Info("udp serve start", zap.Any("addr", u.Address()))
+	defer zlog.Info("udp serve end", zap.Any("addr", u.Address()))
 	ctx, cancel := context.WithCancel(context.Background())
 	u.closeFunc = cancel
 	defer cancel()
@@ -73,7 +74,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 		case <-ticker.C:
 			timeout := time.Since(lastRecv).Seconds() > 5.0
 			if timeout {
-				zlog.Infoln("udp peer timeout", u.Address())
+				zlog.Info("udp peer timeout", zap.Any("addr", u.Address()))
 				return
 			}
 			if time.Since(lastSend).Seconds() >= 0.016 {
@@ -94,7 +95,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			err := pbuf.Marshal(pkt)
 			proto.PutPacket(pkt)
 			if err != nil {
-				zlog.Errorf("Marshal error : %v", err)
+				zlog.Error("marshal error", zap.Error(err))
 				return
 			}
 			u.conn.WriteTo(pbuf.Bytes(), u.addr)
@@ -107,21 +108,21 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			for _, msg := range u.reading2 {
 				if u.room == nil {
 					if len(msg.GetBody()) != 22 {
-						zlog.Errorln("unexpected length:", msg)
+						zlog.Error("unexpected length", zap.Any("msg", msg))
 						u.Close()
 						break
 					}
 					value := string(msg.GetBody()[12:22])
 					sessionID, err := ParseSessionID(value)
 					if err != nil {
-						zlog.Errorln(err)
+						zlog.Error("udp session id", zap.Error(err))
 						u.Close()
 						break
 					}
-					zlog.Infoln("UDPSessionID:", sessionID)
+					zlog.Info("udp session id", zap.Any("session_id", sessionID))
 					room := logic.Join(u, sessionID)
 					if room == nil {
-						zlog.Errorln("failed to join room")
+						zlog.Error("failed to join room")
 						u.Close()
 						break
 					}
@@ -159,7 +160,7 @@ func (u *UDPPeer) Address() string {
 }
 
 func (u *UDPPeer) AddSendData(data []byte) {
-	zlog.Fatalln("AddSendData called", data)
+	zlog.Fatal("AddSendData called", zap.Binary("data", data))
 }
 
 func (u *UDPPeer) AddSendMessage(msg *proto.BattleMessage) {

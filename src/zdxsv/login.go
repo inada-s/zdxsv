@@ -10,6 +10,7 @@ import (
 	"zdxsv/pkg/assets"
 	"zdxsv/pkg/login"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -29,7 +30,7 @@ func handleAssets(w http.ResponseWriter, r *http.Request) {
 
 	bin, err := assets.Asset(r.URL.Path[1:])
 	if err != nil {
-		zlog.Errorln(err)
+		zlog.Error("login server failure", zap.Error(err))
 		w.WriteHeader(404)
 		return
 	}
@@ -75,15 +76,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 		if r.Method == "POST" {
 			r.ParseForm()
 		}
-		zlog.Infoln(
-			m.status,
-			r.RemoteAddr,
-			r.Method,
-			r.URL.Path,
-			r.URL.RawQuery,
-			r.Form,
-			r.UserAgent(),
-		)
+		zlog.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.String("query", r.URL.RawQuery), zap.Any("form", r.Form), zap.String("ua", r.UserAgent()))
 
 	}
 }

@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 )
 
@@ -177,11 +178,11 @@ func handleDNAS(w http.ResponseWriter, r *http.Request) {
 		ans, note = Answer(gw, false, q)
 	}
 	if ans == nil {
-		zlog.Infof("dnas 404 %s %s", r.Method, r.URL)
+		zlog.Info("dnas 404", zap.String("method", r.Method), zap.Stringer("url", r.URL))
 		http.NotFound(w, r)
 		return
 	}
-	zlog.Infof("dnas %s %s q=%d -> %s (%d B)", r.Method, r.URL.Path, len(q), note, len(ans))
+	zlog.Info("dnas request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Int("q", len(q)), zap.Any("note", note), zap.Int("bytes", len(ans)))
 	w.Header().Set("Content-Type", "image/gif")
 	w.Write(ans)
 }
@@ -213,7 +214,7 @@ func (s *Server) serveConn(c net.Conn) {
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	tc := &tlsConn{Conn: c, cfg: s.tls}
 	if err := tc.handshake(); err != nil {
-		zlog.Infof("dnas %s handshake: %v", c.RemoteAddr(), err)
+		zlog.Info("dnas handshake failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
 		return
 	}
 	c.SetDeadline(time.Time{})
@@ -230,11 +231,11 @@ func (s *Server) serveHTTP(c net.Conn) {
 		req, err := http.ReadRequest(br)
 		if err != nil {
 			if err != io.EOF {
-				zlog.Infof("dnas %s read request: %v", c.RemoteAddr(), err)
+				zlog.Info("dnas read request failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
 			}
 			return
 		}
-		zlog.Infof("dnas %s %s %s ua=%q", c.RemoteAddr(), req.Method, req.URL, req.UserAgent())
+		zlog.Info("dnas https request", zap.Stringer("addr", c.RemoteAddr()), zap.String("method", req.Method), zap.Stringer("url", req.URL), zap.String("ua", req.UserAgent()))
 		rw := &respWriter{h: http.Header{}}
 		s.mux.ServeHTTP(rw, req)
 		if _, err := c.Write(rw.bytes()); err != nil || req.Close || req.ProtoMinor == 0 {
