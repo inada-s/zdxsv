@@ -14,11 +14,11 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-
-	"github.com/golang/glog"
+	"go.uber.org/zap"
 
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
+	"zdxsv/pkg/zlog"
 )
 
 var (
@@ -29,6 +29,27 @@ var (
 )
 
 var cpu = flag.Int("cpu", 2, "setting GOMAXPROCS")
+var prodlog = flag.Bool("prodlog", false, "log stackdriver JSON lines")
+var logfile = flag.String("logfile", "", "append logs to this file instead of stderr")
+var verbosity = flag.Int("v", 0, "log verbosity, 2 and above logs debug messages")
+
+// Accepted so that existing command lines keep starting.
+var _ = flag.Bool("logtostderr", true, "ignored")
+var _ = flag.Bool("alsologtostderr", false, "ignored")
+
+func prepareLogger() {
+	o := zlog.Options{Prod: *prodlog, Verbosity: *verbosity, Path: *logfile}
+	if *prodlog {
+		o.Fields = []zap.Field{
+			zap.String("zdxsv_version", releaseVersion),
+			zap.String("zdxsv_revision", releaseCommit),
+		}
+	}
+	if err := zlog.Setup(o); err != nil {
+		log.Fatalln("failed to set up the logger:", err)
+	}
+}
+
 var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof on 127.0.0.1 (port: 16060, or per command), 2: enable blocking profile")
 
 func pprofPort(mode string) int {
@@ -45,7 +66,7 @@ func pprofPort(mode string) int {
 func stripHost(addr string) string {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		glog.FatalDepth(1, "err in splitPort ", addr, err)
+		zlog.Fatalln("err in splitPort ", addr, err)
 	}
 	return ":" + fmt.Sprint(port)
 }
@@ -57,7 +78,7 @@ func printUsage() {
 func prepareDB() {
 	conn, err := sqlx.Open("sqlite3", config.Conf.DB.Name)
 	if err != nil {
-		glog.Fatal(err)
+		zlog.Fatalln(err)
 	}
 	db.DefaultDB = db.SQLiteDB{
 		DB:          conn,
@@ -71,7 +92,7 @@ func prepareOption(command string) {
 		go func() {
 			port := pprofPort(command)
 			addr := fmt.Sprintf("127.0.0.1:%v", port)
-			log.Println(http.ListenAndServe(addr, nil))
+			zlog.Errorln(http.ListenAndServe(addr, nil))
 		}()
 	}
 	if *profile >= 2 {
@@ -81,14 +102,15 @@ func prepareOption(command string) {
 }
 
 func main() {
-	flag.Set("logtostderr", "true")
 	flag.Parse()
+	prepareLogger()
+	defer zlog.Sync()
 	rand.Seed(time.Now().UnixNano())
 
-	glog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.", releaseVersion, releaseCommit, releaseDate)
+	zlog.Infoln("zdxsv - Gundam vs Zeta Gundam private game server.", releaseVersion, releaseCommit, releaseDate)
 
 	args := flag.Args()
-	glog.Infoln(args, len(args))
+	zlog.Infoln(args, len(args))
 
 	// No command runs every server in this process (the systemd service runs it so).
 	command := "all"
@@ -136,9 +158,9 @@ func main() {
 		prepareDB()
 		err := db.DefaultDB.Migrate()
 		if err != nil {
-			glog.Errorln("Migration failed:", err)
+			zlog.Errorln("Migration failed:", err)
 		} else {
-			glog.Errorln("Migration done")
+			zlog.Errorln("Migration done")
 		}
 	default:
 		printUsage()

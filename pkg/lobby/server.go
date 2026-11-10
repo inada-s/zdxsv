@@ -8,7 +8,7 @@ import (
 	"time"
 	"zdxsv/pkg/lobby/message"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 type PeerFactory interface {
@@ -52,10 +52,10 @@ func (s *Server) Serve(l net.Listener) error {
 			return err
 		}
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 			continue
 		}
-		glog.Infoln("A new tcp connection open.", tcpConn.RemoteAddr())
+		zlog.Infoln("A new tcp connection open.", tcpConn.RemoteAddr())
 		conn := NewConn(tcpConn)
 		conn.peer = s.pf.NewPeer(conn)
 		go conn.serve()
@@ -104,7 +104,7 @@ func (c *Conn) serve() {
 }
 
 func (c *Conn) SendMessage(msg *message.Message) {
-	glog.V(2).Infof("\t->%v %v \n", c.Address(), msg)
+	zlog.Debugf("\t->%v %v \n", c.Address(), msg)
 	c.mOutbuf.Lock()
 	c.outbuf = append(c.outbuf, msg.Serialize()...)
 	c.mOutbuf.Unlock()
@@ -132,11 +132,11 @@ func (c *Conn) readLoop(ctx context.Context, cancel func()) {
 		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 30))
 		n, err := c.conn.Read(buf)
 		if err != nil {
-			glog.Infoln("TCP conn error:", err)
+			zlog.Infoln("TCP conn error:", err)
 			return
 		}
 		if n == 0 {
-			glog.Infoln("TCP read zero")
+			zlog.Infoln("TCP read zero")
 			return
 		}
 		c.mInbuf.Lock()
@@ -166,7 +166,7 @@ func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
 			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 			n, err := c.conn.Write(buf[sum:])
 			if err != nil {
-				glog.Errorf("%v write error: %v\n", c.Address(), err)
+				zlog.Errorf("%v write error: %v\n", c.Address(), err)
 				break
 			}
 			sum += n
@@ -208,11 +208,11 @@ func (c *Conn) dispatchLoop(ctx context.Context, cancel func()) {
 				c.inbuf = c.inbuf[n:]
 
 				if msg != nil {
-					glog.V(2).Infof("\t<-%v %v\n", c.Address(), msg)
+					zlog.Debugf("\t<-%v %v\n", c.Address(), msg)
 					c.peer.OnMessage(msg)
 				}
 				if n == 0 {
-					glog.Errorf("Got zero byte msg %v", c.Address())
+					zlog.Errorf("Got zero byte msg %v", c.Address())
 					return
 				}
 			}

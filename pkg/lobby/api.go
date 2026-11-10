@@ -12,7 +12,7 @@ import (
 	"zdxsv/pkg/lobby/lobbyrpc"
 	"zdxsv/pkg/login"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 const (
@@ -156,7 +156,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	replays, err := find(q)
 	if err != nil {
-		glog.Warningln("lbs/replay: FindReplay failure", err)
+		zlog.Warnln("lbs/replay: FindReplay failure", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -166,7 +166,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(replays); err != nil {
-		glog.Warningln("lbs/replay: JSON encode failure", err)
+		zlog.Warnln("lbs/replay: JSON encode failure", err)
 	}
 }
 
@@ -185,7 +185,7 @@ func (h *APIHandler) serveReplayPlayed(w http.ResponseWriter, r *http.Request) {
 		played = db.DefaultDB.IncrementReplayPlayCount
 	}
 	if err := played(battleCode); err != nil {
-		glog.Warningln("lbs/replay_played: IncrementReplayPlayCount failure", battleCode, err)
+		zlog.Warnln("lbs/replay_played: IncrementReplayPlayCount failure", battleCode, err)
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -202,7 +202,7 @@ func (h *APIHandler) serveStatus(w http.ResponseWriter) {
 		}
 		body, err := json.Marshal(MakeStatus(res, now))
 		if err != nil {
-			glog.Warningln("lbs/status: JSON encode failure", err)
+			zlog.Warnln("lbs/status: JSON encode failure", err)
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
@@ -223,6 +223,6 @@ func (h *APIHandler) serveLive(w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(battles); err != nil {
-		glog.Warningln("lbs/live: JSON encode failure", err)
+		zlog.Warnln("lbs/live: JSON encode failure", err)
 	}
 }

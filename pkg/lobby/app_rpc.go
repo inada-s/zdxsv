@@ -6,8 +6,8 @@ import (
 	"time"
 	. "zdxsv/pkg/lobby/lobbyrpc"
 
-	"github.com/golang/glog"
 	"github.com/valyala/gorpc"
+	"zdxsv/pkg/zlog"
 )
 
 const (
@@ -39,7 +39,7 @@ func newLobbyRPCServer(app *App, addr string) *gorpc.Server {
 }
 
 func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *RegisterProxyResponse {
-	glog.Infof("RegisterProxyRequest %v %+v\n", remoteAddr, req)
+	zlog.Infof("RegisterProxyRequest %v %+v\n", remoteAddr, req)
 	res := new(RegisterProxyResponse)
 
 	if req.CurrentVersion < requiredVersion {
@@ -115,13 +115,13 @@ func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *
 			res.LobbyUsers = append(res.LobbyUsers, user)
 		}
 		res.Message = "登録成功"
-		glog.Infoln("Register zproxy", userPeer.UserID, userPeer.SessionID)
+		zlog.Infoln("Register zproxy", userPeer.UserID, userPeer.SessionID)
 	})
 	return res
 }
 
 func (m *lobbyRPC) getBattleInfo(remoteAddr string, req *BattleInfoRequest) *BattleInfoResponse {
-	glog.Infof("BattleInfoRequest %v %+v\n", remoteAddr, req)
+	zlog.Infof("BattleInfoRequest %v %+v\n", remoteAddr, req)
 	res := new(BattleInfoResponse)
 
 	if req.SessionID == "" {

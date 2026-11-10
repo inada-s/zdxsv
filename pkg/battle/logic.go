@@ -6,7 +6,7 @@ import (
 	"net/rpc"
 	"sync"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
@@ -86,14 +86,14 @@ func (m *Logic) ServeRpc(addr string) {
 	rpc.HandleHTTP()
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
-		glog.Errorln(err.Error())
+		zlog.Errorln(err.Error())
 	}
 }
 
 func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {
 	info := m.GetBattleInfo(sessionID)
 	if info == nil {
-		glog.Errorln("BattleInfo not found. sessionID=", sessionID)
+		zlog.Errorln("BattleInfo not found. sessionID=", sessionID)
 		return nil, false
 	}
 
@@ -102,7 +102,7 @@ func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {
 			return &u, true
 		}
 	}
-	glog.Errorln("User not found in BattleInfo. sessionID=", sessionID)
+	zlog.Errorln("User not found in BattleInfo. sessionID=", sessionID)
 	return nil, false
 }
 

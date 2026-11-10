@@ -412,7 +412,6 @@ func test300Ranking(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	flag.Set("logtostderr", "true")
 	flag.Parse()
 	os.Exit(m.Run())
 }

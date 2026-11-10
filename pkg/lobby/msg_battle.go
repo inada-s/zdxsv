@@ -17,12 +17,12 @@ import (
 
 	"encoding/json"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"zdxsv/pkg/zlog"
 )
 
 func NoticeBattleStart(p *AppPeer) {
@@ -68,7 +68,7 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
 		w.WriteString(user.Bin)
 		w.Write8(pos) // 不明
 	} else {
-		glog.Infoln("UserPos not found", pos)
+		zlog.Infoln("UserPos not found", pos)
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
@@ -81,7 +81,7 @@ var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message)
 	user := p.app.OnGetBattleOpponentUser(p, pos)
 	w.Write8(pos)
 	if user == nil {
-		glog.Infoln("UserPos not found", pos)
+		zlog.Infoln("UserPos not found", pos)
 		a.Status = StatusError
 		p.SendMessage(a)
 		return
@@ -122,7 +122,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 		w := a.Writer()
 		w.WriteString(battleCode)
 	} else {
-		glog.Infoln("Failed to get battle code")
+		zlog.Infoln("Failed to get battle code")
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
@@ -234,7 +234,7 @@ func battleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *M
 	}
 	body, err := pb.Marshal(m)
 	if err != nil {
-		glog.Errorln("battle info:", err)
+		zlog.Errorln("battle info:", err)
 		return nil
 	}
 	n := NewServerNotice(0x9951)
@@ -382,15 +382,15 @@ func pilotName(bin string) string {
 // battle ran. Custom category, no answer: logged for server-side stats and troubleshooting.
 var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	if p.PlatformInfo == nil {
-		glog.Warningln("p2p matching report without platform info ignored", p.UserID)
+		zlog.Warnln("p2p matching report without platform info ignored", p.UserID)
 		return
 	}
 	report := &proto.P2PMatchingReport{}
 	if err := pb.Unmarshal(m.Body, report); err != nil {
-		glog.Warningln("p2p matching report:", p.UserID, err)
+		zlog.Warnln("p2p matching report:", p.UserID, err)
 		return
 	}
-	glog.Infoln(p2pMatchingReportLine(report))
+	zlog.Infoln(p2pMatchingReportLine(report))
 	sender := p.UserID
 	if sender == "" { // the report comes before the user login
 		sender = report.GetUserId()
@@ -407,7 +407,7 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 	}
 	records, err := db.DefaultDB.GetBattleRecords(report.GetBattleCode())
 	if err != nil {
-		glog.Warningln("p2p matching report: GetBattleRecords:", err)
+		zlog.Warnln("p2p matching report: GetBattleRecords:", err)
 		return
 	}
 	if !slices.ContainsFunc(records, func(r *db.BattleRecord) bool { return r.UserID == sender }) {
@@ -430,7 +430,7 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 			}
 		}
 		if err := db.DefaultDB.SetUsedMs(r.BattleCode, r.UserID, mask, strings.Join(list, ",")); err != nil {
-			glog.Warningln("p2p matching report: SetUsedMs:", err)
+			zlog.Warnln("p2p matching report: SetUsedMs:", err)
 		}
 	}
 }
@@ -488,7 +488,7 @@ var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) 
 		info = func(userID string) map[string]string { return b.PlatformInfo[userID] }
 	}
 	if n := battleInfoNotice(p, info); n != nil {
-		glog.Infoln("udp bridge battle info", p.UserID)
+		zlog.Infoln("udp bridge battle info", p.UserID)
 		p.SendMessage(n)
 	}
 	a := NewServerAnswer(m)
@@ -583,13 +583,13 @@ func parseBattleResult(m *Message) *model.BattleResult {
 }
 
 var _ = register(0x6138, "AnswerBattleResult", func(p *AppPeer, m *Message) {
-	glog.Infoln("== BattleResult ==")
-	glog.Infoln("ID:", p.User.UserID)
-	glog.Infoln("Name:", p.User.Name)
+	zlog.Infoln("== BattleResult ==")
+	zlog.Infoln("ID:", p.User.UserID)
+	zlog.Infoln("Name:", p.User.Name)
 	result := parseBattleResult(m)
 	js, _ := json.MarshalIndent(result, "", "  ")
-	glog.Infoln(string(js))
-	glog.Infoln("==================")
+	zlog.Infoln(string(js))
+	zlog.Infoln("==================")
 
 	p.app.OnGetBattleResult(p, result)
 })

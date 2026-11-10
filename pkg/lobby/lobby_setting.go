@@ -7,13 +7,13 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 func lobbySetting(platform string, lobbyID uint16) *db.LobbySetting {
 	s, err := db.DefaultDB.GetLobbySetting(platform, int(lobbyID))
 	if err != nil {
-		glog.Warningln("GetLobbySetting failure", platform, lobbyID, err)
+		zlog.Warnln("GetLobbySetting failure", platform, lobbyID, err)
 	}
 	if s == nil {
 		return &db.LobbySetting{Platform: platform, No: int(lobbyID)}
@@ -28,13 +28,13 @@ func lobbyBattleRule(s *db.LobbySetting) *model.Rule {
 	}
 	r, err := db.DefaultDB.GetRule(s.RuleID)
 	if err != nil || r == nil {
-		glog.Warningln("m_lobby_setting rule_id", s.Platform, s.No, s.RuleID, r, err)
+		zlog.Warnln("m_lobby_setting rule_id", s.Platform, s.No, s.RuleID, r, err)
 		return nil
 	}
 	rule := model.NewRule()
 	for k, v := range r.Values() {
 		if !rule.SetByKey(k, *v) {
-			glog.Warningln("m_rule", r.ID, k, *v, "is out of range")
+			zlog.Warnln("m_rule", r.ID, k, *v, "is out of range")
 		}
 	}
 	return rule

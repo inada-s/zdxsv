@@ -16,7 +16,7 @@ import (
 	"zdxsv/pkg/db"
 
 	"cloud.google.com/go/storage"
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 // POST /lbs/replay_upload: an emulator posts a battle's replay as a multipart file
@@ -155,7 +155,7 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		glog.Warningln("replay_upload: store failure", battleCode, err)
+		zlog.Warnln("replay_upload: store failure", battleCode, err)
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
@@ -164,10 +164,10 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		set = db.DefaultDB.SetReplayURL
 	}
 	if err := set(battleCode, url); err != nil {
-		glog.Warningln("replay_upload: SetReplayURL failure", battleCode, err)
+		zlog.Warnln("replay_upload: SetReplayURL failure", battleCode, err)
 		http.Error(w, "Failed to record replay", http.StatusInternalServerError)
 		return
 	}
-	glog.Infoln("replay uploaded", battleCode, fh.Size, url)
+	zlog.Infoln("replay uploaded", battleCode, fh.Size, url)
 	fmt.Fprintf(w, "File uploaded: %q (%v bytes)\n", fh.Filename, fh.Size)
 }

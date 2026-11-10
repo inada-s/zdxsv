@@ -10,7 +10,7 @@ import (
 	"zdxsv/pkg/assets"
 	"zdxsv/pkg/login"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 var (
@@ -29,7 +29,7 @@ func handleAssets(w http.ResponseWriter, r *http.Request) {
 
 	bin, err := assets.Asset(r.URL.Path[1:])
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		w.WriteHeader(404)
 		return
 	}
@@ -75,7 +75,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 		if r.Method == "POST" {
 			r.ParseForm()
 		}
-		glog.Infoln(
+		zlog.Infoln(
 			m.status,
 			r.RemoteAddr,
 			r.Method,

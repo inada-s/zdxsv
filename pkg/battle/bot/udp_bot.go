@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
 )
@@ -70,11 +70,11 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 			if pkt.GetHelloServerData().GetOk() {
 				start.Store(true)
 			} else {
-				glog.Errorln("HelloServer failed")
+				zlog.Errorln("HelloServer failed")
 			}
 		case proto.MessageType_Battle:
-			if glog.V(3) {
-				glog.Infof("[UDP] id:%v SV>CL:%v", bot.id, pkt)
+			if zlog.DebugEnabled() {
+				zlog.Infof("[UDP] id:%v SV>CL:%v", bot.id, pkt)
 			}
 			bb.ApplySeqAck(pkt.GetSeq(), pkt.GetAck())
 			for _, msg := range pkt.GetBattleData() {
@@ -83,8 +83,8 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 					frame := msg.GetBody()
 					for 0 < len(frame) {
 						k := int(frame[0])
-						if glog.V(2) {
-							glog.Infof("[UDP] id:%v SV>CL:%v", bot.id, frame)
+						if zlog.DebugEnabled() {
+							zlog.Infof("[UDP] id:%v SV>CL:%v", bot.id, frame)
 						}
 						msg := readMsg(frame[:k])
 						ms := (time.Now().UnixNano() - msg.unixnano)
@@ -157,5 +157,5 @@ func (bot *UDPBot) Run(fin <-chan interface{}) error {
 }
 
 func (bot *UDPBot) Summary() {
-	glog.Infof("[UDP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
+	zlog.Infof("[UDP] id:%v sendcnt:%v recvcnt:%v readcnt:%v maxrtt:%v[ns]\n", bot.id, bot.sendcnt, bot.recvcnt, bot.readcnt, bot.maxrtt)
 }

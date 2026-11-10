@@ -7,7 +7,7 @@ import (
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/sessionid"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 // 6007 : ServerFull サーバ選択画面へ
@@ -88,10 +88,10 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	r := m.Reader()
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
-	glog.Infoln(key1)
+	zlog.Infoln(key1)
 	sessionID, err := sessionid.Decode(key1)
 	if err != nil {
-		glog.Errorln(err)
+		zlog.Errorln(err)
 		return
 	}
 	p.app.OnKeePair(p, loginKey, sessionID)
@@ -106,7 +106,7 @@ var _ = register(0x6103, "FirstData", func(p *AppPeer, _ *Message) {
 	// r := m.Reader()
 	// TODO:レスポンスの詳細を調査する
 	if p.LoginKey == "" {
-		glog.Errorln("loginKey not set")
+		zlog.Errorln("loginKey not set")
 		return
 	}
 	p.app.OnFirstData(p)

@@ -9,7 +9,7 @@ import (
 
 	"zdxsv/pkg/battle/bot"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 var cpu *int = flag.Int("cpu", 1, "setting GOMAXPROCS")
@@ -21,19 +21,18 @@ var rpcsv *string = flag.String("rpcsv", "127.0.0.1:3080", "battle server ip and
 var bridge *string = flag.String("bridge", "", "comma-separated ip:port: TCP bot i connects to the i-th address (e.g. an emulator UDP bridge) instead of remote")
 
 func main() {
-	flag.Set("logtostderr", "true")
 	flag.Parse()
 	runtime.GOMAXPROCS(*cpu)
 	players := *tcp_players + *udp_players
 	sessionIDs, err := bot.PrepareServer(players, *rpcsv)
 	if err != nil {
-		glog.Fatalln(err)
+		zlog.Fatalln(err)
 	}
 	var bridges []string
 	if *bridge != "" {
 		bridges = strings.Split(*bridge, ",")
 	}
-	glog.Infoln("Start Bots")
+	zlog.Infoln("Start Bots")
 	var wg sync.WaitGroup
 	fin := make(chan interface{})
 	for i := 0; i < players; i++ {
@@ -52,7 +51,7 @@ func main() {
 			err := b.Run(fin)
 			b.Summary()
 			if err != nil {
-				glog.Errorln(err)
+				zlog.Errorln(err)
 			}
 			wg.Done()
 		}()

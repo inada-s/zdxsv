@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 const (
@@ -111,7 +111,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, "another command is running")
 		return
 	}
-	glog.Infoln("discord command", name, "by", in.userID())
+	zlog.Infoln("discord command", name, "by", in.userID())
 	answered := make(chan struct{})
 	defer close(answered)
 	d.wg.Add(1)
@@ -124,7 +124,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		msg, err := run(ctx)
 		if err != nil {
-			glog.Errorln("discord command", name, err)
+			zlog.Errorln("discord command", name, err)
 			msg = name + " failed, nothing changed:\n" + err.Error()
 		}
 		d.editOriginal(ctx, &in, msg)
@@ -179,7 +179,7 @@ func (d *Discord) editOriginal(ctx context.Context, in *interaction, msg string)
 	u := api + "/webhooks/" + url.PathEscape(in.ApplicationID) + "/" + url.PathEscape(in.Token) + "/messages/@original"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
 	if err != nil {
-		glog.Errorln("discord edit message:", err)
+		zlog.Errorln("discord edit message:", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -189,12 +189,12 @@ func (d *Discord) editOriginal(ctx context.Context, in *interaction, msg string)
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		glog.Errorln("discord edit message:", err)
+		zlog.Errorln("discord edit message:", err)
 		return
 	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		glog.Errorln("discord edit message:", res.Status)
+		zlog.Errorln("discord edit message:", res.Status)
 	}
 }
 

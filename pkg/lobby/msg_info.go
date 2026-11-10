@@ -13,9 +13,9 @@ import (
 	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 
-	"github.com/golang/glog"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+	"zdxsv/pkg/zlog"
 )
 
 var reTwoNumber = regexp.MustCompile(`\d{2}`)
@@ -89,7 +89,7 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		ranking, err := db.DefaultDB.GetWinCountRanking(side)
 		users, maxPage := rankingPage(ranking, page, 10)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 		}
 		rp := rankingParams{
 			HasPrev: 0 < page,
@@ -144,12 +144,12 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		}
 		err = tplRanking.Execute(tw, rp)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 		}
 	case strings.Contains(path, "P_RANK"): //撃墜数ランキング
 		ranking, err := db.DefaultDB.GetKillCountRanking(side)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 		}
 		users, maxPage := rankingPage(ranking, page, 10)
 		rp := rankingParams{
@@ -181,13 +181,13 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 		}
 		err = tplRanking.Execute(tw, rp)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 		}
 	default:
-		glog.Errorln("page request", path)
+		zlog.Errorln("page request", path)
 		err := tplUnderConstruction.Execute(tw, nil)
 		if err != nil {
-			glog.Errorln(err)
+			zlog.Errorln(err)
 		}
 	}
 

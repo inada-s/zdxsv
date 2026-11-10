@@ -6,7 +6,7 @@ import (
 	"zdxsv/pkg/db"
 
 	"github.com/blang/semver"
-	"github.com/golang/glog"
+	"zdxsv/pkg/zlog"
 )
 
 // minPcsx2VersionKey: m_server_setting key of the lowest pcsx2 release (zdxsv-X.Y.Z) that may log in.
@@ -25,7 +25,7 @@ func parsePcsx2Version(v string) (semver.Version, error) {
 func pcsx2Allowed(loginKey, machineID string) bool {
 	list, err := db.DefaultDB.GetServerSetting(pcsx2AllowKey)
 	if err != nil {
-		glog.Warningln("GetServerSetting failure", pcsx2AllowKey, err)
+		zlog.Warnln("GetServerSetting failure", pcsx2AllowKey, err)
 		return false
 	}
 	for _, v := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
@@ -44,7 +44,7 @@ func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
 	}
 	minVersion, err := db.DefaultDB.GetServerSetting(minPcsx2VersionKey)
 	if err != nil {
-		glog.Warningln("GetServerSetting failure", minPcsx2VersionKey, err)
+		zlog.Warnln("GetServerSetting failure", minPcsx2VersionKey, err)
 		return false
 	}
 	if minVersion == "" {
@@ -52,7 +52,7 @@ func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
 	}
 	min, err := parsePcsx2Version(minVersion)
 	if err != nil {
-		glog.Warningln("invalid", minPcsx2VersionKey, minVersion, err)
+		zlog.Warnln("invalid", minPcsx2VersionKey, minVersion, err)
 		return false
 	}
 	v, err := parsePcsx2Version(info["pcsx2"])

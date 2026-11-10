@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	pb "github.com/golang/protobuf/proto"
+	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/proto"
 )
@@ -34,8 +34,8 @@ func (u *TCPPeer) Close() error {
 }
 
 func (u *TCPPeer) Serve(logic *Logic) {
-	glog.Infoln("[TCP]", u.Address(), "Serve Start")
-	defer glog.Infoln("[TCP]", u.Address(), "Serve End")
+	zlog.Infoln("[TCP]", u.Address(), "Serve Start")
+	defer zlog.Infoln("[TCP]", u.Address(), "Serve End")
 	data, _ := hex.DecodeString("280110310000000100ffffff")
 	u.AddSendData(data)
 	u.readLoop(logic)
@@ -56,7 +56,7 @@ func (u *TCPPeer) AddSendData(data []byte) {
 	for sum := 0; sum < len(data); {
 		n, err := u.conn.Write(data[sum:])
 		if err != nil {
-			glog.Errorf("%v write error: %v\n", u.Address(), err)
+			zlog.Errorf("%v write error: %v\n", u.Address(), err)
 			break
 		}
 		sum += n
@@ -76,7 +76,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 		n, err := u.conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
-				glog.Errorf("%v read error: %v\n", u.Address(), err)
+				zlog.Errorf("%v read error: %v\n", u.Address(), err)
 			}
 			return
 		}
@@ -86,28 +86,28 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 		inbuf = append(inbuf, buf[:n]...)
 
 		if u.room == nil {
-			glog.Infoln("room nil: ", u.Address())
+			zlog.Infoln("room nil: ", u.Address())
 			if len(inbuf) < 22 {
 				continue
 			}
 			value := string(inbuf[12:22])
 			inbuf = inbuf[:0]
 			sessionID, err := ParseSessionID(value)
-			glog.Infoln("[TCP] SessionID", sessionID, err)
+			zlog.Infoln("[TCP] SessionID", sessionID, err)
 			u.room = logic.Join(u, sessionID)
 			if u.room == nil {
-				glog.Infoln("failed to join room: ", u.UserID(), u.Address())
+				zlog.Infoln("failed to join room: ", u.UserID(), u.Address())
 				u.conn.Close()
 				break
 			}
-			glog.Infoln("join success", u.Address())
+			zlog.Infoln("join success", u.Address())
 		} else {
 			var tmp []byte
 			for 0 < len(inbuf) {
 				size := int(inbuf[0])
 				if size == 0 {
 					// a zero size frame never advances; the stream cannot be resynced
-					glog.Errorln("[TCP] zero size frame", u.Address())
+					zlog.Errorln("[TCP] zero size frame", u.Address())
 					return
 				}
 				if size <= len(inbuf) {
