@@ -12,13 +12,13 @@ import (
 
 func TestMakeStatusPlatforms(t *testing.T) {
 	res := &lobbyapi.StatusResponse{
-		LobbyUsers: []lobbyapi.User{
+		LobbyUsers: []lobbyapi.ZproxyUser{
 			{UserID: "AAAAAA", Platform: model.PlatformConsole},
 			{UserID: "BBBBBB", Platform: model.PlatformEmu, UDP: true},
 			{UserID: "CCCCCC"}, // no platform: a console
 			{UserID: "DDDDDD", Platform: model.PlatformEmu},
 		},
-		Battles: []lobbyapi.Battle{{Platform: model.PlatformEmu, Users: []lobbyapi.User{
+		Battles: []lobbyapi.ZproxyBattle{{Platform: model.PlatformEmu, Users: []lobbyapi.ZproxyUser{
 			{UserID: "DDDDDD", Platform: model.PlatformEmu}, // also in the lobby list: counted once
 			{UserID: "EEEEEE", Platform: model.PlatformEmu},
 		}}},
@@ -42,7 +42,7 @@ func TestAPIStatus(t *testing.T) {
 	calls := 0
 	h := &APIHandler{Status: func() *lobbyapi.StatusResponse {
 		calls++
-		return &lobbyapi.StatusResponse{LobbyUsers: []lobbyapi.User{{UserID: "AAAAAA"}, {UserID: "BBBBBB"}}}
+		return &lobbyapi.StatusResponse{LobbyUsers: []lobbyapi.ZproxyUser{{UserID: "AAAAAA"}, {UserID: "BBBBBB"}}}
 	}}
 	get := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()

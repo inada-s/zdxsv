@@ -36,7 +36,7 @@ var tplDevAuthorize = template.Must(template.New("dev").Parse(`<!DOCTYPE html><h
 <button type="submit">Sign in</button></p></form>
 <p><a href="{{.Deny}}">Deny</a></p></body></html>`))
 
-func (s *Server) serveDevAuthorize(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveDevAuthorize(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	if state == "" || len(state) > 128 {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -53,7 +53,7 @@ func (s *Server) serveDevAuthorize(w http.ResponseWriter, r *http.Request) {
 
 // serveDevCarry (POST) stands in for the lobby chat ｄｃ of a PS2: it makes a new account, as a PS2
 // registration does, and answers {"code": C, "login_key": K} with a carry-over code for it.
-func (s *Server) serveDevCarry(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveDevCarry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

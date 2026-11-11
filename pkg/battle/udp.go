@@ -11,22 +11,22 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-type UDPServer struct {
+type McsUDPServer struct {
 	sync.Mutex
-	peers map[string]*UDPPeer
+	peers map[string]*McsUDPPeer
 
 	conn  *net.UDPConn
-	logic *Logic
+	logic *Mcs
 }
 
-func NewUDPServer(logic *Logic) *UDPServer {
-	return &UDPServer{
-		peers: make(map[string]*UDPPeer),
+func NewUDPServer(logic *Mcs) *McsUDPServer {
+	return &McsUDPServer{
+		peers: make(map[string]*McsUDPPeer),
 		logic: logic,
 	}
 }
 
-func (s *UDPServer) readLoop() error {
+func (s *McsUDPServer) readLoop() error {
 	zlog.Info("udp readLoop start")
 	defer zlog.Info("udp readLoop end")
 	buf := make([]byte, 4096)
@@ -93,7 +93,7 @@ func (s *UDPServer) readLoop() error {
 	}
 }
 
-func (s *UDPServer) ListenAndServe(addr string) error {
+func (s *McsUDPServer) ListenAndServe(addr string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return err
@@ -106,16 +106,16 @@ func (s *UDPServer) ListenAndServe(addr string) error {
 }
 
 // Serve handles packets on conn until it is closed.
-func (s *UDPServer) Serve(conn *net.UDPConn) error {
+func (s *McsUDPServer) Serve(conn *net.UDPConn) error {
 	s.conn = conn
 	s.conn.SetReadBuffer(16 * 1024 * 1024)
 	s.conn.SetWriteBuffer(16 * 1024 * 1024)
 	return s.readLoop()
 }
 
-type UDPPeer struct {
-	BasePeer
-	room *Room
+type McsUDPPeer struct {
+	BaseMcsPeer
+	room *McsRoom
 
 	addr    *net.UDPAddr
 	conn    *net.UDPConn
@@ -125,14 +125,14 @@ type UDPPeer struct {
 	chRecv  chan struct{}
 
 	readingMtx sync.Mutex
-	reading    []Message
-	reading2   []Message
+	reading    []McsMessage
+	reading2   []McsMessage
 
 	closeFunc func()
 }
 
-func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *UDPPeer {
-	return &UDPPeer{
+func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *McsUDPPeer {
+	return &McsUDPPeer{
 		addr:    addr,
 		conn:    conn,
 		chFlush: make(chan struct{}, 1),
@@ -142,19 +142,19 @@ func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *UDPPeer {
 	}
 }
 
-func (u *UDPPeer) Close() error {
+func (u *McsUDPPeer) Close() error {
 	if u.closeFunc != nil {
 		u.closeFunc()
 	}
 	return nil
 }
 
-func (u *UDPPeer) SetUserID(id string) {
+func (u *McsUDPPeer) SetUserID(id string) {
 	u.userID = id
 	u.rudp.SetID(id)
 }
 
-func (u *UDPPeer) Serve(logic *Logic) {
+func (u *McsUDPPeer) Serve(logic *Mcs) {
 	zlog.Info("udp serve start", zap.Any("addr", u.Address()))
 	defer zlog.Info("udp serve end", zap.Any("addr", u.Address()))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -226,7 +226,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 	}
 }
 
-func (u *UDPPeer) OnReceive(pkt Packet) {
+func (u *McsUDPPeer) OnReceive(pkt Packet) {
 	u.rudp.ApplySeqAck(pkt.Seq, pkt.Ack)
 
 	u.readingMtx.Lock()
@@ -243,15 +243,15 @@ func (u *UDPPeer) OnReceive(pkt Packet) {
 	}
 }
 
-func (u *UDPPeer) Address() string {
+func (u *McsUDPPeer) Address() string {
 	return u.addr.String()
 }
 
-func (u *UDPPeer) AddSendData(data []byte) {
+func (u *McsUDPPeer) AddSendData(data []byte) {
 	zlog.Fatal("AddSendData called", zap.Binary("data", data))
 }
 
-func (u *UDPPeer) AddSendMessage(msg Message) {
+func (u *McsUDPPeer) AddSendMessage(msg McsMessage) {
 	u.rudp.Push(msg)
 	select {
 	case u.chFlush <- struct{}{}:

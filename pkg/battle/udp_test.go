@@ -8,10 +8,10 @@ import (
 )
 
 // startUDPServer serves on a local port with U1 (12345678) and U2 (87654321) waiting for battle.
-func startUDPServer(t *testing.T) (*UDPServer, *net.UDPAddr) {
+func startUDPServer(t *testing.T) (*McsUDPServer, *net.UDPAddr) {
 	t.Helper()
-	logic := NewLogic()
-	logic.AddBattle([]User{
+	logic := NewMcs()
+	logic.AddBattle([]McsUser{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
 	})
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -35,13 +35,13 @@ func startUDPServer(t *testing.T) (*UDPServer, *net.UDPAddr) {
 	return s, conn.LocalAddr().(*net.UDPAddr)
 }
 
-func (s *UDPServer) peerCount() int {
+func (s *McsUDPServer) peerCount() int {
 	s.Lock()
 	defer s.Unlock()
 	return len(s.peers)
 }
 
-func waitPeerCount(t *testing.T, s *UDPServer, n int) {
+func waitPeerCount(t *testing.T, s *McsUDPServer, n int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for s.peerCount() != n {
@@ -58,7 +58,7 @@ type udpClient struct {
 	conn   *net.UDPConn
 	server *net.UDPAddr
 	userID string
-	sent   []Message
+	sent   []McsMessage
 	recv   map[string]uint32
 }
 
@@ -107,7 +107,7 @@ func (c *udpClient) hello(sessionID string) bool {
 func (c *udpClient) send(bodies ...[]byte) {
 	c.t.Helper()
 	for _, b := range bodies {
-		c.sent = append(c.sent, Message{UserID: c.userID, Seq: uint32(len(c.sent) + 1), Body: b})
+		c.sent = append(c.sent, McsMessage{UserID: c.userID, Seq: uint32(len(c.sent) + 1), Body: b})
 	}
 	c.write(AppendBattle(nil, uint32(len(c.sent)), 0, c.sent))
 }

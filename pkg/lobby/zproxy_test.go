@@ -25,7 +25,7 @@ type zproxyAPI struct {
 	ip string
 }
 
-func newZproxyAPI(app *App) *zproxyAPI {
+func newZproxyAPI(app *Lbs) *zproxyAPI {
 	return &zproxyAPI{h: &APIHandler{RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}, ip: "127.0.0.1"}
 }
 
@@ -62,7 +62,7 @@ func (z *zproxyAPI) battleInfo(t *testing.T, sessionID string) *lobbyapi.BattleI
 	return res
 }
 
-func findUser(users []lobbyapi.User, userID string) *lobbyapi.User {
+func findUser(users []lobbyapi.ZproxyUser, userID string) *lobbyapi.ZproxyUser {
 	for i := range users {
 		if users[i].UserID == userID {
 			return &users[i]
@@ -74,11 +74,11 @@ func findUser(users []lobbyapi.User, userID string) *lobbyapi.User {
 // TestZproxyAPIFlow is what zproxy does: register while its user is in a
 // lobby, then ask for the battle once the user went to the battle server.
 func TestZproxyAPIFlow(t *testing.T) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battle.NewLogic())
+	addr, app := startLobbyApp(t, battle.NewMcs())
 	api := newZproxyAPI(app)
 
 	type player struct {
@@ -203,15 +203,15 @@ func TestZproxyAPIFlow(t *testing.T) {
 }
 
 func TestStatusPlatform(t *testing.T) {
-	app := NewApp()
-	ps2 := &AppPeer{Platform: model.PlatformConsole}
+	app := NewLbs()
+	ps2 := &LbsPeer{Platform: model.PlatformConsole}
 	ps2.UserID = "AAAAAA"
-	emu := &AppPeer{Platform: model.PlatformEmu}
+	emu := &LbsPeer{Platform: model.PlatformEmu}
 	emu.UserID = "BBBBBB"
 	app.users["SAAAAAA"] = ps2
 	app.users["SBBBBBB"] = emu
 	b := model.NewBattle(model.PlatformEmu, 0)
-	b.Users = append(b.Users, model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}})
+	b.Users = append(b.Users, model.LbsUser{DBUser: db.DBUser{UserID: "CCCCCC", SessionID: "SCCCCCC"}})
 	app.battles["SCCCCCC"] = b
 
 	res := app.status()

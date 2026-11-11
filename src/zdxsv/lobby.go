@@ -24,7 +24,7 @@ import (
 )
 
 // serveLobby runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
-func serveLobby(app *lobby.App) {
+func serveLobby(app *lobby.Lbs) {
 	if c := config.Conf.Lobby; c.RelayRegions != "" {
 		if c.RelayControlAddr == "" || c.RelayStartCommand == "" {
 			zlog.Fatal("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_LOBBY_RELAY_CONTROL_ADDR and ZDXSV_LOBBY_RELAY_START_COMMAND")
@@ -43,7 +43,7 @@ func serveLobby(app *lobby.App) {
 		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
 	go app.Serve()
-	sv := lobby.NewServer(app)
+	sv := lobby.NewLbsServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))
 	if l := tlsListen("lobby", config.Conf.TLS.LobbyAddr); l != nil {
 		go sv.Serve(l)
@@ -110,7 +110,7 @@ func serveLobby(app *lobby.App) {
 	app.Quit()
 }
 
-func newAuthServer() *auth.Server {
+func newAuthServer() *auth.AuthServer {
 	c := config.Conf.Lobby
 	if c.AuthDev {
 		if c.DiscordClientID != "" || c.APIAddr == "" {
@@ -121,7 +121,7 @@ func newAuthServer() *auth.Server {
 			public = "http://" + c.APIAddr
 		}
 		zlog.Warn("ZDXSV_AUTH_DEV set: any user ID signs in; local development only", zap.String("url", public+"/auth/"))
-		return &auth.Server{Provider: auth.DevProvider(), PublicURL: public, Store: db.DefaultDB}
+		return &auth.AuthServer{Provider: auth.DevProvider(), PublicURL: public, Store: db.DefaultDB}
 	}
 	if c.DiscordClientID == "" {
 		return nil
@@ -129,7 +129,7 @@ func newAuthServer() *auth.Server {
 	if c.APIAddr == "" || c.AuthPublicURL == "" || c.DiscordClientSecret == "" {
 		zlog.Fatal("ZDXSV_DISCORD_CLIENT_ID needs ZDXSV_LOBBY_API_ADDR, ZDXSV_AUTH_PUBLIC_URL and ZDXSV_DISCORD_CLIENT_SECRET")
 	}
-	p := auth.Discord(c.DiscordClientID, string(c.DiscordClientSecret))
+	p := auth.DiscordProvider(c.DiscordClientID, string(c.DiscordClientSecret))
 	if base := strings.TrimSuffix(c.AuthProviderURL, "/"); base != "" {
 		zlog.Warn("ZDXSV_AUTH_PROVIDER_URL set: sign-in goes there instead of Discord", zap.Any("url", base))
 		for _, u := range []*string{&p.AuthURL, &p.TokenURL, &p.UserURL} {
@@ -137,7 +137,7 @@ func newAuthServer() *auth.Server {
 		}
 	}
 	zlog.Info("start auth", zap.String("url", c.AuthPublicURL+"/auth/"))
-	return &auth.Server{Provider: p, PublicURL: c.AuthPublicURL, Store: db.DefaultDB}
+	return &auth.AuthServer{Provider: p, PublicURL: c.AuthPublicURL, Store: db.DefaultDB}
 }
 
 // mainRelayTest: `zdxsv relay <session id> <hex token>` runs only the GGPO relay on

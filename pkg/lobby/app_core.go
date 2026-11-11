@@ -27,11 +27,11 @@ import (
 // Login
 // ===========================
 
-func (a *App) OnOpen(p *AppPeer) {
+func (a *Lbs) OnOpen(p *LbsPeer) {
 	RequestKeyPair(p)
 }
 
-func (a *App) OnClose(p *AppPeer) {
+func (a *Lbs) OnClose(p *LbsPeer) {
 	if p.inBattleAfterRoom {
 		a.OnExitBattleAfterRoom(p)
 	}
@@ -42,7 +42,7 @@ func (a *App) OnClose(p *AppPeer) {
 // closePeer logs p out at once and closes its connection after a shutdown notice.
 // Serve drops p's messages still queued: lobby and room members are keyed by user id,
 // so they would act on a later client of the same user.
-func (a *App) closePeer(p *AppPeer) {
+func (a *Lbs) closePeer(p *LbsPeer) {
 	a.OnClose(p)
 	delete(a.peers, p.conn.Address())
 	SendServerShutDown(p)
@@ -50,13 +50,13 @@ func (a *App) closePeer(p *AppPeer) {
 }
 
 // removeUser forgets p as its user unless a peer that logged in later holds the user id.
-func (a *App) removeUser(p *AppPeer) {
+func (a *Lbs) removeUser(p *LbsPeer) {
 	if a.users[p.UserID] == p {
 		delete(a.users, p.UserID)
 	}
 }
 
-func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
+func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 	accountKey, ok := login.Sessions.Use(sessionID, loginKey)
 	if !ok {
 		zlog.Error("no login session", zap.Any("session_id", sessionID))
@@ -96,7 +96,7 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 	RequestFirstData(p)
 }
 
-func (a *App) OnFirstData(p *AppPeer) {
+func (a *Lbs) OnFirstData(p *LbsPeer) {
 	if p.LoginKey == "" {
 		zlog.Error("loginKey not set")
 		return
@@ -109,12 +109,12 @@ func (a *App) OnFirstData(p *AppPeer) {
 					zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 					return
 				}
-				p.User = u
+				p.LbsUser = u
 				break
 			}
 		}
-		p.User.Entry = model.EntryNone
-		NoticeUserIDList(p, []*db.User{&p.User.User})
+		p.LbsUser.Entry = model.EntryNone
+		NoticeUserIDList(p, []*db.DBUser{&p.LbsUser.DBUser})
 	} else {
 		users, err := db.DefaultDB.GetUserList(p.LoginKey)
 		if err != nil {
@@ -127,7 +127,7 @@ func (a *App) OnFirstData(p *AppPeer) {
 
 // OnDecideUserID logs p in as a user of its account; false when refused. The users of an
 // account may play at once, from separate clients, but each user from one client only.
-func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
+func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 	sessionID := p.SessionID
 
 	if userID == "******" {
@@ -136,7 +136,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 			zlog.Error("login failed", zap.Error(err))
 			return false
 		}
-		p.User.User = *u
+		p.LbsUser.DBUser = *u
 		p.Name = name
 		p.SessionID = sessionID
 	} else if _, ok := a.battles[p.SessionID]; ok {
@@ -160,7 +160,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 			zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
-		p.User.User = *u
+		p.LbsUser.DBUser = *u
 		p.SessionID = sessionID
 	} else if 0 < len(userID) && 0 < len(name) {
 		u, err := db.DefaultDB.GetUser(userID)
@@ -172,7 +172,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 			zlog.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
-		p.User.User = *u
+		p.LbsUser.DBUser = *u
 		p.Name = name
 		p.SessionID = sessionID
 	} else {
@@ -185,13 +185,13 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 		a.closePeer(other)
 	}
 
-	err := db.DefaultDB.LoginUser(&p.User.User)
+	err := db.DefaultDB.LoginUser(&p.LbsUser.DBUser)
 	if err != nil {
 		zlog.Error("user login failed", zap.Error(err))
 		return false
 	}
 
-	err = db.DefaultDB.UpdateUser(&p.User.User)
+	err = db.DefaultDB.UpdateUser(&p.LbsUser.DBUser)
 	if err != nil {
 		zlog.Error("user login failed", zap.Error(err))
 		return false
@@ -203,7 +203,7 @@ func (a *App) OnDecideUserID(p *AppPeer, userID, name string) bool {
 	return true
 }
 
-func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
+func (a *Lbs) OnGetBattleResult(p *LbsPeer, result *model.BattleResult) {
 	js, err := json.Marshal(result)
 	if err != nil {
 		zlog.Error("failed to marshal battle result", zap.Error(err), zap.Any("result", result))
@@ -230,18 +230,18 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 
-	zlog.Info("user before battle result", zap.Any("user", p.User.User))
+	zlog.Info("user before battle result", zap.Any("user", p.LbsUser.DBUser))
 	rec, err := db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 0)
 	if err != nil {
 		zlog.Error("failed to calculate battle count", zap.Error(err))
 		return
 	}
 
-	p.User.BattleCount = rec.Battle
-	p.User.WinCount = rec.Win
-	p.User.LoseCount = rec.Lose
-	p.User.KillCount = rec.Kill
-	p.User.DeathCount = rec.Death
+	p.LbsUser.BattleCount = rec.Battle
+	p.LbsUser.WinCount = rec.Win
+	p.LbsUser.LoseCount = rec.Lose
+	p.LbsUser.KillCount = rec.Kill
+	p.LbsUser.DeathCount = rec.Death
 
 	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 1)
 	if err != nil {
@@ -249,11 +249,11 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 
-	p.User.AeugBattleCount = rec.Battle
-	p.User.AeugWinCount = rec.Win
-	p.User.AeugLoseCount = rec.Lose
-	p.User.AeugKillCount = rec.Kill
-	p.User.AeugDeathCount = rec.Death
+	p.LbsUser.AeugBattleCount = rec.Battle
+	p.LbsUser.AeugWinCount = rec.Win
+	p.LbsUser.AeugLoseCount = rec.Lose
+	p.LbsUser.AeugKillCount = rec.Kill
+	p.LbsUser.AeugDeathCount = rec.Death
 
 	rec, err = db.DefaultDB.CalculateUserTotalBattleCount(p.UserID, 2)
 	if err != nil {
@@ -261,11 +261,11 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 
-	p.User.TitansBattleCount = rec.Battle
-	p.User.TitansWinCount = rec.Win
-	p.User.TitansLoseCount = rec.Lose
-	p.User.TitansKillCount = rec.Kill
-	p.User.TitansDeathCount = rec.Death
+	p.LbsUser.TitansBattleCount = rec.Battle
+	p.LbsUser.TitansWinCount = rec.Win
+	p.LbsUser.TitansLoseCount = rec.Lose
+	p.LbsUser.TitansKillCount = rec.Kill
+	p.LbsUser.TitansDeathCount = rec.Death
 
 	rec, err = db.DefaultDB.CalculateUserDailyBattleCount(p.UserID)
 	if err != nil {
@@ -273,19 +273,19 @@ func (a *App) OnGetBattleResult(p *AppPeer, result *model.BattleResult) {
 		return
 	}
 
-	p.User.DailyBattleCount = rec.Battle
-	p.User.DailyWinCount = rec.Win
-	p.User.DailyLoseCount = rec.Lose
+	p.LbsUser.DailyBattleCount = rec.Battle
+	p.LbsUser.DailyWinCount = rec.Win
+	p.LbsUser.DailyLoseCount = rec.Lose
 
-	err = db.DefaultDB.UpdateUser(&p.User.User)
+	err = db.DefaultDB.UpdateUser(&p.LbsUser.DBUser)
 	if err != nil {
 		zlog.Error("failed to update user", zap.Error(err))
 		return
 	}
-	zlog.Info("user after battle result", zap.Any("user", p.User.User))
+	zlog.Info("user after battle result", zap.Any("user", p.LbsUser.DBUser))
 }
 
-type RankingRecord struct {
+type LbsRankingRecord struct {
 	Rank        uint32
 	EntireCount uint32
 	Class       byte
@@ -296,7 +296,7 @@ type RankingRecord struct {
 	Kill        uint32
 }
 
-func (a *App) getUserRanking(userID string, side byte) *RankingRecord {
+func (a *Lbs) getUserRanking(userID string, side byte) *LbsRankingRecord {
 	res, err := db.DefaultDB.CalculateUserTotalBattleCount(userID, side)
 	if err != nil {
 		zlog.Error("failed to update user", zap.Error(err))
@@ -308,7 +308,7 @@ func (a *App) getUserRanking(userID string, side byte) *RankingRecord {
 		c = 14
 	}
 
-	return &RankingRecord{
+	return &LbsRankingRecord{
 		Rank:        0, // TODO
 		EntireCount: 0, // TODO
 		Class:       byte(c),
@@ -320,20 +320,20 @@ func (a *App) getUserRanking(userID string, side byte) *RankingRecord {
 	}
 }
 
-func (a *App) OnGetUserRanking(p *AppPeer, kind, page byte) *RankingRecord {
+func (a *Lbs) OnGetUserRanking(p *LbsPeer, kind, page byte) *LbsRankingRecord {
 	return a.getUserRanking(p.UserID, page)
 }
 
-func (a *App) OnDecideTeam(p *AppPeer, team string) {
+func (a *Lbs) OnDecideTeam(p *LbsPeer, team string) {
 	p.Team = team
-	db.DefaultDB.UpdateUser(&p.User.User)
+	db.DefaultDB.UpdateUser(&p.LbsUser.DBUser)
 }
 
-func (a *App) OnSetUserBinary(p *AppPeer, bin string) {
+func (a *Lbs) OnSetUserBinary(p *LbsPeer, bin string) {
 	p.Bin = bin
 }
 
-func (a *App) OnUserLogout(p *AppPeer) {
+func (a *Lbs) OnUserLogout(p *LbsPeer) {
 	if p.Lobby != nil {
 		a.OnExitLobby(p)
 	}
@@ -344,7 +344,7 @@ func (a *App) OnUserLogout(p *AppPeer) {
 	a.removeUser(p)
 }
 
-func (a *App) OnUserGotoBattle(p *AppPeer) {
+func (a *Lbs) OnUserGotoBattle(p *LbsPeer) {
 	if p.Battle != nil {
 		a.battles[p.SessionID] = p.Battle
 		// The client comes back with this session after the battle.
@@ -360,7 +360,7 @@ func (a *App) OnUserGotoBattle(p *AppPeer) {
 	a.removeUser(p)
 }
 
-func (a *App) OnUserTopPageJump(p *AppPeer) {
+func (a *Lbs) OnUserTopPageJump(p *LbsPeer) {
 	if p.Battle != nil {
 		p.Battle = nil
 	}
@@ -377,7 +377,7 @@ func (a *App) OnUserTopPageJump(p *AppPeer) {
 // Utility
 // ===========================
 
-func (a *App) startTestBattle(platform string, lobbyID uint16, users []*model.User) (string, bool) {
+func (a *Lbs) startTestBattle(platform string, lobbyID uint16, users []*model.LbsUser) (string, bool) {
 	if len(users) != 1 {
 		return "ユーザー数エラー", false
 	}
@@ -409,7 +409,7 @@ func (a *App) startTestBattle(platform string, lobbyID uint16, users []*model.Us
 	return "接続テスト対戦開始", true
 }
 
-func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, rule *model.Rule) bool {
+func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*model.LbsUser, rule *model.Rule) bool {
 	if a.battleServer == nil {
 		zlog.Error("failed to start battle: no battle server")
 		return false
@@ -454,9 +454,9 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		}
 	}
 
-	var battleUsers []battle.User
+	var battleUsers []battle.McsUser
 	for _, u := range users {
-		battleUsers = append(battleUsers, battle.User{
+		battleUsers = append(battleUsers, battle.McsUser{
 			UserID:    u.UserID,
 			SessionID: u.SessionID,
 			Name:      u.Name,
@@ -521,7 +521,7 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 // Lobby
 // ===========================
 
-func (a *App) countBattles(platform string) int {
+func (a *Lbs) countBattles(platform string) int {
 	count := 0
 	for _, battle := range a.battles {
 		if battle.Platform == platform {
@@ -531,11 +531,11 @@ func (a *App) countBattles(platform string) int {
 	return count
 }
 
-func (a *App) OnGetPlazaJoinUser(p *AppPeer) uint16 {
+func (a *Lbs) OnGetPlazaJoinUser(p *LbsPeer) uint16 {
 	return uint16(a.countBattles(p.Platform))
 }
 
-func (a *App) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
+func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 	l, ok := a.getLobby(platform, lobbyID)
 	if ok {
 		lb := uint16(len(l.Users))
@@ -553,7 +553,7 @@ func (a *App) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 	}
 }
 
-func (a *App) OnPlatformInfo(p *AppPeer, info map[string]string) {
+func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
 		zlog.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
 		return
@@ -563,23 +563,23 @@ func (a *App) OnPlatformInfo(p *AppPeer, info map[string]string) {
 	zlog.Info("platform", zap.Any("platform", p.Platform), zap.Any("info", info))
 }
 
-func (a *App) OnEnterLobby(p *AppPeer, lobbyID uint16) {
+func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
-		p.User.Sync = ""
+		p.LbsUser.Sync = ""
 		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
-			p.User.Sync = s
+			p.LbsUser.Sync = s
 		}
 		a.dropBattlesOf(p.UserID)
 		p.Lobby = l
-		p.Lobby.Enter(&p.User)
+		p.Lobby.Enter(&p.LbsUser)
 		a.noticeLobbyUserCountAll(l.Platform, l.ID)
 	}
 }
 
 // dropBattlesOf forgets the battles a user left without coming back to the battle after room
 // (a new login, a broken battle): the user is no longer in them.
-func (a *App) dropBattlesOf(userID string) {
+func (a *Lbs) dropBattlesOf(userID string) {
 	for sid, battle := range a.battles {
 		for _, u := range battle.Users {
 			if u.SessionID == sid && u.UserID == userID {
@@ -593,7 +593,7 @@ func (a *App) dropBattlesOf(userID string) {
 	}
 }
 
-func (a *App) OnExitLobby(p *AppPeer) {
+func (a *Lbs) OnExitLobby(p *LbsPeer) {
 	if p.Room != nil {
 		a.OnExitRoom(p)
 		p.Room = nil
@@ -605,7 +605,7 @@ func (a *App) OnExitLobby(p *AppPeer) {
 	}
 }
 
-func (a *App) OnGetLobbyUserCount(p *AppPeer, lobbyID uint16) (count uint16) {
+func (a *Lbs) OnGetLobbyUserCount(p *LbsPeer, lobbyID uint16) (count uint16) {
 	lb, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
 		count = uint16(len(lb.Users))
@@ -613,7 +613,7 @@ func (a *App) OnGetLobbyUserCount(p *AppPeer, lobbyID uint16) (count uint16) {
 	return
 }
 
-func (a *App) OnGetLobbyEntryUserCount(p *AppPeer, lobbyID uint16) (uint16, uint16) {
+func (a *Lbs) OnGetLobbyEntryUserCount(p *LbsPeer, lobbyID uint16) (uint16, uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if !ok {
 		return 0, 0
@@ -621,10 +621,10 @@ func (a *App) OnGetLobbyEntryUserCount(p *AppPeer, lobbyID uint16) (uint16, uint
 	return l.GetEntryUserCount()
 }
 
-func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
+func (a *Lbs) OnEntryLobbyBattle(p *LbsPeer, side byte) {
 	if p.Lobby != nil {
 		lobby := p.Lobby
-		lobby.Entry(&p.User, side)
+		lobby.Entry(&p.LbsUser, side)
 
 		setting := lobbySetting(lobby.Platform, lobby.ID)
 		if lobbyHasHack(setting, model.HackZproxyTest) && side != model.EntryNone {
@@ -661,21 +661,21 @@ func (a *App) OnEntryLobbyBattle(p *AppPeer, side byte) {
 	}
 }
 
-func (a *App) OnGetBattleUserCount(p *AppPeer) byte {
+func (a *Lbs) OnGetBattleUserCount(p *LbsPeer) byte {
 	if p.Battle == nil {
 		return 0
 	}
 	return byte(len(p.Battle.Users))
 }
 
-func (a *App) OnGetBattleUserPosition(p *AppPeer) byte {
+func (a *Lbs) OnGetBattleUserPosition(p *LbsPeer) byte {
 	if p.Battle == nil {
 		return 0
 	}
 	return p.Battle.GetPosition(p.UserID)
 }
 
-func (a *App) OnGetBattleOpponentUser(p *AppPeer, pos byte) *model.User {
+func (a *Lbs) OnGetBattleOpponentUser(p *LbsPeer, pos byte) *model.LbsUser {
 	if p.Battle == nil {
 		return nil
 	}
@@ -684,11 +684,11 @@ func (a *App) OnGetBattleOpponentUser(p *AppPeer, pos byte) *model.User {
 
 // OnGetBattleOpponentClass returns the rank class shown for a user,
 // 14 (大将) down to 0 (二等兵).
-func (a *App) OnGetBattleOpponentClass(u *model.User) uint16 {
+func (a *Lbs) OnGetBattleOpponentClass(u *model.LbsUser) uint16 {
 	return min(uint16(u.WinCount/100), 14)
 }
 
-func (a *App) OnGetBattleRule(p *AppPeer) *model.Rule {
+func (a *Lbs) OnGetBattleRule(p *LbsPeer) *model.Rule {
 	if p.Battle == nil {
 		return nil
 	}
@@ -697,14 +697,14 @@ func (a *App) OnGetBattleRule(p *AppPeer) *model.Rule {
 
 // OnGetBattleCode returns a unique battle code the client is going to join.
 // Clients use this value as a random seed.
-func (a *App) OnGetBattleCode(p *AppPeer) (string, error) {
+func (a *Lbs) OnGetBattleCode(p *LbsPeer) (string, error) {
 	if p.Battle == nil {
 		return "", fmt.Errorf("Battle not found")
 	}
 	return p.Battle.BattleCode, nil
 }
 
-func (a *App) OnGetBattleServerAddress(p *AppPeer) (net.IP, uint16) {
+func (a *Lbs) OnGetBattleServerAddress(p *LbsPeer) (net.IP, uint16) {
 	if p.Battle == nil {
 		return nil, 0
 	}
@@ -715,9 +715,9 @@ func (a *App) OnGetBattleServerAddress(p *AppPeer) (net.IP, uint16) {
 	return p.Battle.ServerIP, p.Battle.ServerPort
 }
 
-func (a *App) noticeBattleAfterRoomUserCountAll(battle *model.Battle) uint16 {
+func (a *Lbs) noticeBattleAfterRoomUserCountAll(battle *model.LbsBattle) uint16 {
 	count := uint16(0)
-	var peers []*AppPeer
+	var peers []*LbsPeer
 	for _, u := range battle.Users {
 		peer, ok := a.users[u.UserID]
 		if ok && peer.inBattleAfterRoom && peer.Battle == battle {
@@ -731,7 +731,7 @@ func (a *App) noticeBattleAfterRoomUserCountAll(battle *model.Battle) uint16 {
 	return count
 }
 
-func (a *App) OnEnterBattleAfterRoom(p *AppPeer) {
+func (a *Lbs) OnEnterBattleAfterRoom(p *LbsPeer) {
 	battle, ok := a.battles[p.SessionID]
 	if !ok {
 		return
@@ -752,7 +752,7 @@ func (a *App) OnEnterBattleAfterRoom(p *AppPeer) {
 	}
 }
 
-func (a *App) OnExitBattleAfterRoom(p *AppPeer) {
+func (a *Lbs) OnExitBattleAfterRoom(p *LbsPeer) {
 	p.inBattleAfterRoom = false
 	if p.Battle == nil {
 		return
@@ -762,7 +762,7 @@ func (a *App) OnExitBattleAfterRoom(p *AppPeer) {
 	a.noticeBattleAfterRoomUserCountAll(battle)
 }
 
-func (a *App) OnGetBattleAfterRoomUserCount(p *AppPeer) uint16 {
+func (a *Lbs) OnGetBattleAfterRoomUserCount(p *LbsPeer) uint16 {
 	if p.Battle == nil {
 		return 0
 	}
@@ -778,7 +778,7 @@ func chatTextTooLong(s string) bool {
 	return len(b) > maxChatTextBytes
 }
 
-func (a *App) OnSendChatMessage(p *AppPeer, msg string) {
+func (a *Lbs) OnSendChatMessage(p *LbsPeer, msg string) {
 	if chatTextTooLong(msg) {
 		return
 	}
@@ -822,14 +822,14 @@ func (a *App) OnSendChatMessage(p *AppPeer, msg string) {
 // Room
 // ===========================
 
-func (a *App) OnGetRoomCount(p *AppPeer) uint16 {
+func (a *Lbs) OnGetRoomCount(p *LbsPeer) uint16 {
 	if p.Lobby != nil {
 		return p.Lobby.RoomCount()
 	}
 	return 0
 }
 
-func (a *App) OnGetRoomName(p *AppPeer, roomID uint16) string {
+func (a *Lbs) OnGetRoomName(p *LbsPeer, roomID uint16) string {
 	if p.Lobby != nil {
 		if room, ok := p.Lobby.Rooms[roomID]; ok {
 			return room.Name
@@ -838,7 +838,7 @@ func (a *App) OnGetRoomName(p *AppPeer, roomID uint16) string {
 	return "error"
 }
 
-func (a *App) OnGetRoomJoinInfo(p *AppPeer, roomID uint16) (max uint16) {
+func (a *Lbs) OnGetRoomJoinInfo(p *LbsPeer, roomID uint16) (max uint16) {
 	if p.Lobby != nil {
 		r, ok := p.Lobby.Rooms[roomID]
 		if !ok {
@@ -849,7 +849,7 @@ func (a *App) OnGetRoomJoinInfo(p *AppPeer, roomID uint16) (max uint16) {
 	return
 }
 
-func (a *App) OnGetRoomUserCount(p *AppPeer, roomID uint16) (count uint16) {
+func (a *Lbs) OnGetRoomUserCount(p *LbsPeer, roomID uint16) (count uint16) {
 	if p.Lobby != nil {
 		r, ok := p.Lobby.Rooms[roomID]
 		if !ok {
@@ -860,7 +860,7 @@ func (a *App) OnGetRoomUserCount(p *AppPeer, roomID uint16) (count uint16) {
 	return
 }
 
-func (a *App) OnGetRoomStatus(p *AppPeer, roomID uint16) (status byte) {
+func (a *Lbs) OnGetRoomStatus(p *LbsPeer, roomID uint16) (status byte) {
 	if p.Lobby != nil {
 		r, ok := p.Lobby.Rooms[roomID]
 		if !ok {
@@ -871,13 +871,13 @@ func (a *App) OnGetRoomStatus(p *AppPeer, roomID uint16) (status byte) {
 	return
 }
 
-func (a *App) OnGetRoomPasswordInfo(p *AppPeer, roomID uint16) (pass string, ok bool) {
+func (a *Lbs) OnGetRoomPasswordInfo(p *LbsPeer, roomID uint16) (pass string, ok bool) {
 	//TODO
 	ok = false
 	return
 }
 
-func (a *App) OnRequestCreateRoom(p *AppPeer, roomID uint16) bool {
+func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
 	if p.Lobby == nil {
 		return false
 	}
@@ -901,27 +901,27 @@ func (a *App) OnRequestCreateRoom(p *AppPeer, roomID uint16) bool {
 	return ok
 }
 
-func (a *App) OnRequestGetRuleCount(p *AppPeer, roomID uint16) byte {
+func (a *Lbs) OnRequestGetRuleCount(p *LbsPeer, roomID uint16) byte {
 	return model.RuleCount()
 }
 
-func (a *App) OnGetNamePermission(p *AppPeer, roomID uint16) byte {
+func (a *Lbs) OnGetNamePermission(p *LbsPeer, roomID uint16) byte {
 	return 1 // 0: 不可 1: 可
 }
 
-func (a *App) OnGetPasswordPermission(p *AppPeer, roomID uint16) byte {
+func (a *Lbs) OnGetPasswordPermission(p *LbsPeer, roomID uint16) byte {
 	return 0 // 0: 不可 1: 可
 }
 
-func (a *App) OnGetRuleName(_ *AppPeer, _ uint16, ruleID byte) string {
+func (a *Lbs) OnGetRuleName(_ *LbsPeer, _ uint16, ruleID byte) string {
 	return model.RuleTitle(ruleID)
 }
 
-func (a *App) OnGetRulePermission(_ *AppPeer, _ uint16, _ byte) byte {
+func (a *Lbs) OnGetRulePermission(_ *LbsPeer, _ uint16, _ byte) byte {
 	return 1
 }
 
-func (a *App) OnGetRuleDefaultIndex(p *AppPeer, roomID uint16, ruleID byte) byte {
+func (a *Lbs) OnGetRuleDefaultIndex(p *LbsPeer, roomID uint16, ruleID byte) byte {
 	if p.Lobby == nil {
 		return 0
 	}
@@ -933,34 +933,34 @@ func (a *App) OnGetRuleDefaultIndex(p *AppPeer, roomID uint16, ruleID byte) byte
 	return room.Rule.Get(ruleID)
 }
 
-func (a *App) OnGetRuleElementName(_ *AppPeer, _ uint16, ruleID byte, elemID byte) string {
+func (a *Lbs) OnGetRuleElementName(_ *LbsPeer, _ uint16, ruleID byte, elemID byte) string {
 	return model.RuleElementName(ruleID, elemID)
 }
 
-func (a *App) OnGetRuleControl(_ *AppPeer, _ uint16, _ byte, _ byte) byte {
+func (a *Lbs) OnGetRuleControl(_ *LbsPeer, _ uint16, _ byte, _ byte) byte {
 	//TODO:調査
 	return 0
 }
 
-func (a *App) OnGetRuleElementCount(_ *AppPeer, _ uint16, ruleID byte) byte {
+func (a *Lbs) OnGetRuleElementCount(_ *LbsPeer, _ uint16, ruleID byte) byte {
 	return model.RuleElementCount(ruleID)
 }
 
-func (a *App) OnDecideRoomName(p *AppPeer, name string) {
+func (a *Lbs) OnDecideRoomName(p *LbsPeer, name string) {
 	if p.Room == nil {
 		return
 	}
 	p.Room.Name = name
 }
 
-func (a *App) OnDecideRoomPassword(p *AppPeer, pass string) {
+func (a *Lbs) OnDecideRoomPassword(p *LbsPeer, pass string) {
 	if p.Room == nil {
 		return
 	}
 	p.Room.Password = pass
 }
 
-func (a *App) OnDecideRule(p *AppPeer, ruleID, elemID byte) (nazo byte) {
+func (a *Lbs) OnDecideRule(p *LbsPeer, ruleID, elemID byte) (nazo byte) {
 	if p.Room == nil {
 		return
 	}
@@ -968,12 +968,12 @@ func (a *App) OnDecideRule(p *AppPeer, ruleID, elemID byte) (nazo byte) {
 	nazo = 1
 	return
 }
-func (a *App) OnDecideRuleFinish(p *AppPeer) {
+func (a *Lbs) OnDecideRuleFinish(p *LbsPeer) {
 	if p.Room == nil || p.Lobby == nil {
 		return
 	}
 	r := p.Room
-	r.Enter(&p.User)
+	r.Enter(&p.LbsUser)
 	for id := range p.Lobby.Users {
 		peer, ok := a.users[id]
 		if !ok {
@@ -986,7 +986,7 @@ func (a *App) OnDecideRuleFinish(p *AppPeer) {
 	}
 }
 
-func (a *App) OnGetRoomRestTime(p *AppPeer, roomID uint16) uint16 {
+func (a *Lbs) OnGetRoomRestTime(p *LbsPeer, roomID uint16) uint16 {
 	if p.Lobby == nil {
 		return 0
 	}
@@ -1002,7 +1002,7 @@ func (a *App) OnGetRoomRestTime(p *AppPeer, roomID uint16) uint16 {
 	return uint16(t)
 }
 
-func (a *App) OnGetRoomMember(p *AppPeer, roomID uint16) (count uint16, users []string) {
+func (a *Lbs) OnGetRoomMember(p *LbsPeer, roomID uint16) (count uint16, users []string) {
 	if p.Lobby == nil {
 		return
 	}
@@ -1018,7 +1018,7 @@ func (a *App) OnGetRoomMember(p *AppPeer, roomID uint16) (count uint16, users []
 	return
 }
 
-func (a *App) OnGetRoomEntryList(p *AppPeer, roomID uint16) (count uint8, ids []string, sides []byte) {
+func (a *Lbs) OnGetRoomEntryList(p *LbsPeer, roomID uint16) (count uint8, ids []string, sides []byte) {
 	ids = make([]string, 0, 4)
 	sides = make([]byte, 0, 4)
 	if p.Lobby == nil {
@@ -1036,11 +1036,11 @@ func (a *App) OnGetRoomEntryList(p *AppPeer, roomID uint16) (count uint8, ids []
 	return
 }
 
-func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
+func (a *Lbs) OnEntryRoomMatch(p *LbsPeer, side byte) {
 	if p.Room == nil || p.Lobby == nil {
 		return
 	}
-	p.Room.Entry(&p.User, side)
+	p.Room.Entry(&p.LbsUser, side)
 	aeug, titans := p.Room.GetEntryUserCount()
 
 	for id := range p.Lobby.Users {
@@ -1053,7 +1053,7 @@ func (a *App) OnEntryRoomMatch(p *AppPeer, side byte) {
 	}
 }
 
-func (a *App) OnEnterRoom(p *AppPeer, roomID, _, _ uint16) bool {
+func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID, _, _ uint16) bool {
 	if p.Lobby == nil {
 		return false
 	}
@@ -1074,7 +1074,7 @@ func (a *App) OnEnterRoom(p *AppPeer, roomID, _, _ uint16) bool {
 		NoticeJoinRoom(peer, p.UserID, p.Name, p.Team)
 	}
 
-	r.Enter(&p.User)
+	r.Enter(&p.LbsUser)
 	p.Room = r
 
 	if p.Lobby != nil {
@@ -1091,7 +1091,7 @@ func (a *App) OnEnterRoom(p *AppPeer, roomID, _, _ uint16) bool {
 	return true
 }
 
-func (a *App) OnExitRoom(p *AppPeer) {
+func (a *Lbs) OnExitRoom(p *LbsPeer) {
 	if p.Room == nil {
 		return
 	}
@@ -1138,7 +1138,7 @@ func (a *App) OnExitRoom(p *AppPeer) {
 
 }
 
-func (a *App) OnGetRoomMatchEntryUserCount(p *AppPeer, roomID uint16) (aeug uint16, titans uint16) {
+func (a *Lbs) OnGetRoomMatchEntryUserCount(p *LbsPeer, roomID uint16) (aeug uint16, titans uint16) {
 	if p.Lobby != nil {
 		if room, ok := p.Lobby.Rooms[roomID]; ok {
 			return room.GetEntryUserCount()
@@ -1147,7 +1147,7 @@ func (a *App) OnGetRoomMatchEntryUserCount(p *AppPeer, roomID uint16) (aeug uint
 	return
 }
 
-func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {
+func (a *Lbs) OnNoticeRoomBattleStart(p *LbsPeer) {
 	if p.Room == nil {
 		return
 	}
@@ -1170,7 +1170,7 @@ func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {
 
 // OnGetRanking returns a page of 10 of the win count (or kill count) ranking for side
 // (0 total, 1 AEUG, 2 TITANS) and the last page number.
-func (a *App) OnGetRanking(kill bool, side byte, page int) ([]*db.RankingRecord, int) {
+func (a *Lbs) OnGetRanking(kill bool, side byte, page int) ([]*db.RankingRecord, int) {
 	get := db.DefaultDB.GetWinCountRanking
 	if kill {
 		get = db.DefaultDB.GetKillCountRanking
@@ -1254,19 +1254,19 @@ func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
 	return !pcsx2Allowed(loginKey, machineID)
 }
 
-func lobbySetting(platform string, lobbyID uint16) *db.LobbySetting {
+func lobbySetting(platform string, lobbyID uint16) *db.MLobbySetting {
 	s, err := db.DefaultDB.GetLobbySetting(platform, int(lobbyID))
 	if err != nil {
 		zlog.Warn("GetLobbySetting failure", zap.Any("platform", platform), zap.Any("lobby_id", lobbyID), zap.Error(err))
 	}
 	if s == nil {
-		return &db.LobbySetting{Platform: platform, No: int(lobbyID)}
+		return &db.MLobbySetting{Platform: platform, No: int(lobbyID)}
 	}
 	return s
 }
 
 // lobbyBattleRule is the m_rule of a battle started in a lobby; nil for the default rule.
-func lobbyBattleRule(s *db.LobbySetting) *model.Rule {
+func lobbyBattleRule(s *db.MLobbySetting) *model.Rule {
 	if s.RuleID == "" {
 		return nil
 	}
@@ -1284,12 +1284,12 @@ func lobbyBattleRule(s *db.LobbySetting) *model.Rule {
 	return rule
 }
 
-func lobbyCanStart(l *model.Lobby, s *db.LobbySetting) bool {
+func lobbyCanStart(l *model.LbsLobby, s *db.MLobbySetting) bool {
 	l.Start = s.Start
 	return l.CanBattleStart()
 }
 
-func lobbyHasHack(s *db.LobbySetting, hack string) bool {
+func lobbyHasHack(s *db.MLobbySetting, hack string) bool {
 	return slices.Contains(strings.Split(s.Hack, ","), hack)
 }
 
@@ -1306,11 +1306,11 @@ const carryCommand = "ｄｃ"
 
 // SetCarryCodeIssuer turns the carry-over chat command on (chat_command lobbies): issue returns a code that
 // links the account to a Discord sign-in in the emulator.
-func (a *App) SetCarryCodeIssuer(issue func(loginKey string) string) {
+func (a *Lbs) SetCarryCodeIssuer(issue func(loginKey string) string) {
 	a.carryCode = issue
 }
 
-func lobbyChatCarry(p *AppPeer, str string) bool {
+func lobbyChatCarry(p *LbsPeer, str string) bool {
 	if str != carryCommand || p.app.carryCode == nil || p.LoginKey == "" {
 		return false
 	}

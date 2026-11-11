@@ -15,8 +15,8 @@ import (
 )
 
 func TestLobbyBan(t *testing.T) {
-	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr, app := startLobbyApp(t, battle.NewMcs())
 	ban := func(bans ...*db.MasterBan) {
 		t.Helper()
 		if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: bans}); err != nil {
@@ -54,17 +54,17 @@ func TestLobbyBan(t *testing.T) {
 	ban(&db.MasterBan{Key: u1, Until: time.Now().Add(-time.Second)})
 	c1.conn.Close()
 	waitFor(t, "the lobby to drop "+u1, func() (gone bool) {
-		app.Locked(func(a *App) { _, ok := a.users[u1]; gone = !ok })
+		app.Locked(func(a *Lbs) { _, ok := a.users[u1]; gone = !ok })
 		return
 	})
 	dialLobby(t, addr).login(ac1, u1, "one")
 }
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {
-	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battle.NewLogic())
-	loggedIn := func(userID string) (peer *AppPeer) {
-		app.Locked(func(a *App) { peer = a.users[userID] })
+	dbtest.UseTestDB(t)
+	addr, app := startLobbyApp(t, battle.NewMcs())
+	loggedIn := func(userID string) (peer *LbsPeer) {
+		app.Locked(func(a *Lbs) { peer = a.users[userID] })
 		return
 	}
 
@@ -99,11 +99,11 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 	queued := NewClientQuestion(0x6305)
 	queued.Writer().Write(u16(lobbyID))
 	app.chEvent <- eventPeerMessage{peer: first, msg: queued}
-	var p *AppPeer
+	var p *LbsPeer
 	var inLobby bool
-	app.Locked(func(a *App) {
+	app.Locked(func(a *Lbs) {
 		p = a.users[u1]
-		inLobby = p != nil && p.Lobby != nil && p.Lobby.Users[u1] == &p.User && first.Lobby == nil
+		inLobby = p != nil && p.Lobby != nil && p.Lobby.Users[u1] == &p.LbsUser && first.Lobby == nil
 	})
 	if p == nil || p == first {
 		t.Fatalf("%s held by %v after its new login", u1, p)
@@ -127,8 +127,8 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 }
 
 func TestAccountUserLimit(t *testing.T) {
-	sqldb := dbtest.Use(t)
-	addr, _ := startLobbyApp(t, battle.NewLogic())
+	sqldb := dbtest.UseTestDB(t)
+	addr, _ := startLobbyApp(t, battle.NewMcs())
 	countUsers := func(loginKey string) (n int) {
 		if err := sqldb.Get(&n, `SELECT COUNT(*) FROM user WHERE login_key = ?`, loginKey); err != nil {
 			t.Fatal(err)
@@ -196,17 +196,17 @@ func TestAccountUserLimit(t *testing.T) {
 }
 
 func TestUserOfAnotherAccountRefused(t *testing.T) {
-	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battle.NewLogic())
-	peerOf := func(userID string) (p *AppPeer) {
-		app.Locked(func(a *App) { p = a.users[userID] })
+	dbtest.UseTestDB(t)
+	addr, app := startLobbyApp(t, battle.NewMcs())
+	peerOf := func(userID string) (p *LbsPeer) {
+		app.Locked(func(a *Lbs) { p = a.users[userID] })
 		return
 	}
-	afterBattle := func(sessionID string, u db.User) {
+	afterBattle := func(sessionID string, u db.DBUser) {
 		u.SessionID = sessionID
-		app.Locked(func(a *App) {
+		app.Locked(func(a *Lbs) {
 			b := model.NewBattle(model.PlatformEmu, 0)
-			b.Users = append(b.Users, model.User{User: u})
+			b.Users = append(b.Users, model.LbsUser{DBUser: u})
 			a.battles[sessionID] = b
 		})
 	}
@@ -289,8 +289,8 @@ func TestUserOfAnotherAccountRefused(t *testing.T) {
 }
 
 func TestLobbyOutdatedClient(t *testing.T) {
-	conn := dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	conn := dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 	set := func(key, v string) {
 		t.Helper()
 		if _, err := conn.Exec(`INSERT OR REPLACE INTO m_server_setting (key, value) VALUES (?, ?)`, key, v); err != nil {

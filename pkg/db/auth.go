@@ -112,7 +112,7 @@ func (db SQLiteDB) TokenAccounts(token string) (string, []string, error) {
 	return keys[0], keys, nil
 }
 
-func (db SQLiteDB) AddTokenAccount(token, ip string) (*Account, error) {
+func (db SQLiteDB) AddTokenAccount(token, ip string) (*DBAccount, error) {
 	provider, uid, _, err := db.tokenIdentity(token)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (db SQLiteDB) CarryTokenAccount(token, loginKey string) error {
 	return db.LinkIdentity(provider, uid, loginKey)
 }
 
-func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) (*Account, error) {
+func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) (*DBAccount, error) {
 	tx, err := db.Beginx()
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (db SQLiteDB) RegisterIdentityAccount(provider, providerUserID, ip string) 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &Account{LoginKey: key, CreatedIP: ip, Created: now, LastLogin: now}, nil
+	return &DBAccount{LoginKey: key, CreatedIP: ip, Created: now, LastLogin: now}, nil
 }
 
 func (db SQLiteDB) LinkIdentity(provider, providerUserID, loginKey string) error {

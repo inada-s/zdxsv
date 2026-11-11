@@ -7,18 +7,18 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-type Room struct {
+type McsRoom struct {
 	sync.RWMutex
 
 	id    int
-	peers []Peer // 追加はappend 削除はnil代入 インデックスがposと一致するように維持
+	peers []McsPeer // 追加はappend 削除はnil代入 インデックスがposと一致するように維持
 }
 
-func newRoom(id int) *Room {
-	return &Room{id: id}
+func newMcsRoom(id int) *McsRoom {
+	return &McsRoom{id: id}
 }
 
-func (r *Room) SendMessage(peer Peer, msg Message) {
+func (r *McsRoom) SendMessage(peer McsPeer, msg McsMessage) {
 	k := peer.Position()
 
 	r.RLock()
@@ -38,7 +38,7 @@ func (r *Room) SendMessage(peer Peer, msg Message) {
 	r.RUnlock()
 }
 
-func (r *Room) Clear() {
+func (r *McsRoom) Clear() {
 	r.Lock()
 	for i := 0; i < len(r.peers); i++ {
 		r.peers[i] = nil
@@ -47,7 +47,7 @@ func (r *Room) Clear() {
 	r.Unlock()
 }
 
-func (r *Room) Join(p Peer) {
+func (r *McsRoom) Join(p McsPeer) {
 	p.SetRoomID(r.id)
 	r.Lock()
 	p.SetPosition(len(r.peers))
@@ -55,7 +55,7 @@ func (r *Room) Join(p Peer) {
 	r.Unlock()
 }
 
-func (r *Room) Leave(p Peer) {
+func (r *McsRoom) Leave(p McsPeer) {
 	pos := p.Position()
 
 	r.Lock()

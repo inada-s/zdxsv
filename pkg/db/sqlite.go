@@ -270,7 +270,7 @@ func tableColumns(tx *sql.Tx, table string) ([]string, error) {
 	return columns, rows.Err()
 }
 
-func (db SQLiteDB) RegisterAccount(ip string) (*Account, error) {
+func (db SQLiteDB) RegisterAccount(ip string) (*DBAccount, error) {
 	key := GenLoginKey()
 	now := time.Now()
 	_, err := db.Exec(`
@@ -281,15 +281,15 @@ VALUES
 	if err != nil {
 		return nil, err
 	}
-	a := &Account{
+	a := &DBAccount{
 		LoginKey:  key,
 		CreatedIP: ip,
 	}
 	return a, nil
 }
 
-func (db SQLiteDB) GetAccountByLoginKey(key string) (*Account, error) {
-	a := &Account{}
+func (db SQLiteDB) GetAccountByLoginKey(key string) (*DBAccount, error) {
+	a := &DBAccount{}
 	err := db.QueryRowx("SELECT * FROM account WHERE login_key = ?", key).StructScan(a)
 	if err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func (db SQLiteDB) GetAccountByLoginKey(key string) (*Account, error) {
 	return a, nil
 }
 
-func (db SQLiteDB) LoginAccount(a *Account) error {
+func (db SQLiteDB) LoginAccount(a *DBAccount) error {
 	a.LastLogin = time.Now()
 	_, err := db.Exec(`UPDATE account SET last_login = ? WHERE login_key = ?`, a.LastLogin, a.LoginKey)
 	return err
@@ -378,8 +378,8 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 	return tx.Commit()
 }
 
-func (db SQLiteDB) GetRule(id string) (*Rule, error) {
-	r := &Rule{}
+func (db SQLiteDB) GetRule(id string) (*MRule, error) {
+	r := &MRule{}
 	err := db.QueryRowx(`SELECT * FROM m_rule WHERE id = ?`, id).StructScan(r)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -396,8 +396,8 @@ func (db SQLiteDB) GetMasterBans() ([]*MasterBan, error) {
 	return bans, err
 }
 
-func (db SQLiteDB) GetLobbySetting(platform string, no int) (*LobbySetting, error) {
-	s := &LobbySetting{}
+func (db SQLiteDB) GetLobbySetting(platform string, no int) (*MLobbySetting, error) {
+	s := &MLobbySetting{}
 	err := db.QueryRowx(`SELECT * FROM m_lobby_setting WHERE platform = ? AND no = ?`, platform, no).StructScan(s)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -417,7 +417,7 @@ func (db SQLiteDB) GetServerSetting(key string) (string, error) {
 	return value, err
 }
 
-func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
+func (db SQLiteDB) RegisterUser(loginKey string) (*DBUser, error) {
 	userID := genUserID()
 	now := time.Now()
 	res, err := db.Exec(`INSERT INTO user (user_id, login_key, created)
@@ -431,7 +431,7 @@ func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
 	} else if n == 0 {
 		return nil, ErrUserLimit
 	}
-	u := &User{
+	u := &DBUser{
 		LoginKey: loginKey,
 		UserID:   userID,
 		Created:  now,
@@ -439,16 +439,16 @@ func (db SQLiteDB) RegisterUser(loginKey string) (*User, error) {
 	return u, nil
 }
 
-func (db SQLiteDB) GetUserList(loginKey string) ([]*User, error) {
+func (db SQLiteDB) GetUserList(loginKey string) ([]*DBUser, error) {
 	rows, err := db.Queryx(`SELECT * FROM user WHERE login_key = ?`, loginKey)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	users := []*User{}
+	users := []*DBUser{}
 	for rows.Next() {
-		u := new(User)
+		u := new(DBUser)
 		err = rows.StructScan(u)
 		if err != nil {
 			return nil, err
@@ -458,13 +458,13 @@ func (db SQLiteDB) GetUserList(loginKey string) ([]*User, error) {
 	return users, nil
 }
 
-func (db SQLiteDB) GetUser(userID string) (*User, error) {
-	u := &User{}
+func (db SQLiteDB) GetUser(userID string) (*DBUser, error) {
+	u := &DBUser{}
 	err := db.Get(u, `SELECT * FROM user WHERE user_id = ?`, userID)
 	return u, err
 }
 
-func (db SQLiteDB) LoginUser(user *User) error {
+func (db SQLiteDB) LoginUser(user *DBUser) error {
 	a, err := db.GetAccountByLoginKey(user.LoginKey)
 	if err != nil {
 		return err
@@ -480,7 +480,7 @@ func (db SQLiteDB) LoginUser(user *User) error {
 	return err
 }
 
-func (db SQLiteDB) UpdateUser(user *User) error {
+func (db SQLiteDB) UpdateUser(user *DBUser) error {
 	_, err := db.NamedExec(`
 UPDATE user
 SET
@@ -795,8 +795,8 @@ func (db SQLiteDB) GetKillCountRanking(side byte) ([]*RankingRecord, error) {
 	return ranking, nil
 }
 
-func (db SQLiteDB) GetLobbySettings() ([]*LobbySetting, error) {
-	settings := []*LobbySetting{}
+func (db SQLiteDB) GetLobbySettings() ([]*MLobbySetting, error) {
+	settings := []*MLobbySetting{}
 	err := db.Select(&settings, `SELECT * FROM m_lobby_setting ORDER BY platform, no`)
 	return settings, err
 }

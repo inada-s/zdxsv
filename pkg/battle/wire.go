@@ -15,7 +15,7 @@ const (
 	KindBattle      byte = 3
 )
 
-type Message struct {
+type McsMessage struct {
 	UserID string
 	Seq    uint32
 	Body   []byte
@@ -27,7 +27,7 @@ type Packet struct {
 	OK        bool
 	Seq       uint32
 	Ack       uint32
-	Messages  []Message
+	Messages  []McsMessage
 }
 
 func IsWirePacket(b []byte) bool {
@@ -47,7 +47,7 @@ func AppendHelloAnswer(b []byte, sessionID string, ok bool) []byte {
 	return append(b, sessionID...)
 }
 
-func AppendBattle(b []byte, seq, ack uint32, msgs []Message) []byte {
+func AppendBattle(b []byte, seq, ack uint32, msgs []McsMessage) []byte {
 	b = append(b, 0, KindBattle)
 	b = binary.BigEndian.AppendUint32(b, seq)
 	b = binary.BigEndian.AppendUint32(b, ack)
@@ -92,7 +92,7 @@ func ParsePacket(b []byte) (Packet, error) {
 			if len(b) < 1+n+6 {
 				return p, errShort
 			}
-			m := Message{UserID: string(b[1 : 1+n])}
+			m := McsMessage{UserID: string(b[1 : 1+n])}
 			b = b[1+n:]
 			m.Seq = binary.BigEndian.Uint32(b)
 			size := int(binary.BigEndian.Uint16(b[4:]))

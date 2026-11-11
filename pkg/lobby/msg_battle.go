@@ -15,12 +15,12 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-func NoticeBattleStart(p *AppPeer) {
+func NoticeBattleStart(p *LbsPeer) {
 	n := NewServerNotice(0x6910)
 	p.SendMessage(n)
 }
 
-var _ = register(0x6911, "GetBattleUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6911, "GetBattleUserCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	count := p.app.OnGetBattleUserCount(p)
 	w := a.Writer()
@@ -32,7 +32,7 @@ var _ = register(0x6911, "GetBattleUserCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6912, "GetBattleUserPosition", func(p *AppPeer, m *Message) {
+var _ = register(0x6912, "GetBattleUserPosition", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	pos := p.app.OnGetBattleUserPosition(p)
@@ -44,7 +44,7 @@ var _ = register(0x6912, "GetBattleUserPosition", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
+var _ = register(0x6913, "GetBattleOpponentUser", func(p *LbsPeer, m *LbsMessage) {
 	pos := m.Reader().Read8()
 	user := p.app.OnGetBattleOpponentUser(p, pos)
 	a := NewServerAnswer(m)
@@ -64,7 +64,7 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message) {
+var _ = register(0x6917, "GetBattleOpponentStatus", func(p *LbsPeer, m *LbsMessage) {
 	pos := m.Reader().Read8()
 	a := NewServerAnswer(m)
 	w := a.Writer()
@@ -87,7 +87,7 @@ var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message)
 	p.SendMessage(a)
 })
 
-var _ = register(0x6914, "GetBattleRule", func(p *AppPeer, m *Message) {
+var _ = register(0x6914, "GetBattleRule", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	rule := p.app.OnGetBattleRule(p)
@@ -99,7 +99,7 @@ var _ = register(0x6914, "GetBattleRule", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
+var _ = register(0x6915, "GetBattleBattleCode", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	battleCode, err := p.app.OnGetBattleCode(p)
 	if err == nil {
@@ -115,7 +115,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *AppPeer, m *Message) {
 // P2PMatchingReport is sent by emulators with lobby GGPO on the first lobby connection
 // after a battle, after the platform info: a P2PMatchingReport (zdxsv.proto) on how the
 // battle ran. Custom category, no answer: logged for server-side stats and troubleshooting.
-var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
+var _ = register(0x9952, "P2PMatchingReport", func(p *LbsPeer, m *LbsMessage) {
 	report := &proto.P2PMatchingReport{}
 	if err := pb.Unmarshal(m.Body, report); err != nil {
 		zlog.Warn("p2p matching report: bad request", zap.String("user_id", p.UserID), zap.Error(err))
@@ -124,7 +124,7 @@ var _ = register(0x9952, "P2PMatchingReport", func(p *AppPeer, m *Message) {
 	p.app.OnP2PMatchingReport(p, report)
 })
 
-func battleInfoNotice(info *proto.P2PMatching) *Message {
+func battleInfoNotice(info *proto.P2PMatching) *LbsMessage {
 	if info == nil {
 		return nil
 	}
@@ -139,7 +139,7 @@ func battleInfoNotice(info *proto.P2PMatching) *Message {
 	return n
 }
 
-var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) {
+var _ = register(0x6916, "GetBattleServerAddress", func(p *LbsPeer, m *LbsMessage) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
 	if n := battleInfoNotice(p.app.OnGetBattleInfo(p)); n != nil {
 		zlog.Info("udp bridge battle info", zap.String("user_id", p.UserID))
@@ -167,17 +167,17 @@ var _ = register(0x6916, "GetBattleServerAddress", func(p *AppPeer, m *Message) 
 	p.SendMessage(a)
 })
 
-var _ = register(0x6210, "EnterBattleAfterRoom", func(p *AppPeer, m *Message) {
+var _ = register(0x6210, "EnterBattleAfterRoom", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnEnterBattleAfterRoom(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6211, "ExitBattleAfterRoom", func(p *AppPeer, m *Message) {
+var _ = register(0x6211, "ExitBattleAfterRoom", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnExitBattleAfterRoom(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6212, "GetBattleAfterRoomUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6212, "GetBattleAfterRoomUserCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	n := p.app.OnGetBattleAfterRoomUserCount(p)
@@ -185,18 +185,18 @@ var _ = register(0x6212, "GetBattleAfterRoomUserCount", func(p *AppPeer, m *Mess
 	p.SendMessage(a)
 })
 
-func NoticeBattleAfterRoomUserCount(p *AppPeer, count uint16) {
+func NoticeBattleAfterRoomUserCount(p *LbsPeer, count uint16) {
 	n := NewServerNotice(0x6212)
 	w := n.Writer()
 	w.Write16(count)
 	p.SendMessage(n)
 }
 
-func AskBattleResult(p *AppPeer) {
+func AskBattleResult(p *LbsPeer) {
 	p.SendMessage(NewServerQuestion(0x6138))
 }
 
-func parseBattleResult(m *Message) *model.BattleResult {
+func parseBattleResult(m *LbsMessage) *model.BattleResult {
 	r := m.Reader()
 	v01 := r.Read16()
 	v02 := r.ReadEncryptedString()
@@ -236,10 +236,10 @@ func parseBattleResult(m *Message) *model.BattleResult {
 	}
 }
 
-var _ = register(0x6138, "AnswerBattleResult", func(p *AppPeer, m *Message) {
+var _ = register(0x6138, "AnswerBattleResult", func(p *LbsPeer, m *LbsMessage) {
 	result := parseBattleResult(m)
 	js, _ := json.MarshalIndent(result, "", "  ")
-	zlog.Info("battle result", zap.String("user_id", p.User.UserID), zap.String("name", p.User.Name), zap.String("result", string(js)))
+	zlog.Info("battle result", zap.String("user_id", p.LbsUser.UserID), zap.String("name", p.LbsUser.Name), zap.String("result", string(js)))
 
 	p.app.OnGetBattleResult(p, result)
 })

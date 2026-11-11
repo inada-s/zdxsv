@@ -12,28 +12,28 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-type PeerFactory interface {
-	NewPeer(conn *Conn) Peer
+type LbsPeerFactory interface {
+	NewPeer(conn *LbsConn) LbsConnPeer
 }
 
-type Peer interface {
+type LbsConnPeer interface {
 	OnOpen()
-	OnMessage(*message.Message)
+	OnMessage(*message.LbsMessage)
 	OnClose()
 }
 
-type Server struct {
+type LbsServer struct {
 	conn net.Conn
-	pf   PeerFactory
+	pf   LbsPeerFactory
 }
 
-func NewServer(pf PeerFactory) *Server {
-	return &Server{
+func NewLbsServer(pf LbsPeerFactory) *LbsServer {
+	return &LbsServer{
 		pf: pf,
 	}
 }
 
-func (s *Server) ListenAndServe(addr string) error {
+func (s *LbsServer) ListenAndServe(addr string) error {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (s *Server) ListenAndServe(addr string) error {
 }
 
 // Serve accepts connections on l until l is closed.
-func (s *Server) Serve(l net.Listener) error {
+func (s *LbsServer) Serve(l net.Listener) error {
 	for {
 		tcpConn, err := l.Accept()
 		if errors.Is(err, net.ErrClosed) {
@@ -62,15 +62,15 @@ func (s *Server) Serve(l net.Listener) error {
 }
 
 // ServeConn serves one client connection until it closes.
-func (s *Server) ServeConn(c net.Conn) {
-	conn := NewConn(c)
+func (s *LbsServer) ServeConn(c net.Conn) {
+	conn := NewLbsConn(c)
 	conn.peer = s.pf.NewPeer(conn)
 	conn.serve()
 }
 
-type Conn struct {
+type LbsConn struct {
 	conn net.Conn
-	peer Peer
+	peer LbsConnPeer
 
 	chWrite    chan bool
 	chClose    chan bool
@@ -84,8 +84,8 @@ type Conn struct {
 	inbuf  []byte
 }
 
-func NewConn(conn net.Conn) *Conn {
-	return &Conn{
+func NewLbsConn(conn net.Conn) *LbsConn {
+	return &LbsConn{
 		conn:       conn,
 		chWrite:    make(chan bool, 1),
 		chClose:    make(chan bool, 1),
@@ -95,7 +95,7 @@ func NewConn(conn net.Conn) *Conn {
 	}
 }
 
-func (c *Conn) serve() {
+func (c *LbsConn) serve() {
 	defer c.conn.Close()
 	defer c.peer.OnClose()
 
@@ -109,7 +109,7 @@ func (c *Conn) serve() {
 	<-ctx.Done()
 }
 
-func (c *Conn) SendMessage(msg *message.Message) {
+func (c *LbsConn) SendMessage(msg *message.LbsMessage) {
 	zlog.Debug("send", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 	c.mOutbuf.Lock()
 	c.outbuf = append(c.outbuf, msg.Serialize()...)
@@ -120,11 +120,11 @@ func (c *Conn) SendMessage(msg *message.Message) {
 	}
 }
 
-func (c *Conn) Address() string {
+func (c *LbsConn) Address() string {
 	return c.conn.RemoteAddr().String()
 }
 
-func (c *Conn) readLoop(ctx context.Context, cancel func()) {
+func (c *LbsConn) readLoop(ctx context.Context, cancel func()) {
 	defer cancel()
 
 	buf := make([]byte, 4096)
@@ -156,7 +156,7 @@ func (c *Conn) readLoop(ctx context.Context, cancel func()) {
 	}
 }
 
-func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
+func (c *LbsConn) writeLoop(ctx context.Context, cancel func()) {
 	defer cancel()
 
 	buf := make([]byte, 0, 128)
@@ -193,14 +193,14 @@ func (c *Conn) writeLoop(ctx context.Context, cancel func()) {
 }
 
 // Close closes the connection once the messages sent before it are written.
-func (c *Conn) Close() {
+func (c *LbsConn) Close() {
 	select {
 	case c.chClose <- true:
 	default:
 	}
 }
 
-func (c *Conn) dispatchLoop(ctx context.Context, cancel func()) {
+func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 	defer cancel()
 
 	for {

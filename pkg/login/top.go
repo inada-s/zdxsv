@@ -18,12 +18,12 @@ import (
 )
 
 var (
-	tplTop     *template.Template
-	tplLogin   *template.Template
-	tplMessage *template.Template
+	tplTop          *template.Template
+	tplLogin        *template.Template
+	tplLoginMessage *template.Template
 )
 
-func Prepare() {
+func PrepareLoginPages() {
 	var err error
 	var bin []byte
 
@@ -52,7 +52,7 @@ func Prepare() {
 		zlog.Fatal("login template", zap.Error(err))
 	}
 
-	tplMessage, err = template.New("message").Parse(string(bin))
+	tplLoginMessage, err = template.New("message").Parse(string(bin))
 	if err != nil {
 		zlog.Fatal("login template", zap.Error(err))
 	}
@@ -119,7 +119,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	tplLogin.Execute(sw, p)
 }
 
-func loginAccount(loginKey string) (*db.Account, error) {
+func loginAccount(loginKey string) (*db.DBAccount, error) {
 	a, err := db.DefaultDB.GetAccountByLoginKey(loginKey)
 	if err != nil {
 		return nil, err
@@ -244,5 +244,5 @@ func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 	p.ServerVersion = "1.0"
 	p.Message = message
 	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
-	tplMessage.Execute(sw, p)
+	tplLoginMessage.Execute(sw, p)
 }

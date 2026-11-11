@@ -46,7 +46,7 @@ func GenBattleCode() string {
 	return fmt.Sprintf("%013d", time.Now().UnixNano()/1000000)
 }
 
-type Account struct {
+type DBAccount struct {
 	LoginKey           string    `db:"login_key" json:"login_key,omitempty"`
 	LastUserID         string    `db:"last_user_id" json:"last_user_id,omitempty"`
 	Created            time.Time `db:"created" json:"created,omitempty"`
@@ -72,12 +72,12 @@ type Master struct {
 	// ServerSettings replaces m_server_setting; nil keeps it.
 	ServerSettings map[string]string
 	// LobbySettings replaces m_lobby_setting; nil keeps it.
-	LobbySettings []*LobbySetting
+	LobbySettings []*MLobbySetting
 	// Rules replaces m_rule; nil keeps it.
-	Rules []*Rule
+	Rules []*MRule
 }
 
-type LobbySetting struct {
+type MLobbySetting struct {
 	Platform string `db:"platform"`
 	No       int    `db:"no"`
 	Start    string `db:"start"`
@@ -88,7 +88,7 @@ type LobbySetting struct {
 	Hack string `db:"hack"`
 }
 
-type Rule struct {
+type MRule struct {
 	ID            string `db:"id"`
 	BattleCount   uint16 `db:"battle_count"`
 	VisibleTeam   uint16 `db:"visible_team"`
@@ -102,7 +102,7 @@ type Rule struct {
 }
 
 // Values maps each rule key (model.RuleKeys) to its field.
-func (r *Rule) Values() map[string]*uint16 {
+func (r *MRule) Values() map[string]*uint16 {
 	return map[string]*uint16{
 		"battle_count":    &r.BattleCount,
 		"visible_team":    &r.VisibleTeam,
@@ -116,7 +116,7 @@ func (r *Rule) Values() map[string]*uint16 {
 	}
 }
 
-type User struct {
+type DBUser struct {
 	LoginKey  string `db:"login_key" json:"login_key,omitempty"`
 	SessionID string `db:"session_id" json:"session_id,omitempty"`
 
@@ -225,20 +225,20 @@ type BattleCountResult struct {
 
 type RankingRecord struct {
 	Rank int `db:"rank"`
-	User
+	DBUser
 }
 
 type DB interface {
 	Init() error
 	Migrate() error
-	RegisterAccount(ip string) (*Account, error)
+	RegisterAccount(ip string) (*DBAccount, error)
 
-	GetAccountByLoginKey(key string) (*Account, error)
+	GetAccountByLoginKey(key string) (*DBAccount, error)
 	// IdentityLoginKey returns the first login key linked to a provider identity, "" when none.
 	IdentityLoginKey(provider, providerUserID string) (string, error)
 	// RegisterIdentityAccount creates an account linked to a provider identity;
 	// ErrIdentityFull when it made MaxIdentityNewAccounts.
-	RegisterIdentityAccount(provider, providerUserID, ip string) (*Account, error)
+	RegisterIdentityAccount(provider, providerUserID, ip string) (*DBAccount, error)
 	// LinkIdentity links a provider identity to an existing account (carried over); ErrCarryFull when
 	// the identity carried MaxIdentityCarriedAccounts, ErrAccountLinked when the account has a link.
 	LinkIdentity(provider, providerUserID, loginKey string) error
@@ -251,14 +251,14 @@ type DB interface {
 	// "" when the identity has none. ErrUnknownToken when unknown or revoked.
 	TokenAccounts(token string) (string, []string, error)
 	// AddTokenAccount creates another account for the token's identity.
-	AddTokenAccount(token, ip string) (*Account, error)
+	AddTokenAccount(token, ip string) (*DBAccount, error)
 	// CarryTokenAccount links an existing account to the token's identity (see LinkIdentity).
 	CarryTokenAccount(token, loginKey string) error
 	// IssueAuthToken stores a new emulator token for a provider identity and returns it.
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
 	// LoginAccount records a login of the account at the login pages.
-	LoginAccount(*Account) error
+	LoginAccount(*DBAccount) error
 
 	// SetLoginEndpoint records where the account last logged in to the lobby from.
 	SetLoginEndpoint(loginKey, ip, machineID string) error
@@ -268,21 +268,21 @@ type DB interface {
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
 	// GetLobbySetting returns the m_lobby_setting of a lobby, nil if none.
-	GetLobbySetting(platform string, no int) (*LobbySetting, error)
+	GetLobbySetting(platform string, no int) (*MLobbySetting, error)
 	// GetLobbySettings returns all of m_lobby_setting.
-	GetLobbySettings() ([]*LobbySetting, error)
+	GetLobbySettings() ([]*MLobbySetting, error)
 	// GetRule returns the m_rule of id, nil if none.
-	GetRule(id string) (*Rule, error)
+	GetRule(id string) (*MRule, error)
 	// ReplaceMaster replaces every m_ table of m in one transaction.
 	ReplaceMaster(m *Master) error
 	GetMasterBans() ([]*MasterBan, error)
 
 	// An account can hold three users.
-	RegisterUser(loginKey string) (*User, error)
-	GetUserList(loginKey string) ([]*User, error)
-	GetUser(userID string) (*User, error)
-	LoginUser(user *User) error
-	UpdateUser(user *User) error
+	RegisterUser(loginKey string) (*DBUser, error)
+	GetUserList(loginKey string) ([]*DBUser, error)
+	GetUser(userID string) (*DBUser, error)
+	LoginUser(user *DBUser) error
+	UpdateUser(user *DBUser) error
 
 	// AddBattleRecord is called when a battle starts.
 	AddBattleRecord(battle *BattleRecord) error

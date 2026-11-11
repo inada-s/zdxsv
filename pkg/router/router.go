@@ -53,7 +53,7 @@ func (r *Router) Serve(l net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("accept new conn: %s", err)
 		}
-		conn := &Conn{Conn: c, router: r}
+		conn := &RouterConn{Conn: c, router: r}
 		go conn.proxy()
 	}
 }
@@ -77,8 +77,8 @@ func IsGameConsoleHello(r io.Reader) bool {
 	return hdr.Type == 128 && hdr.Major == 100 && hdr.Minor == 1 && hdr.Length == 769
 }
 
-// A Conn handles the proxying of one user connection.
-type Conn struct {
+// A RouterConn handles the proxying of one user connection.
+type RouterConn struct {
 	net.Conn
 
 	router   *Router
@@ -86,12 +86,12 @@ type Conn struct {
 	tlsMinor int
 }
 
-func (c *Conn) logf(msg string, args ...interface{}) {
+func (c *RouterConn) logf(msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
 	zlog.Info("router", zap.Stringer("remote", c.RemoteAddr()), zap.Stringer("local", c.LocalAddr()), zap.Any("msg", msg))
 }
 
-func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
+func (c *RouterConn) abort(alert byte, msg string, args ...interface{}) {
 	c.logf(msg, args...)
 	alertMsg := []byte{21, 3, byte(c.tlsMinor), 0, 2, 2, alert}
 
@@ -108,11 +108,11 @@ func (c *Conn) abort(alert byte, msg string, args ...interface{}) {
 	}
 }
 
-func (c *Conn) internalError(msg string, args ...interface{}) {
+func (c *RouterConn) internalError(msg string, args ...interface{}) {
 	c.abort(80, msg, args...)
 }
 
-func (c *Conn) proxy() {
+func (c *RouterConn) proxy() {
 	defer c.Close()
 
 	if err := c.SetReadDeadline(time.Now().Add(c.router.helloTimeout())); err != nil {

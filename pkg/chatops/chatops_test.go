@@ -59,7 +59,7 @@ func (f *fakeDiscordAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.edits <- m.Content
 }
 
-type rig struct {
+type chatopsRig struct {
 	t      *testing.T
 	key    ed25519.PrivateKey
 	api    *httptest.Server
@@ -68,8 +68,8 @@ type rig struct {
 	d      *Discord
 }
 
-func newRig(t *testing.T) *rig {
-	dbtest.Use(t)
+func newChatopsRig(t *testing.T) *chatopsRig {
+	dbtest.UseTestDB(t)
 	pub, key, _ := ed25519.GenerateKey(nil)
 	sheets := &fakeSheets{}
 	ss := httptest.NewServer(sheets)
@@ -86,10 +86,10 @@ func newRig(t *testing.T) *rig {
 	}
 	api := httptest.NewServer(d)
 	t.Cleanup(api.Close)
-	return &rig{t: t, key: key, api: api, sheets: sheets, edits: dapi.edits, d: d}
+	return &chatopsRig{t: t, key: key, api: api, sheets: sheets, edits: dapi.edits, d: d}
 }
 
-func (r *rig) post(body string, sign bool) (int, map[string]interface{}) {
+func (r *chatopsRig) post(body string, sign bool) (int, map[string]interface{}) {
 	r.t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, r.api.URL, bytes.NewBufferString(body))
 	ts := "1700000000"
@@ -123,11 +123,11 @@ func command(name, user string, roles ...string) string {
 	return string(b)
 }
 
-func (r *rig) run(user string, roles ...string) string {
+func (r *chatopsRig) run(user string, roles ...string) string {
 	return r.runCommand("op master-up", user, roles...)
 }
 
-func (r *rig) runCommand(name, user string, roles ...string) string {
+func (r *chatopsRig) runCommand(name, user string, roles ...string) string {
 	r.t.Helper()
 	code, m := r.post(command(name, user, roles...), true)
 	if code != http.StatusOK || m["type"] != float64(responseDeferredChannelMessage) {
@@ -152,7 +152,7 @@ func masterBans(t *testing.T) []*db.MasterBan {
 	return b
 }
 
-func newUser(t *testing.T) *db.User {
+func newChatopsUser(t *testing.T) *db.DBUser {
 	t.Helper()
 	a, err := db.DefaultDB.RegisterAccount("1.2.3.4")
 	if err != nil {
@@ -165,7 +165,7 @@ func newUser(t *testing.T) *db.User {
 	return u
 }
 
-func banned(t *testing.T, u *db.User) bool {
+func banned(t *testing.T, u *db.DBUser) bool {
 	t.Helper()
 	b, err := db.DefaultDB.FindBan(u.LoginKey)
 	if err != nil {
@@ -187,8 +187,8 @@ func banSheets(rows ...[]string) map[string][][]string {
 }
 
 func TestReloadMasterBan(t *testing.T) {
-	r := newRig(t)
-	a, b, c := newUser(t), newUser(t), newUser(t)
+	r := newChatopsRig(t)
+	a, b, c := newChatopsUser(t), newChatopsUser(t), newChatopsUser(t)
 	sibling, err := db.DefaultDB.RegisterUser(a.LoginKey)
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +264,7 @@ func TestReloadMasterBan(t *testing.T) {
 }
 
 func TestReloadServerSetting(t *testing.T) {
-	r := newRig(t)
+	r := newChatopsRig(t)
 	setting := func(key string) string {
 		t.Helper()
 		v, err := db.DefaultDB.GetServerSetting(key)
@@ -334,8 +334,8 @@ func TestParseLobbyHack(t *testing.T) {
 }
 
 func TestReloadLobbySetting(t *testing.T) {
-	r := newRig(t)
-	lobby := func(platform string, no int) *db.LobbySetting {
+	r := newChatopsRig(t)
+	lobby := func(platform string, no int) *db.MLobbySetting {
 		t.Helper()
 		s, err := db.DefaultDB.GetLobbySetting(platform, no)
 		if err != nil {
@@ -343,7 +343,7 @@ func TestReloadLobbySetting(t *testing.T) {
 		}
 		return s
 	}
-	rule := func(id string) *db.Rule {
+	rule := func(id string) *db.MRule {
 		t.Helper()
 		r, err := db.DefaultDB.GetRule(id)
 		if err != nil {
@@ -379,7 +379,7 @@ func TestReloadLobbySetting(t *testing.T) {
 	if s := lobby("console", 5); s == nil || s.RuleID != "noreload" || s.Hack != "widescreen" {
 		t.Fatalf("console 5: %+v", s)
 	}
-	want := db.Rule{ID: "tai", BattleCount: 0, VisibleTeam: 0, BattleTime: 90, BattleGauge: 1, ReloadType: 0, DamageLevel: 3, AwakeType: 0, AwakeIncRatio: 100, AwakeDecRatio: 100}
+	want := db.MRule{ID: "tai", BattleCount: 0, VisibleTeam: 0, BattleTime: 90, BattleGauge: 1, ReloadType: 0, DamageLevel: 3, AwakeType: 0, AwakeIncRatio: 100, AwakeDecRatio: 100}
 	if got := rule("tai"); got == nil || *got != want {
 		t.Fatalf("rule tai %+v, want %+v", got, want)
 	}
@@ -435,15 +435,15 @@ func TestReloadLobbySetting(t *testing.T) {
 }
 
 func TestOpMaster(t *testing.T) {
-	r := newRig(t)
+	r := newChatopsRig(t)
 	if got := r.runCommand("op master", "someone", "ops-role"); got != "https://docs.google.com/spreadsheets/d/sheet-id" {
 		t.Fatalf("op master: %q", got)
 	}
 }
 
 func TestDiscordRejects(t *testing.T) {
-	r := newRig(t)
-	u := newUser(t)
+	r := newChatopsRig(t)
+	u := newChatopsUser(t)
 	r.sheets.sheets = banSheets([]string{u.UserID, "2099-01-01"})
 
 	if code, _ := r.post(command("op master-up", "ops-user"), false); code != http.StatusUnauthorized {

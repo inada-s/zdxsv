@@ -283,7 +283,7 @@ func test203CalculateUserBattleCount(t *testing.T) {
 func test300Ranking(t *testing.T) {
 	testDB.(SQLiteDB).Exec("DELETE FROM user")
 
-	var users []*User
+	var users []*DBUser
 	for i := 0; i < 3; i++ {
 		ac, err := testDB.RegisterAccount("12.34.56.78")
 		must(t, err)

@@ -15,17 +15,17 @@ import (
 // 6003 : 強制ログイン画面へ メンテに使えるかも
 //
 
-var _ = register(0x6006, "Logout", func(p *AppPeer, m *Message) {
+var _ = register(0x6006, "Logout", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnUserLogout(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6002, "GotoBattle", func(p *AppPeer, m *Message) {
+var _ = register(0x6002, "GotoBattle", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnUserGotoBattle(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-func SendServerShutDown(p *AppPeer) {
+func SendServerShutDown(p *LbsPeer) {
 	n := NewServerNotice(0x6003)
 	w := n.Writer()
 	w.WriteString("<BODY><LF=6><CENTER>サーバがシャットダウンしました<END>")
@@ -35,34 +35,34 @@ func SendServerShutDown(p *AppPeer) {
 // maxMachineIDLen bounds what a client can store as its machine id.
 const maxMachineIDLen = 64
 
-func SendBanned(p *AppPeer) {
+func SendBanned(p *LbsPeer) {
 	n := NewServerNotice(0x6003)
 	n.Writer().WriteString("<BODY><LF=5><CENTER>YOU ARE BANNED<END>")
 	p.SendMessage(n)
 }
 
-func SendPleaseUpdate(p *AppPeer) {
+func SendPleaseUpdate(p *LbsPeer) {
 	n := NewServerNotice(0x6003)
 	n.Writer().WriteString("<BODY><LF=5><CENTER>PLEASE UPDATE PCSX2<END>")
 	p.SendMessage(n)
 }
 
-func RequestLineCheck(p *AppPeer) {
+func RequestLineCheck(p *LbsPeer) {
 	m := NewServerQuestion(0x6001)
 	p.SendMessage(m)
 }
 
-var _ = register(0x6001, "OnLineCheck", func(_ *AppPeer, _ *Message) {
+var _ = register(0x6001, "OnLineCheck", func(_ *LbsPeer, _ *LbsMessage) {
 })
 
-var _ = register(0x600E, "EchoPacket", func(p *AppPeer, m *Message) {
+var _ = register(0x600E, "EchoPacket", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write(m.Body)
 	p.SendMessage(a)
 })
 
-var _ = register(0x61A0, "NAZO 0x61A0", func(p *AppPeer, m *Message) {
+var _ = register(0x61A0, "NAZO 0x61A0", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	// 自動切断猶予
@@ -71,7 +71,7 @@ var _ = register(0x61A0, "NAZO 0x61A0", func(p *AppPeer, m *Message) {
 })
 
 // Login Sequence
-func RequestKeyPair(p *AppPeer) {
+func RequestKeyPair(p *LbsPeer) {
 	m := NewServerQuestion(0x6101)
 	m.Seq = 1
 	w := m.Writer()
@@ -81,11 +81,11 @@ func RequestKeyPair(p *AppPeer) {
 
 // PlatformInfo is sent only by emulators, before the key pair answer.
 // Custom category, no answer: the game never sees it.
-var _ = register(0x9950, "PlatformInfo", func(p *AppPeer, m *Message) {
+var _ = register(0x9950, "PlatformInfo", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnPlatformInfo(p, model.ParsePlatformInfo(string(m.Body)))
 })
 
-var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
+var _ = register(0x6101, "ResponseKeyPair", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
@@ -98,16 +98,16 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	p.app.OnKeePair(p, loginKey, sessionID)
 })
 
-func RequestFirstData(p *AppPeer) {
+func RequestFirstData(p *LbsPeer) {
 	m := NewServerQuestion(0x6103)
 	p.SendMessage(m)
 }
 
-var _ = register(0x6103, "FirstData", func(p *AppPeer, _ *Message) {
+var _ = register(0x6103, "FirstData", func(p *LbsPeer, _ *LbsMessage) {
 	p.app.OnFirstData(p)
 })
 
-func NoticeUserIDList(p *AppPeer, users []*db.User) {
+func NoticeUserIDList(p *LbsPeer, users []*db.DBUser) {
 	m := NewServerNotice(0x6131)
 	w := m.Writer()
 	w.Write8(byte(len(users)))
@@ -119,7 +119,7 @@ func NoticeUserIDList(p *AppPeer, users []*db.User) {
 	p.SendMessage(m)
 }
 
-var _ = register(0x6132, "DecideUserID", func(p *AppPeer, m *Message) {
+var _ = register(0x6132, "DecideUserID", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	userID := r.ReadEncryptedString()
 	name := r.ReadEncryptedString()
@@ -132,13 +132,13 @@ var _ = register(0x6132, "DecideUserID", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6190, "DecideTeam", func(p *AppPeer, m *Message) {
+var _ = register(0x6190, "DecideTeam", func(p *LbsPeer, m *LbsMessage) {
 	team := m.Reader().ReadEncryptedString()
 	p.app.OnDecideTeam(p, team)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x614C, "GetTopInformation", func(p *AppPeer, m *Message) {
+var _ = register(0x614C, "GetTopInformation", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write8(0)
@@ -151,11 +151,11 @@ var _ = register(0x614C, "GetTopInformation", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-func NoticeLoginOk(p *AppPeer) {
+func NoticeLoginOk(p *LbsPeer) {
 	p.SendMessage(NewServerNotice(0x6104))
 }
 
-var _ = register(0x6144, "GetParsonalRecordHeader", func(p *AppPeer, m *Message) {
+var _ = register(0x6144, "GetParsonalRecordHeader", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	// The response data is all 1 byte size,
@@ -164,7 +164,7 @@ var _ = register(0x6144, "GetParsonalRecordHeader", func(p *AppPeer, m *Message)
 	p.SendMessage(a)
 })
 
-var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
+var _ = register(0x6145, "GetParsonalRecordData", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	r := m.Reader()
 	kind := r.Read8()
@@ -194,7 +194,7 @@ var _ = register(0x6145, "GetParsonalRecordData", func(p *AppPeer, m *Message) {
 })
 
 // *UNUSED*
-var _ = register(0x6146, "GetParsonalRecordVide", func(p *AppPeer, m *Message) {
+var _ = register(0x6146, "GetParsonalRecordVide", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	r := m.Reader()
 	kind := r.Read8()
@@ -213,7 +213,7 @@ var _ = register(0x6146, "GetParsonalRecordVide", func(p *AppPeer, m *Message) {
 	w.Write8(6)
 })
 
-var _ = register(0x6143, "SetUserBinary", func(p *AppPeer, m *Message) {
+var _ = register(0x6143, "SetUserBinary", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	bin := r.ReadEncryptedString()
 	p.app.OnSetUserBinary(p, bin)
@@ -222,11 +222,11 @@ var _ = register(0x6143, "SetUserBinary", func(p *AppPeer, m *Message) {
 
 // 0x6143のレスポンスを送ったらクライアントが送ってくる.
 // 0バイトだから特に情報はないが, 目的は不明.
-var _ = register(0x6141, "NoticeNazo", func(p *AppPeer, m *Message) {
+var _ = register(0x6141, "NoticeNazo", func(p *LbsPeer, m *LbsMessage) {
 })
 
 // Custom API
-var _ = register(0x0001, "RegisterOldProxy", func(p *AppPeer, m *Message) {
+var _ = register(0x0001, "RegisterOldProxy", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	a.Category = CategoryCustom
 	a.Writer().WriteString("OLD VERSION")

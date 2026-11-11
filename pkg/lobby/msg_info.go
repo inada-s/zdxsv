@@ -19,7 +19,7 @@ import (
 
 var reTwoNumber = regexp.MustCompile(`\d{2}`)
 
-var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
+var _ = register(0x6801, "GetRegurationData", func(p *LbsPeer, m *LbsMessage) {
 	path := m.Reader().ReadEncryptedString()
 	buf := new(bytes.Buffer)
 	tw := &runeWriter{transform.NewWriter(buf, japanese.ShiftJIS.NewEncoder())}

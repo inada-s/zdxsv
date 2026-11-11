@@ -39,8 +39,8 @@ func (c *testClient) rankingPage(path string) (string, []string) {
 }
 
 func TestLobbyRankingPages(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 
 	// 12 ranked users: user i has i+1 wins, 12-i Aeug wins and 2i kills.
 	var ids []string

@@ -94,7 +94,7 @@ func checkRuleIDs(d db.DB, m *db.Master) error {
 		}
 		found := false
 		if m.Rules != nil {
-			found = slices.ContainsFunc(m.Rules, func(r *db.Rule) bool { return r.ID == s.RuleID })
+			found = slices.ContainsFunc(m.Rules, func(r *db.MRule) bool { return r.ID == s.RuleID })
 		} else {
 			r, err := d.GetRule(s.RuleID)
 			if err != nil {
@@ -131,7 +131,7 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 			return nil, fmt.Errorf("%s: %w", RuleTable, err)
 		}
 		if m.Rules == nil {
-			m.Rules = []*db.Rule{}
+			m.Rules = []*db.MRule{}
 		}
 	}
 	if table, ok := tables[LobbySettingTable]; ok {
@@ -139,7 +139,7 @@ func ParseMaster(d db.DB, tables map[string][][]string) (*db.Master, error) {
 			return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
 		}
 		if m.LobbySettings == nil {
-			m.LobbySettings = []*db.LobbySetting{}
+			m.LobbySettings = []*db.MLobbySetting{}
 		}
 	}
 	if err := checkRuleIDs(d, m); err != nil {
@@ -313,17 +313,17 @@ func parseLobbyHack(cell string) (string, error) {
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
 // and no (lobby number) are required; start, explain, rule_id and hack optional.
 // An empty cell keeps the lobby's default.
-func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
+func ParseLobbySettings(table [][]string) ([]*db.MLobbySetting, error) {
 	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
-	var settings []*db.LobbySetting
+	var settings []*db.MLobbySetting
 	seen := map[string]int{}
 	for n, row := range table[1:] {
 		line := n + 1
 		cell := cellFunc(col, row)
-		s := &db.LobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain"), RuleID: cell("rule_id"), Hack: cell("hack")}
+		s := &db.MLobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain"), RuleID: cell("rule_id"), Hack: cell("hack")}
 		if s.Platform != model.PlatformConsole && s.Platform != model.PlatformEmu {
 			errs = append(errs, fmt.Errorf("row %d: platform %q is not %s or %s", line, s.Platform, model.PlatformConsole, model.PlatformEmu))
 		}
@@ -353,7 +353,7 @@ func ParseLobbySettings(table [][]string) ([]*db.LobbySetting, error) {
 
 // ParseRules checks the m_rule table (header first): id is required, the model.RuleKeys
 // columns optional; an empty cell is the menu default.
-func ParseRules(table [][]string) ([]*db.Rule, error) {
+func ParseRules(table [][]string) ([]*db.MRule, error) {
 	var ruleKeys []string
 	for k := range model.RuleKeys {
 		ruleKeys = append(ruleKeys, k)
@@ -363,12 +363,12 @@ func ParseRules(table [][]string) ([]*db.Rule, error) {
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
-	var rules []*db.Rule
+	var rules []*db.MRule
 	seen := map[string]int{}
 	for n, row := range table[1:] {
 		line := n + 1
 		cell := cellFunc(col, row)
-		r := &db.Rule{ID: cell("id")}
+		r := &db.MRule{ID: cell("id")}
 		if r.ID == "" {
 			errs = append(errs, fmt.Errorf("row %d: no id", line))
 		} else if prev, ok := seen[r.ID]; ok {

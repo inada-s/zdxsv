@@ -21,11 +21,11 @@ type RegisterProxyRequest struct {
 }
 
 type RegisterProxyResponse struct {
-	Result     bool   `json:"result"`
-	Message    string `json:"message"`
-	SessionID  string `json:"session_id"`
-	UserID     string `json:"user_id"`
-	LobbyUsers []User `json:"lobby_users"`
+	Result     bool         `json:"result"`
+	Message    string       `json:"message"`
+	SessionID  string       `json:"session_id"`
+	UserID     string       `json:"user_id"`
+	LobbyUsers []ZproxyUser `json:"lobby_users"`
 }
 
 type BattleInfoRequest struct {
@@ -33,15 +33,15 @@ type BattleInfoRequest struct {
 }
 
 type BattleInfoResponse struct {
-	Result   bool   `json:"result"`
-	Message  string `json:"message"`
-	Users    []User `json:"users"`
-	BattleIP net.IP `json:"battle_ip"`
-	Port     uint16 `json:"port"`
-	IsTest   bool   `json:"is_test"`
+	Result   bool         `json:"result"`
+	Message  string       `json:"message"`
+	Users    []ZproxyUser `json:"users"`
+	BattleIP net.IP       `json:"battle_ip"`
+	Port     uint16       `json:"port"`
+	IsTest   bool         `json:"is_test"`
 }
 
-type User struct {
+type ZproxyUser struct {
 	UserID   string   `json:"user_id"`
 	Name     string   `json:"name"`
 	Team     string   `json:"team"`
@@ -50,14 +50,14 @@ type User struct {
 	Platform string   `json:"platform"`
 }
 
-type Battle struct {
-	Users     []User   `json:"users"`
-	AeugIDs   []string `json:"aeug_ids"`
-	TitansIDs []string `json:"titans_ids"`
-	Platform  string   `json:"platform"`
+type ZproxyBattle struct {
+	Users     []ZproxyUser `json:"users"`
+	AeugIDs   []string     `json:"aeug_ids"`
+	TitansIDs []string     `json:"titans_ids"`
+	Platform  string       `json:"platform"`
 }
 
 type StatusResponse struct {
-	LobbyUsers []User   `json:"lobby_users"`
-	Battles    []Battle `json:"battles"`
+	LobbyUsers []ZproxyUser   `json:"lobby_users"`
+	Battles    []ZproxyBattle `json:"battles"`
 }

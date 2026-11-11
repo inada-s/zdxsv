@@ -13,46 +13,46 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-type MessageHandler func(*AppPeer, *message.Message)
+type LbsHandler func(*LbsPeer, *message.LbsMessage)
 
 type handlerHolder struct {
-	handlers     map[uint16]MessageHandler
+	handlers     map[uint16]LbsHandler
 	handlerNames map[uint16]string
 }
 
 var defaultHandlers = &handlerHolder{
-	handlers:     make(map[uint16]MessageHandler),
+	handlers:     make(map[uint16]LbsHandler),
 	handlerNames: make(map[uint16]string),
 }
 
-func register(id uint16, name string, f MessageHandler) interface{} {
+func register(id uint16, name string, f LbsHandler) interface{} {
 	defaultHandlers.handlers[id] = f
 	defaultHandlers.handlerNames[id] = name
 	return nil
 }
 
 type eventPeerCome struct {
-	peer *AppPeer
+	peer *LbsPeer
 }
 
 type eventPeerLeave struct {
-	peer *AppPeer
+	peer *LbsPeer
 }
 
 type eventPeerMessage struct {
-	peer *AppPeer
-	msg  *message.Message
+	peer *LbsPeer
+	msg  *message.LbsMessage
 }
 
 type eventFunc struct {
-	f func(*App)
+	f func(*Lbs)
 	c chan<- interface{}
 }
 
-type AppPeer struct {
-	model.User
-	conn              *Conn
-	app               *App
+type LbsPeer struct {
+	model.LbsUser
+	conn              *LbsConn
+	app               *Lbs
 	inBattleAfterRoom bool
 	Platform          string
 	PlatformInfo      map[string]string
@@ -68,23 +68,23 @@ type AppPeer struct {
 	lastRecvTime time.Time
 }
 
-func (p *AppPeer) OnOpen() {
+func (p *LbsPeer) OnOpen() {
 	p.app.chEvent <- eventPeerCome{peer: p}
 }
 
-func (p *AppPeer) OnMessage(msg *message.Message) {
+func (p *LbsPeer) OnMessage(msg *message.LbsMessage) {
 	p.app.chEvent <- eventPeerMessage{peer: p, msg: msg}
 }
 
-func (p *AppPeer) OnClose() {
+func (p *LbsPeer) OnClose() {
 	p.app.chEvent <- eventPeerLeave{peer: p}
 }
 
-func (p *AppPeer) SendMessage(msg *message.Message) {
+func (p *LbsPeer) SendMessage(msg *message.LbsMessage) {
 	p.conn.SendMessage(msg)
 }
 
-func (p *AppPeer) IP() string {
+func (p *LbsPeer) IP() string {
 	h, _, err := net.SplitHostPort(p.conn.Address())
 	if err != nil {
 		return ""
@@ -92,13 +92,13 @@ func (p *AppPeer) IP() string {
 	return h
 }
 
-type App struct {
+type Lbs struct {
 	*handlerHolder
-	battleServer *battle.Logic
-	users        map[string]*AppPeer
-	lobbys       map[string]map[uint16]*model.Lobby // platform -> lobby id -> lobby
-	battles      map[string]*model.Battle
-	peers        map[string]*AppPeer // conn address -> peer, owned by Serve
+	battleServer *battle.Mcs
+	users        map[string]*LbsPeer
+	lobbys       map[string]map[uint16]*model.LbsLobby // platform -> lobby id -> lobby
+	battles      map[string]*model.LbsBattle
+	peers        map[string]*LbsPeer // conn address -> peer, owned by Serve
 	chEvent      chan interface{}
 	chQuit       chan interface{}
 
@@ -112,13 +112,13 @@ const (
 	battleTimeout   = time.Hour
 )
 
-func NewApp() *App {
-	app := &App{
+func NewLbs() *Lbs {
+	app := &Lbs{
 		handlerHolder:      defaultHandlers,
-		users:              make(map[string]*AppPeer),
-		lobbys:             make(map[string]map[uint16]*model.Lobby),
-		battles:            make(map[string]*model.Battle),
-		peers:              make(map[string]*AppPeer),
+		users:              make(map[string]*LbsPeer),
+		lobbys:             make(map[string]map[uint16]*model.LbsLobby),
+		battles:            make(map[string]*model.LbsBattle),
+		peers:              make(map[string]*LbsPeer),
 		chEvent:            make(chan interface{}, 64),
 		chQuit:             make(chan interface{}),
 		aliveCheckInterval: 10 * time.Second,
@@ -129,10 +129,10 @@ func NewApp() *App {
 }
 
 // getLobby returns the lobby of the platform, creating the platform's lobbies on first use.
-func (a *App) getLobby(platform string, lobbyID uint16) (*model.Lobby, bool) {
+func (a *Lbs) getLobby(platform string, lobbyID uint16) (*model.LbsLobby, bool) {
 	lobbys, ok := a.lobbys[platform]
 	if !ok {
-		lobbys = make(map[uint16]*model.Lobby)
+		lobbys = make(map[uint16]*model.LbsLobby)
 		for i := 0; i < model.LobbyCount; i++ {
 			lobbys[uint16(i)] = model.NewLobby(platform, uint16(i))
 		}
@@ -142,15 +142,15 @@ func (a *App) getLobby(platform string, lobbyID uint16) (*model.Lobby, bool) {
 	return l, ok
 }
 
-func (a *App) NewPeer(conn *Conn) Peer {
-	return &AppPeer{
+func (a *Lbs) NewPeer(conn *LbsConn) LbsConnPeer {
+	return &LbsPeer{
 		conn:     conn,
 		app:      a,
 		Platform: model.PlatformConsole,
 	}
 }
 
-func (a *App) Locked(f func(*App)) {
+func (a *Lbs) Locked(f func(*Lbs)) {
 	c := make(chan interface{})
 	a.chEvent <- eventFunc{
 		f: f,
@@ -159,8 +159,8 @@ func (a *App) Locked(f func(*App)) {
 	<-c
 }
 
-func (a *App) Quit() {
-	a.Locked(func(app *App) {
+func (a *Lbs) Quit() {
+	a.Locked(func(app *Lbs) {
 		for _, p := range app.users {
 			SendServerShutDown(p)
 		}
@@ -169,13 +169,13 @@ func (a *App) Quit() {
 	close(a.chQuit)
 }
 
-func (a *App) AddHandler(id uint16, name string, f MessageHandler) {
+func (a *Lbs) AddHandler(id uint16, name string, f LbsHandler) {
 	a.handlers[id] = f
 	a.handlerNames[id] = name
 }
 
 // SetBattleServer gives the lobby the battle logic it hands battle users to. Call it before Serve.
-func (a *App) SetBattleServer(b *battle.Logic) {
+func (a *Lbs) SetBattleServer(b *battle.Mcs) {
 	a.battleServer = b
 }
 
@@ -187,7 +187,7 @@ func stripHost(addr string) string {
 	return ":" + fmt.Sprint(port)
 }
 
-func (a *App) Serve() {
+func (a *Lbs) Serve() {
 	aliveCheck := time.NewTicker(a.aliveCheckInterval)
 	defer aliveCheck.Stop()
 
@@ -233,7 +233,7 @@ func (a *App) Serve() {
 // checkAlive closes peers silent for peerRecvTimeout and line-checks the
 // others, drops battles older than battleTimeout and keeps the battle
 // server connection up.
-func (a *App) checkAlive(now time.Time) {
+func (a *Lbs) checkAlive(now time.Time) {
 	for _, p := range a.peers {
 		if now.Sub(p.lastRecvTime) >= peerRecvTimeout {
 			zlog.Info("recv timeout", zap.String("user_id", p.UserID), zap.Any("addr", p.conn.Address()))

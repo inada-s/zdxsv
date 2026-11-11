@@ -13,12 +13,12 @@ import (
 )
 
 // newRobustPeer returns a logged in peer of a new App; sent messages stay in its Conn's outbuf.
-func newRobustPeer(t *testing.T) *AppPeer {
+func newRobustPeer(t *testing.T) *LbsPeer {
 	t.Helper()
 	c, _ := newPipe(t)
-	app := NewApp()
-	p := &AppPeer{app: app, conn: NewConn(c), Platform: model.PlatformConsole}
-	p.User = model.User{User: db.User{UserID: "ROBUST", Name: "robust"}}
+	app := NewLbs()
+	p := &LbsPeer{app: app, conn: NewLbsConn(c), Platform: model.PlatformConsole}
+	p.LbsUser = model.LbsUser{DBUser: db.DBUser{UserID: "ROBUST", Name: "robust"}}
 	app.users[p.UserID] = p
 	return p
 }
@@ -26,13 +26,13 @@ func newRobustPeer(t *testing.T) *AppPeer {
 // Every client message handler must survive any body in any peer state: a
 // panic in a handler stops the whole lobby.
 func TestHandlersSurviveBadInput(t *testing.T) {
-	dbtest.Use(t)
+	dbtest.UseTestDB(t)
 	states := []struct {
 		name  string
-		setup func(*AppPeer)
+		setup func(*LbsPeer)
 	}{
-		{"no lobby", func(*AppPeer) {}},
-		{"in lobby", func(p *AppPeer) { p.app.OnEnterLobby(p, 4) }},
+		{"no lobby", func(*LbsPeer) {}},
+		{"in lobby", func(p *LbsPeer) { p.app.OnEnterLobby(p, 4) }},
 	}
 	bodies := [][]byte{
 		nil,

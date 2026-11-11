@@ -65,7 +65,7 @@ func TestAnswerGolden(t *testing.T) {
 		t.Fatalf("only %d golden cases", len(gs))
 	}
 	for _, g := range gs {
-		a, note := Answer(g.gw, g.kind == "i-connect", query(g.gw, g.kind, g.packet, g.qlen))
+		a, note := DnasAnswer(g.gw, g.kind == "i-connect", query(g.gw, g.kind, g.packet, g.qlen))
 		sum := sha256.Sum256(a)
 		if len(a) != g.alen || hex.EncodeToString(sum[:]) != g.sha {
 			t.Errorf("%s %s %s q=%d: got %d B (%s), want %d B", g.gw, g.kind, g.packet, g.qlen, len(a), note, g.alen)
@@ -74,7 +74,7 @@ func TestAnswerGolden(t *testing.T) {
 }
 
 func startServer(t *testing.T, login http.Handler) string {
-	s, err := NewServer("jp", login)
+	s, err := NewDnasServer("jp", login)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func dialQuery(t *testing.T, addr, method, urlPath string, body []byte) (int, []
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, b, err := Query(c, method, urlPath, body)
+	status, b, err := DnasQuery(c, method, urlPath, body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestServer(t *testing.T) {
 
 	for _, kind := range []string{"i-connect", "others"} {
 		q := query("gai-gw", kind, "c9acca0f30eecbf7_01180000", 308)
-		want, note := Answer("gai-gw", kind == "i-connect", q)
+		want, note := DnasAnswer("gai-gw", kind == "i-connect", q)
 		if strings.HasSuffix(note, "missing") {
 			t.Fatal(note)
 		}

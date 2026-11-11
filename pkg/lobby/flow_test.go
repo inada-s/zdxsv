@@ -44,33 +44,33 @@ func newPipe(t *testing.T) (net.Conn, net.Conn) {
 
 // testLobby is a lobby that clients reach through in-memory connections.
 type testLobby struct {
-	sv *Server
+	sv *LbsServer
 }
 
 // startLobby runs a lobby App with the battle logic b in process.
-func startLobby(t *testing.T, b *battle.Logic) *testLobby {
+func startLobby(t *testing.T, b *battle.Mcs) *testLobby {
 	t.Helper()
 	l, _ := startLobbyApp(t, b)
 	return l
 }
 
 // startLobbyApp is startLobby that also returns the App.
-func startLobbyApp(t *testing.T, b *battle.Logic) (*testLobby, *App) {
+func startLobbyApp(t *testing.T, b *battle.Mcs) (*testLobby, *Lbs) {
 	t.Helper()
-	return startLobbyAppWith(t, b, func(*App) {})
+	return startLobbyAppWith(t, b, func(*Lbs) {})
 }
 
 // startLobbyAppWith is startLobbyApp with setup run on the App before it serves.
-func startLobbyAppWith(t *testing.T, b *battle.Logic, setup func(*App)) (*testLobby, *App) {
+func startLobbyAppWith(t *testing.T, b *battle.Mcs, setup func(*Lbs)) (*testLobby, *Lbs) {
 	t.Helper()
 	config.Conf.Battle.PublicAddr = "127.0.0.2:8210"
 
-	app := NewApp()
+	app := NewLbs()
 	app.SetBattleServer(b)
 	setup(app)
 	go app.Serve()
 	t.Cleanup(app.Quit)
-	return &testLobby{sv: NewServer(app)}, app
+	return &testLobby{sv: NewLbsServer(app)}, app
 }
 
 // encryptString is the client side of MessageBodyReader.ReadEncryptedString.
@@ -102,7 +102,7 @@ type testClient struct {
 	t     *testing.T
 	conn  net.Conn
 	buf   []byte
-	queue []*Message
+	queue []*LbsMessage
 }
 
 func dialLobby(t *testing.T, l *testLobby) *testClient {
@@ -112,7 +112,7 @@ func dialLobby(t *testing.T, l *testLobby) *testClient {
 	return &testClient{t: t, conn: c}
 }
 
-func (c *testClient) send(m *Message) {
+func (c *testClient) send(m *LbsMessage) {
 	c.t.Helper()
 	if _, err := c.conn.Write(m.Serialize()); err != nil {
 		c.t.Fatal(err)
@@ -121,7 +121,7 @@ func (c *testClient) send(m *Message) {
 
 // expect returns the first server message with the command not yet expected.
 // Other messages stay queued for a later expect.
-func (c *testClient) expect(command uint16, category byte) *Message {
+func (c *testClient) expect(command uint16, category byte) *LbsMessage {
 	c.t.Helper()
 	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	tmp := make([]byte, 4096)
@@ -162,7 +162,7 @@ func platformInfo(i int) []byte {
 }
 
 // ask sends a client question and returns the server answer.
-func (c *testClient) ask(command uint16, body []byte) *Message {
+func (c *testClient) ask(command uint16, body []byte) *LbsMessage {
 	c.t.Helper()
 	q := NewClientQuestion(command)
 	q.Writer().Write(body)
@@ -176,7 +176,7 @@ func (c *testClient) ask(command uint16, body []byte) *Message {
 
 // login logs in as userID ("******" registers a new user) and returns the
 // decided user ID, the user IDs the lobby offered and its battle result question.
-func (c *testClient) login(ac *testLogin, userID, name string) (string, []string, *Message) {
+func (c *testClient) login(ac *testLogin, userID, name string) (string, []string, *LbsMessage) {
 	c.t.Helper()
 	listed := c.chooseUser(ac, userID, name)
 	ask := c.expect(0x6138, CategoryQuestion)
@@ -248,7 +248,7 @@ func (c *testClient) topPage() [3]personalRecord {
 
 // battleResult is the client's answer body to the 0x6138 battle result question.
 func battleResult(seq uint16, battleCode string, rounds, win, lose byte, kill, death, frame uint32, side byte) []byte {
-	m := &Message{}
+	m := &LbsMessage{}
 	w := m.Writer()
 	w.Write16(0)
 	w.Write(encryptString(seq, battleCode))
@@ -286,8 +286,8 @@ func u16(v uint16) []byte { return []byte{byte(v >> 8), byte(v)} }
 // A client walks the plaza and the lobby list the way the game does after login,
 // and sees the user who entered a lobby.
 func TestLobbyList(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 	in, look := dialLobby(t, addr), dialLobby(t, addr)
 	in.login(registerAccount(t), "******", "inside")
 	look.login(registerAccount(t), "******", "looker")
@@ -361,11 +361,11 @@ func TestLobbyBattleRoundTrip(t *testing.T) {
 }
 
 func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, shared int, emu bool) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	brpc := battle.NewLogic()
+	brpc := battle.NewMcs()
 	addr := startLobby(t, brpc)
 
 	type player struct {
@@ -582,8 +582,8 @@ func roomStatus(c *testClient, roomID uint16) byte {
 // One client creates a room with a rule, another joins, both entry and the
 // owner starts: the battle carries the room's rule.
 func TestLobbyRoomBattle(t *testing.T) {
-	dbtest.Use(t)
-	brpc := battle.NewLogic()
+	dbtest.UseTestDB(t)
+	brpc := battle.NewMcs()
 	addr := startLobby(t, brpc)
 
 	const lobbyID, roomID = 4, 1

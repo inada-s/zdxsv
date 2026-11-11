@@ -7,18 +7,18 @@ import (
 	. "zdxsv/pkg/message"
 )
 
-var _ = register(0x6203, "GetPlazaCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6203, "GetPlazaCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(25) // Not sure
 	p.SendMessage(a)
 })
 
-var _ = register(0x6207, "EnterPlaza", func(p *AppPeer, m *Message) {
+var _ = register(0x6207, "EnterPlaza", func(p *LbsPeer, m *LbsMessage) {
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6205, "GetPlazaJoinUser", func(p *AppPeer, m *Message) {
+var _ = register(0x6205, "GetPlazaJoinUser", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	id := m.Reader().Read16()
@@ -29,7 +29,7 @@ var _ = register(0x6205, "GetPlazaJoinUser", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6206, "GetPlazaStatus", func(p *AppPeer, m *Message) {
+var _ = register(0x6206, "GetPlazaStatus", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	id := r.Read16()
 	a := NewServerAnswer(m)
@@ -39,14 +39,14 @@ var _ = register(0x6206, "GetPlazaStatus", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6301, "GetLobbyCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6301, "GetLobbyCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(25) // Not sure
 	p.SendMessage(a)
 })
 
-var _ = register(0x6303, "GetLobbyUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6303, "GetLobbyUserCount", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
 	count := p.app.OnGetLobbyUserCount(p, lobbyID)
 	a := NewServerAnswer(m)
@@ -56,7 +56,7 @@ var _ = register(0x6303, "GetLobbyUserCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6304, "GetLobbyUserStatus", func(p *AppPeer, m *Message) {
+var _ = register(0x6304, "GetLobbyUserStatus", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
@@ -65,7 +65,7 @@ var _ = register(0x6304, "GetLobbyUserStatus", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
+var _ = register(0x6308, "GetLobbyExplain", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
@@ -87,24 +87,24 @@ var _ = register(0x6308, "GetLobbyExplain", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6305, "EnterLobby", func(p *AppPeer, m *Message) {
+var _ = register(0x6305, "EnterLobby", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	p.app.OnEnterLobby(p, lobbyID)
 	p.SendMessage(a)
 })
 
-var _ = register(0x6408, "ExitLobby", func(p *AppPeer, m *Message) {
+var _ = register(0x6408, "ExitLobby", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnExitLobby(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6208, "TopPageJump", func(p *AppPeer, m *Message) {
+var _ = register(0x6208, "TopPageJump", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnUserTopPageJump(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
 	aeug, titans := p.app.OnGetLobbyEntryUserCount(p, lobbyID)
 	a := NewServerAnswer(m)
@@ -117,13 +117,13 @@ var _ = register(0x640F, "GetLobbyEntryUserCount", func(p *AppPeer, m *Message) 
 	SendLobbyChatHackNotice(p, lobbySetting(p.Platform, lobbyID))
 })
 
-var _ = register(0x640E, "EntryLobbyBattle", func(p *AppPeer, m *Message) {
+var _ = register(0x640E, "EntryLobbyBattle", func(p *LbsPeer, m *LbsMessage) {
 	side := m.Reader().Read8()
 	p.app.OnEntryLobbyBattle(p, side)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6707, "GetFrendOnline", func(p *AppPeer, m *Message) {
+var _ = register(0x6707, "GetFrendOnline", func(p *LbsPeer, m *LbsMessage) {
 	_ = m.Reader().ReadEncryptedString() // ユーザID
 	a := NewServerAnswer(m)
 	w := a.Writer()
@@ -131,13 +131,13 @@ var _ = register(0x6707, "GetFrendOnline", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6703, "FindFrendStatus", func(p *AppPeer, m *Message) {
+var _ = register(0x6703, "FindFrendStatus", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	// string
 	p.SendMessage(a)
 })
 
-var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
+var _ = register(0x6704, "SendMailMessage", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	_ = r.ReadEncryptedString() // ユーザID
 	_ = r.ReadEncryptedString() // メッセージ
@@ -147,11 +147,11 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
+var _ = register(0x6701, "SendChatMessage", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnSendChatMessage(p, m.Reader().ReadEncryptedString())
 })
 
-func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {
+func NoticeBothPlazaJoinUser(p *LbsPeer, id uint16, count uint16) {
 	n := NewServerNotice(0x6205)
 	w := n.Writer()
 	w.Write16(id)
@@ -160,7 +160,7 @@ func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {
 	p.SendMessage(n)
 }
 
-func NoticeChatMessage(p *AppPeer, userID, name, message string) {
+func NoticeChatMessage(p *LbsPeer, userID, name, message string) {
 	n := NewServerNotice(0x6702)
 	w := n.Writer()
 	w.WriteString(userID)
@@ -176,7 +176,7 @@ func NoticeChatMessage(p *AppPeer, userID, name, message string) {
 	p.SendMessage(n)
 }
 
-func NoticeLobbyUserCount(p *AppPeer, lobbyID, inLobby, inBattle uint16) {
+func NoticeLobbyUserCount(p *LbsPeer, lobbyID, inLobby, inBattle uint16) {
 	n := NewServerNotice(0x6303)
 	w := n.Writer()
 	w.Write16(lobbyID)
@@ -187,7 +187,7 @@ func NoticeLobbyUserCount(p *AppPeer, lobbyID, inLobby, inBattle uint16) {
 
 // NoticeLobbyEntryUserCount reinforms the peer about
 // how many players entry to lobby match in the lobby.
-func NoticeLobbyEntryUserCount(p *AppPeer, lobbyID, aeug, titans uint16) {
+func NoticeLobbyEntryUserCount(p *LbsPeer, lobbyID, aeug, titans uint16) {
 	n := NewServerNotice(0x640F)
 	w := n.Writer()
 	w.Write16(lobbyID)

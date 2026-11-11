@@ -14,11 +14,11 @@ type BattleBuffer struct {
 	ack   uint32 // the last seq received from the peer
 	begin uint32 // the first seq not acked yet
 	end   uint32 // the next seq to give
-	ring  []Message
+	ring  []McsMessage
 }
 
 func NewBattleBuffer(id string) *BattleBuffer {
-	return &BattleBuffer{id: id, begin: 1, end: 1, ring: make([]Message, ringSize)}
+	return &BattleBuffer{id: id, begin: 1, end: 1, ring: make([]McsMessage, ringSize)}
 }
 
 func (b *BattleBuffer) SetID(id string) {
@@ -33,7 +33,7 @@ func (b *BattleBuffer) ID() string {
 	return b.id
 }
 
-func (b *BattleBuffer) Push(msg Message) {
+func (b *BattleBuffer) Push(msg McsMessage) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	b.ring[b.end%ringSize] = msg
@@ -49,7 +49,7 @@ func (b *BattleBuffer) AppendPacket(dst []byte) []byte {
 		e = b.begin + sendMax
 	}
 	l, r := b.begin%ringSize, e%ringSize
-	var msgs []Message
+	var msgs []McsMessage
 	if l <= r {
 		msgs = b.ring[l:r]
 	} else {
@@ -81,15 +81,15 @@ func NewMessageFilter(acceptIDs []string) *MessageFilter {
 	return mf
 }
 
-func (m *MessageFilter) GenerateMessage(userID string, data []byte) Message {
+func (m *MessageFilter) GenerateMessage(userID string, data []byte) McsMessage {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	msg := Message{UserID: userID, Seq: m.seq, Body: data}
+	msg := McsMessage{UserID: userID, Seq: m.seq, Body: data}
 	m.seq++
 	return msg
 }
 
-func (m *MessageFilter) Filter(msg Message) bool {
+func (m *MessageFilter) Filter(msg McsMessage) bool {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	ack, ok := m.recvSeq[msg.UserID]

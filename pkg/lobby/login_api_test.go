@@ -15,7 +15,7 @@ import (
 )
 
 func TestAPILogin(t *testing.T) {
-	dbtest.Use(t)
+	dbtest.UseTestDB(t)
 	oldConf := config.Conf
 	config.Conf.Lobby.PublicAddr = "198.51.100.7:8200"
 	t.Cleanup(func() { config.Conf = oldConf })
