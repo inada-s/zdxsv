@@ -1,8 +1,8 @@
 // Package stun encodes the Ping/Pong datagrams zproxy exchanges with the lobby's STUN
 // server and with other zproxies. On the wire they are the protobuf (proto2) message
-// Packet{type = 1, ping_data = 11 | pong_data = 12}, Ping/PongMessage{timestamp = 1,
+// StunPacket{type = 1, ping_data = 11 | pong_data = 12}, Ping/PongMessage{timestamp = 1,
 // user_id = 2, public_addr = 3 (Pong only)}.
-package stun
+package main
 
 import (
 	"encoding/binary"
@@ -10,11 +10,11 @@ import (
 	"fmt"
 )
 
-type Type int32
+type StunType int32
 
 const (
-	Ping Type = 2
-	Pong Type = 3
+	StunPing StunType = 2
+	StunPong StunType = 3
 )
 
 const (
@@ -32,8 +32,8 @@ const (
 	wireFixed32 = 5
 )
 
-type Packet struct {
-	Type       Type
+type StunPacket struct {
+	Type       StunType
 	Timestamp  int64
 	UserID     string
 	PublicAddr string // Pong only
@@ -49,35 +49,35 @@ func appendString(b []byte, field int, s string) []byte {
 	return append(b, s...)
 }
 
-// Marshal encodes p. Empty strings are left out.
-func Marshal(p Packet) []byte {
+// MarshalStun encodes p. Empty strings are left out.
+func MarshalStun(p StunPacket) []byte {
 	var body []byte
 	body = appendTag(body, fieldTimestamp, wireVarint)
 	body = binary.AppendUvarint(body, uint64(p.Timestamp))
 	if p.UserID != "" {
 		body = appendString(body, fieldUserID, p.UserID)
 	}
-	if p.Type == Pong && p.PublicAddr != "" {
+	if p.Type == StunPong && p.PublicAddr != "" {
 		body = appendString(body, fieldPublicAddr, p.PublicAddr)
 	}
 
 	b := appendTag(nil, fieldType, wireVarint)
 	b = binary.AppendUvarint(b, uint64(p.Type))
 	field := fieldPing
-	if p.Type == Pong {
+	if p.Type == StunPong {
 		field = fieldPong
 	}
 	return appendString(b, field, string(body))
 }
 
-var errShort = errors.New("stun: truncated")
+var errStunShort = errors.New("stun: truncated")
 
-// fields calls fn for each varint and length-delimited field of the protobuf message b.
-func fields(b []byte, fn func(field, wire int, v uint64, data []byte)) error {
+// stunFields calls fn for each varint and length-delimited field of the protobuf message b.
+func stunFields(b []byte, fn func(field, wire int, v uint64, data []byte)) error {
 	for len(b) > 0 {
 		tag, n := binary.Uvarint(b)
 		if n <= 0 {
-			return errShort
+			return errStunShort
 		}
 		b = b[n:]
 		field, wire := int(tag>>3), int(tag&7)
@@ -88,14 +88,14 @@ func fields(b []byte, fn func(field, wire int, v uint64, data []byte)) error {
 		case wireVarint:
 			v, n := binary.Uvarint(b)
 			if n <= 0 {
-				return errShort
+				return errStunShort
 			}
 			b = b[n:]
 			fn(field, wire, v, nil)
 		case wireBytes:
 			l, n := binary.Uvarint(b)
 			if n <= 0 || uint64(len(b)-n) < l {
-				return errShort
+				return errStunShort
 			}
 			data := b[n : n+int(l)]
 			b = b[n+int(l):]
@@ -106,7 +106,7 @@ func fields(b []byte, fn func(field, wire int, v uint64, data []byte)) error {
 				size = 4
 			}
 			if len(b) < size {
-				return errShort
+				return errStunShort
 			}
 			b = b[size:]
 		default:
@@ -116,40 +116,40 @@ func fields(b []byte, fn func(field, wire int, v uint64, data []byte)) error {
 	return nil
 }
 
-// Unmarshal decodes a Ping or a Pong; unknown fields are skipped.
-func Unmarshal(b []byte) (Packet, error) {
-	var p Packet
+// UnmarshalStun decodes a Ping or a Pong; unknown fields are skipped.
+func UnmarshalStun(b []byte) (StunPacket, error) {
+	var p StunPacket
 	var hasType bool
 	var body []byte
-	err := fields(b, func(field, wire int, v uint64, data []byte) {
+	err := stunFields(b, func(field, wire int, v uint64, data []byte) {
 		switch {
 		case field == fieldType && wire == wireVarint:
-			p.Type, hasType = Type(v), true
+			p.Type, hasType = StunType(v), true
 		case (field == fieldPing || field == fieldPong) && wire == wireBytes:
 			body = data
 		}
 	})
 	if err != nil {
-		return Packet{}, err
+		return StunPacket{}, err
 	}
 	if !hasType {
-		return Packet{}, errors.New("stun: no type")
+		return StunPacket{}, errors.New("stun: no type")
 	}
-	if p.Type != Ping && p.Type != Pong {
-		return Packet{}, fmt.Errorf("stun: type %d", p.Type)
+	if p.Type != StunPing && p.Type != StunPong {
+		return StunPacket{}, fmt.Errorf("stun: type %d", p.Type)
 	}
-	err = fields(body, func(field, wire int, v uint64, data []byte) {
+	err = stunFields(body, func(field, wire int, v uint64, data []byte) {
 		switch {
 		case field == fieldTimestamp && wire == wireVarint:
 			p.Timestamp = int64(v)
 		case field == fieldUserID && wire == wireBytes:
 			p.UserID = string(data)
-		case field == fieldPublicAddr && wire == wireBytes && p.Type == Pong:
+		case field == fieldPublicAddr && wire == wireBytes && p.Type == StunPong:
 			p.PublicAddr = string(data)
 		}
 	})
 	if err != nil {
-		return Packet{}, err
+		return StunPacket{}, err
 	}
 	return p, nil
 }

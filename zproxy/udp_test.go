@@ -5,9 +5,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"zproxy/battle"
-	"zproxy/stun"
 )
 
 func listenUDP(t *testing.T) *net.UDPConn {
@@ -36,8 +33,8 @@ func TestUDPClient(t *testing.T) {
 	}
 	got := make(chan recv, 16)
 	for _, c := range []*UDPClient{a, b} {
-		c.SubscribePacket("pb", func(p stun.Packet, addr *net.UDPAddr) { got <- recv{p, addr} })
-		c.SubscribeBattle("battle", func(p battle.Packet, addr *net.UDPAddr) { got <- recv{p, addr} })
+		c.SubscribePacket("pb", func(p StunPacket, addr *net.UDPAddr) { got <- recv{p, addr} })
+		c.SubscribeBattle("battle", func(p BattlePacket, addr *net.UDPAddr) { got <- recv{p, addr} })
 	}
 	next := func() recv {
 		t.Helper()
@@ -52,8 +49,8 @@ func TestUDPClient(t *testing.T) {
 
 	a.SendPing("A", bAddr.String())
 	r := next()
-	ping, ok := r.pkt.(stun.Packet)
-	if !ok || ping.Type != stun.Ping || ping.UserID != "A" || ping.Timestamp == 0 {
+	ping, ok := r.pkt.(StunPacket)
+	if !ok || ping.Type != StunPing || ping.UserID != "A" || ping.Timestamp == 0 {
 		t.Fatalf("ping = %v", r.pkt)
 	}
 	if !isSameAddr(r.addr, aAddr) {
@@ -62,15 +59,15 @@ func TestUDPClient(t *testing.T) {
 
 	b.SendPong(ping, "B", r.addr)
 	r = next()
-	pong, ok := r.pkt.(stun.Packet)
-	if !ok || pong.Type != stun.Pong || pong.UserID != "B" || pong.Timestamp != ping.Timestamp {
+	pong, ok := r.pkt.(StunPacket)
+	if !ok || pong.Type != StunPong || pong.UserID != "B" || pong.Timestamp != ping.Timestamp {
 		t.Fatalf("pong = %v", r.pkt)
 	}
 
-	a.Send(battle.AppendBattle(nil, 7, 3, []battle.Message{{UserID: "A", Seq: 1, Body: []byte{1, 2}}}), bAddr)
+	a.Send(AppendBattle(nil, 7, 3, []BattleMessage{{UserID: "A", Seq: 1, Body: []byte{1, 2}}}), bAddr)
 	r = next()
-	bp, ok := r.pkt.(battle.Packet)
-	if !ok || bp.Kind != battle.KindBattle || bp.Seq != 7 || bp.Ack != 3 || len(bp.Messages) != 1 || bp.Messages[0].UserID != "A" {
+	bp, ok := r.pkt.(BattlePacket)
+	if !ok || bp.Kind != KindBattle || bp.Seq != 7 || bp.Ack != 3 || len(bp.Messages) != 1 || bp.Messages[0].UserID != "A" {
 		t.Fatalf("battle = %+v", r.pkt)
 	}
 

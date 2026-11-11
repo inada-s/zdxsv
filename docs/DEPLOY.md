@@ -108,9 +108,9 @@ On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS 
 ## Releases
 
 `git tag vX.Y.Z && git push origin vX.Y.Z` publishes the server and, when its code changed,
-zproxy (`scripts/zproxy-release-needed.sh`). zproxy is its own Go module (`src/zproxy/go.mod`) and
+zproxy (`scripts/zproxy-release-needed.sh`). zproxy is its own Go module (`zproxy/go.mod`) and
 imports no server package. The server tarball's name must never end in
-`<os>_<arch>`: zproxy's self-update would take it (`src/zproxy/release_test.go`).
+`<os>_<arch>`: zproxy's self-update would take it (`zproxy/release_test.go`).
 
 ## Clients
 

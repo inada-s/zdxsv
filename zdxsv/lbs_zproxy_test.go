@@ -222,7 +222,7 @@ func TestStatusPlatform(t *testing.T) {
 	}
 }
 
-// testdata/zproxy_api.json is also decoded by zproxy's copy of these types (src/zproxy), so
+// testdata/zproxy_api.json is also decoded by zproxy's copy of these types (zproxy/), so
 // both sides read and write the same keys.
 func TestZproxyAPIKeys(t *testing.T) {
 	raw, err := os.ReadFile("testdata/zproxy_api.json")

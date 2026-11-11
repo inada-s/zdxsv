@@ -11,7 +11,7 @@ import (
 // goreleaserArchives: archive id -> name_template ("" = goreleaser's default) from .goreleaser.yml.
 func goreleaserArchives(t *testing.T) map[string]string {
 	t.Helper()
-	b, err := os.ReadFile("../../.goreleaser.yml")
+	b, err := os.ReadFile("../.goreleaser.yml")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package stun
+package main
 
 import (
 	"bytes"
@@ -8,24 +8,24 @@ import (
 
 // Bytes the protobuf library marshals for these packets.
 var golden = []struct {
-	pkt Packet
+	pkt StunPacket
 	hex string
 }{
-	{Packet{Type: Ping, Timestamp: 1}, "08025a020801"},
-	{Packet{Type: Ping, Timestamp: 1234567890123456789, UserID: "ABC123"}, "08025a12089582a6efc79e8491111206414243313233"},
-	{Packet{Type: Pong, Timestamp: -5, UserID: "SERVER", PublicAddr: "203.0.113.1:8250"},
+	{StunPacket{Type: StunPing, Timestamp: 1}, "08025a020801"},
+	{StunPacket{Type: StunPing, Timestamp: 1234567890123456789, UserID: "ABC123"}, "08025a12089582a6efc79e8491111206414243313233"},
+	{StunPacket{Type: StunPong, Timestamp: -5, UserID: "SERVER", PublicAddr: "203.0.113.1:8250"},
 		"0803622508fbffffffffffffffff0112065345525645521a103230332e302e3131332e313a38323530"},
 }
 
 func TestGolden(t *testing.T) {
 	for _, g := range golden {
 		want, _ := hex.DecodeString(g.hex)
-		if got := Marshal(g.pkt); !bytes.Equal(got, want) {
-			t.Errorf("Marshal(%+v) = %x, want %s", g.pkt, got, g.hex)
+		if got := MarshalStun(g.pkt); !bytes.Equal(got, want) {
+			t.Errorf("MarshalStun(%+v) = %x, want %s", g.pkt, got, g.hex)
 		}
-		got, err := Unmarshal(want)
+		got, err := UnmarshalStun(want)
 		if err != nil || got != g.pkt {
-			t.Errorf("Unmarshal(%s) = %+v, %v", g.hex, got, err)
+			t.Errorf("UnmarshalStun(%s) = %+v, %v", g.hex, got, err)
 		}
 	}
 }
@@ -33,7 +33,7 @@ func TestGolden(t *testing.T) {
 func TestUnmarshalSkipsUnknownFields(t *testing.T) {
 	// Pong golden + fixed32 field 4 and fixed64 field 13 on the packet, varint field 9 in the body
 	b, _ := hex.DecodeString("0803622708fbffffffffffffffff0112065345525645521a103230332e302e3131332e313a383235304807" + "2501020304" + "690102030405060708")
-	got, err := Unmarshal(b)
+	got, err := UnmarshalStun(b)
 	want := golden[2].pkt
 	if err != nil || got != want {
 		t.Errorf("Unmarshal = %+v, %v; want %+v", got, err, want)
@@ -52,8 +52,8 @@ func TestUnmarshalBad(t *testing.T) {
 		"08025a0408011201", // body: user id longer than the body
 	} {
 		b, _ := hex.DecodeString(h)
-		if p, err := Unmarshal(b); err == nil {
-			t.Errorf("Unmarshal(%s) = %+v, nil error", h, p)
+		if p, err := UnmarshalStun(b); err == nil {
+			t.Errorf("UnmarshalStun(%s) = %+v, nil error", h, p)
 		}
 	}
 }

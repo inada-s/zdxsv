@@ -5,7 +5,7 @@ all: build
 build:
 	mkdir -p bin
 	go build -o ./bin/zdxsv ./zdxsv
-	cd src/zproxy && go build -o ../../bin/zproxy .
+	cd zproxy && go build -o ../bin/zproxy .
 
 # smoke test of the server binary (scripts/smoke.sh; ports 53 and 443 need cap_net_bind_service).
 .PHONY: smoke
@@ -16,7 +16,7 @@ smoke:
 .PHONY: test
 test:
 	go test -v zdxsv/...
-	cd src/zproxy && go test -v ./...
+	cd zproxy && go test -v ./...
 
 # test with coverage; per-package report in cover-pkg.txt, per-function in cover.txt, html in cover.html.
 .PHONY: cover

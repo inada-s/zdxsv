@@ -7,7 +7,7 @@ Rules for agents working in this repository.
 - The server is one package, `zdxsv/` (`package main`): the lobby
   server is `lbs` (`lbs_*.go`), the battle server `mcs` (`mcs_*.go`).
   Generated protobuf code stays in `zdxsv/proto/`; zproxy is its own
-  module in `src/zproxy` and imports no server code.
+  module in `zproxy/` (one `package main`) and imports no server code.
 - `lbs_msg_*.go`: decode the message, call a `Lbs` method, encode the
   answer. A fixed answer needs no `Lbs` call. Decisions and state
   changes live in `Lbs`, and `Lbs` stays unit-testable. No package
