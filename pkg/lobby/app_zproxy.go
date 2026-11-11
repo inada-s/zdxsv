@@ -16,7 +16,7 @@ const (
 
 // RegisterProxy registers the zproxy at ip of a lobby user: the user with that IP for
 // UserID _AUTO_, or from a LAN or the lobby host the user UserID.
-func (a *App) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
+func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
 	zlog.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
 	res := new(RegisterProxyResponse)
 
@@ -46,8 +46,8 @@ func (a *App) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		return res
 	}
 
-	a.Locked(func(app *App) {
-		var userPeer *AppPeer
+	a.Locked(func(app *Lbs) {
+		var userPeer *LbsPeer
 		for userID, peer := range app.users {
 			arr := strings.Split(peer.conn.Address(), ":")
 			if 0 < len(arr) {
@@ -75,7 +75,7 @@ func (a *App) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		res.UserID = userPeer.UserID
 		res.SessionID = userPeer.SessionID
 		for _, u := range app.users {
-			user := User{
+			user := ZproxyUser{
 				UserID: u.UserID,
 				Name:   u.Name,
 				Team:   u.Team,
@@ -91,7 +91,7 @@ func (a *App) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 }
 
 // BattleInfo is the battle of the zproxy whose user has session req.SessionID.
-func (a *App) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
+func (a *Lbs) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
 	zlog.Info("BattleInfoRequest", zap.Any("req", req))
 	res := new(BattleInfoResponse)
 
@@ -100,7 +100,7 @@ func (a *App) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
 		res.Message = "セッションIDが無効です."
 	}
 
-	a.Locked(func(app *App) {
+	a.Locked(func(app *Lbs) {
 		battle, ok := app.battles[req.SessionID]
 		if !ok {
 			res.Result = false
@@ -126,7 +126,7 @@ func (a *App) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
 		res.Port = battle.ServerPort
 		res.IsTest = battle.TestBattle
 		for _, u := range battle.Users {
-			res.Users = append(res.Users, User{
+			res.Users = append(res.Users, ZproxyUser{
 				UserID: u.UserID,
 				Name:   u.Name,
 				Team:   u.Team,
@@ -139,19 +139,19 @@ func (a *App) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
 }
 
 // Status lists the lobby users and battles, from the app's goroutine.
-func (a *App) Status() *StatusResponse {
+func (a *Lbs) Status() *StatusResponse {
 	var res *StatusResponse
-	a.Locked(func(app *App) {
+	a.Locked(func(app *Lbs) {
 		res = app.status()
 	})
 	return res
 }
 
 // status lists lobby users and battles with their platform. Call it locked.
-func (app *App) status() *StatusResponse {
+func (app *Lbs) status() *StatusResponse {
 	res := new(StatusResponse)
 	for _, u := range app.users {
-		user := User{
+		user := ZproxyUser{
 			UserID:   u.UserID,
 			Name:     u.Name,
 			Team:     u.Team,
@@ -166,12 +166,12 @@ func (app *App) status() *StatusResponse {
 		if _, ok := checked[sid]; ok {
 			continue
 		}
-		battle := Battle{Platform: b.Platform}
+		battle := ZproxyBattle{Platform: b.Platform}
 		battle.AeugIDs = append(battle.AeugIDs, b.AeugIDs...)
 		battle.TitansIDs = append(battle.TitansIDs, b.TitansIDs...)
 		for _, u := range b.Users {
 			_, isUDP := b.UDPUsers[u.UserID]
-			battle.Users = append(battle.Users, User{
+			battle.Users = append(battle.Users, ZproxyUser{
 				UserID:   u.UserID,
 				Name:     u.Name,
 				Team:     u.Team,

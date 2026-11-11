@@ -57,7 +57,7 @@ func TestUDPStunServer(t *testing.T) {
 		}
 	}
 	srv := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}
-	go (&Server{}).ServeUDPStunServer(srv.String())
+	go (&LbsServer{}).ServeUDPStunServer(srv.String())
 	test := &net.UDPAddr{IP: srv.IP, Port: port + 1}
 
 	// a client bound to port + 1 before the server would take its test socket

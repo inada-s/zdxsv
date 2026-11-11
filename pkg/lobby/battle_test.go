@@ -25,13 +25,13 @@ import (
 
 func Test_ParseBattleResult(t *testing.T) {
 	type args struct {
-		m *Message
+		m *LbsMessage
 	}
 	tests := []struct {
 		name string
 		args args
 	}{
-		{"test1-1p", args{&Message{
+		{"test1-1p", args{&LbsMessage{
 			Direction: ClientToServer,
 			Category:  CategoryAnswer,
 			Command:   0x6138,
@@ -46,7 +46,7 @@ func Test_ParseBattleResult(t *testing.T) {
 				0x3c, 0x00, 0x00, 0x03, 0xe7,
 			},
 		}}},
-		{"test1-2p", args{&Message{
+		{"test1-2p", args{&LbsMessage{
 			Direction: ClientToServer,
 			Category:  CategoryAnswer,
 			Command:   0x6138,
@@ -60,7 +60,7 @@ func Test_ParseBattleResult(t *testing.T) {
 				0x38, 0x00, 0x00, 0x03, 0xe7,
 			},
 		}}},
-		{"test1-3p", args{&Message{
+		{"test1-3p", args{&LbsMessage{
 			Direction: ClientToServer,
 			Category:  CategoryAnswer,
 			Command:   0x6138,
@@ -75,7 +75,7 @@ func Test_ParseBattleResult(t *testing.T) {
 				0x3e, 0x00, 0x00, 0x03, 0xe7,
 			},
 		}}},
-		{"test1-4p", args{&Message{
+		{"test1-4p", args{&LbsMessage{
 			Direction: ClientToServer,
 			Category:  CategoryAnswer,
 			Command:   0x6138,
@@ -99,13 +99,13 @@ func Test_ParseBattleResult(t *testing.T) {
 }
 
 // newCapturePeer returns a peer whose sent messages stay in its Conn's outbuf.
-func newCapturePeer(t *testing.T) *AppPeer {
+func newCapturePeer(t *testing.T) *LbsPeer {
 	t.Helper()
 	c, _ := newPipe(t)
-	return &AppPeer{app: &App{}, conn: NewConn(c)}
+	return &LbsPeer{app: &Lbs{}, conn: NewLbsConn(c)}
 }
 
-func sentMessage(t *testing.T, p *AppPeer) *Message {
+func sentMessage(t *testing.T, p *LbsPeer) *LbsMessage {
 	t.Helper()
 	n, m := Deserialize(p.conn.outbuf)
 	if m == nil || n != len(p.conn.outbuf) {
@@ -116,13 +116,13 @@ func sentMessage(t *testing.T, p *AppPeer) *Message {
 
 func TestGetBattleOpponentStatus(t *testing.T) {
 	b := model.NewBattle(model.PlatformConsole, 2)
-	b.Add(&model.User{User: db.User{UserID: "A", WinCount: 1500}, Entry: model.EntryAeug})
-	b.Add(&model.User{User: db.User{UserID: "B"}, Entry: model.EntryTitans})
+	b.Add(&model.LbsUser{DBUser: db.DBUser{UserID: "A", WinCount: 1500}, Entry: model.EntryAeug})
+	b.Add(&model.LbsUser{DBUser: db.DBUser{UserID: "B"}, Entry: model.EntryTitans})
 	handler := defaultHandlers.handlers[0x6917]
 
 	cases := []struct {
 		name   string
-		battle *model.Battle
+		battle *model.LbsBattle
 		pos    byte
 		status uint32
 	}{
@@ -151,21 +151,21 @@ func TestGetBattleOpponentStatus(t *testing.T) {
 	}
 }
 
-func newUDPTestPeer(info map[string]string, test bool) *AppPeer {
+func newUDPTestPeer(info map[string]string, test bool) *LbsPeer {
 	b := model.NewBattle(model.PlatformFromInfo(info), 2)
 	b.ServerIP = net.IPv4(192, 168, 1, 8)
 	b.ServerPort = 8210
 	b.TestBattle = test
 	for _, id := range []string{"AAAAAA", "BBBBBB"} {
-		b.Users = append(b.Users, model.User{User: db.User{UserID: id, SessionID: "S" + id}})
+		b.Users = append(b.Users, model.LbsUser{DBUser: db.DBUser{UserID: id, SessionID: "S" + id}})
 	}
-	p := &AppPeer{PlatformInfo: info, Platform: model.PlatformFromInfo(info)}
+	p := &LbsPeer{PlatformInfo: info, Platform: model.PlatformFromInfo(info)}
 	p.UserID = "BBBBBB"
 	p.Battle = b
 	return p
 }
 
-func battleInfo(t *testing.T, n *Message) *proto.P2PMatching {
+func battleInfo(t *testing.T, n *LbsMessage) *proto.P2PMatching {
 	t.Helper()
 	if n == nil {
 		t.Fatal("no notice")
@@ -195,7 +195,7 @@ func testUsers(ids ...string) []*proto.P2PUser {
 func TestNoBattleInfoNotice(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
 	noUDP := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
-	for name, p := range map[string]*AppPeer{
+	for name, p := range map[string]*LbsPeer{
 		"console":     newUDPTestPeer(map[string]string{}, false),
 		"no udp":      newUDPTestPeer(noUDP, false),
 		"test battle": newUDPTestPeer(emu, true),
@@ -227,8 +227,8 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.Users = append(p.Battle.Users,
-		model.User{User: db.User{UserID: "CCCCCC", SessionID: "SCCCCCC"}},
-		model.User{User: db.User{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
+		model.LbsUser{DBUser: db.DBUser{UserID: "CCCCCC", SessionID: "SCCCCCC"}},
+		model.LbsUser{DBUser: db.DBUser{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
 	infos := map[string]map[string]string{
 		// every address (IPv4 public, local, IPv6); the TCP source IP is udp_addr's: not added
 		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5", "sync": "fedcba9876543210"},
@@ -367,8 +367,8 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 
 func TestLiveUsers(t *testing.T) {
 	b := model.NewBattle("", 0)
-	b.Users = []model.User{{User: db.User{UserID: "AAAAAA", Name: "アムロ\n"}, Bin: capturedUserBinary, Entry: model.EntryTitans},
-		{User: db.User{UserID: "BBBBBB", Name: "Bob"}, Entry: model.EntryAeug}}
+	b.Users = []model.LbsUser{{DBUser: db.DBUser{UserID: "AAAAAA", Name: "アムロ\n"}, Bin: capturedUserBinary, Entry: model.EntryTitans},
+		{DBUser: db.DBUser{UserID: "BBBBBB", Name: "Bob"}, Entry: model.EntryAeug}}
 	var got []string
 	for _, u := range liveUsers(b) {
 		got = append(got, fmt.Sprintf("%s/%s/%s/%d/%d", u.UserID, u.UserName, u.PilotName, u.Team, u.Pos))
@@ -379,15 +379,15 @@ func TestLiveUsers(t *testing.T) {
 	}
 }
 
-func testBattleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
+func testBattleInfoNotice(p *LbsPeer, info func(userID string) map[string]string) *LbsMessage {
 	return battleInfoNotice(p2pMatching(p, info))
 }
 
 // A player asking for the battle server address after the others left the
 // lobby for the battle still gets their battle info.
 func TestBattleInfoAfterPeersLeft(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 	const lobbyID = 4
 	sides := []byte{model.EntryAeug, model.EntryTitans, model.EntryAeug, model.EntryTitans}
 	var cs []*testClient
@@ -439,11 +439,11 @@ func TestBattleInfoAfterPeersLeft(t *testing.T) {
 }
 
 func TestLobbyBattleSameSyncOnly(t *testing.T) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	addr := startLobby(t, battle.NewLogic())
+	addr := startLobby(t, battle.NewMcs())
 	const lobbyID = 2
 	enter := func(i int, sync string, side byte) *testClient {
 		c := dialLobby(t, addr)
@@ -486,13 +486,13 @@ func TestLobbyBattleSameSyncOnly(t *testing.T) {
 }
 
 // lobby1Proxy logs a user in, enters lobby 1 and registers its proxy with the lobby API.
-func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
+func lobby1Proxy(t *testing.T) (*Lbs, *testClient, *testLogin, string) {
 	t.Helper()
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battle.NewLogic())
+	addr, app := startLobbyApp(t, battle.NewMcs())
 	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
@@ -538,7 +538,7 @@ func TestLobbyTestBattle(t *testing.T) {
 
 func TestLobbyTestBattleStaleProxy(t *testing.T) {
 	app, c, _, _ := lobby1Proxy(t)
-	app.Locked(func(a *App) {
+	app.Locked(func(a *Lbs) {
 		for _, p := range a.users {
 			p.proxyRegTime = time.Now().Add(-21 * time.Second)
 		}
@@ -555,11 +555,11 @@ func TestLobbyTestBattleStaleProxy(t *testing.T) {
 // A client leaves for a battle and never comes back with its battle session: the user logs in again
 // with a new session, enters a lobby and logs out. /lbs/status must not list them in a battle.
 func TestStatusAfterLeftBattleRelogin(t *testing.T) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battle.NewLogic())
+	addr, app := startLobbyApp(t, battle.NewMcs())
 	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
@@ -608,7 +608,7 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 
 // A battle member's report round_data sets every player's used_ms; /lbs/replay?used_ms= finds it.
 func TestReportUsedMsSearch(t *testing.T) {
-	dbtest.Use(t)
+	dbtest.UseTestDB(t)
 	for _, r := range []*db.BattleRecord{
 		{BattleCode: "B1", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
 		{BattleCode: "B1", UserID: "BBBBBB", Players: 2, Pos: 2, Side: 2},
@@ -634,7 +634,7 @@ func TestReportUsedMsSearch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		p := &AppPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
+		p := &LbsPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
 		m := NewClientNotice(0x9952)
 		m.Writer().Write(body)
 		defaultHandlers.handlers[0x9952](p, m)

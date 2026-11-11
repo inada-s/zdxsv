@@ -9,8 +9,8 @@ import (
 	"zdxsv/pkg/db"
 )
 
-func newUser(id string) *User {
-	return &User{User: db.User{UserID: id}}
+func newLbsUser(id string) *LbsUser {
+	return &LbsUser{DBUser: db.DBUser{UserID: id}}
 }
 
 func TestRuleDefaults(t *testing.T) {
@@ -88,7 +88,7 @@ func TestRuleSerialize(t *testing.T) {
 func TestRoomLifecycle(t *testing.T) {
 	r := NewRoom(2, 1)
 	r.Rule.Set(rulePlayerCount, 0) // 2 players
-	a, b := newUser("A"), newUser("B")
+	a, b := newLbsUser("A"), newLbsUser("B")
 
 	r.Enter(a)
 	if r.Owner != "A" || r.MaxPlayer != 2 || r.Status != RoomStateRecruit || r.Deadline.IsZero() {
@@ -117,7 +117,7 @@ func TestRoomBattleStart(t *testing.T) {
 	sides := map[string]byte{"a1": EntryAeug, "t1": EntryTitans, "a2": EntryAeug, "n": EntryNone, "a3": EntryAeug}
 	order := []string{"a1", "t1", "a2", "n", "a3"}
 	for _, id := range order {
-		u := newUser(id)
+		u := newLbsUser(id)
 		r.Enter(u)
 		r.Entry(u, sides[id])
 	}
@@ -128,7 +128,7 @@ func TestRoomBattleStart(t *testing.T) {
 		t.Errorf("3 vs 1 can start")
 	}
 	active, inactive := r.StartBattleUsers()
-	ids := func(us []*User) (s []string) {
+	ids := func(us []*LbsUser) (s []string) {
 		for _, u := range us {
 			s = append(s, u.UserID)
 		}
@@ -155,9 +155,9 @@ func TestLobbyEntry(t *testing.T) {
 	if l.RoomCount() != 5 || len(l.Rooms) != 6 || l.Rooms[5].LobbyID != 4 {
 		t.Fatalf("rooms: count %d, map %d", l.RoomCount(), len(l.Rooms))
 	}
-	users := map[string]*User{}
+	users := map[string]*LbsUser{}
 	for _, id := range []string{"a1", "a2", "a3", "t1", "t2", "x"} {
-		users[id] = newUser(id)
+		users[id] = newLbsUser(id)
 		l.Enter(users[id])
 	}
 	for _, id := range []string{"a1", "t1", "a2", "a3", "t2"} {
@@ -218,7 +218,7 @@ func TestLobbyCanBattleStart(t *testing.T) {
 		l.Start = c.start
 		add := func(n int, side byte, p string) {
 			for i := 0; i < n; i++ {
-				u := newUser(p + string(rune('0'+i)))
+				u := newLbsUser(p + string(rune('0'+i)))
 				l.Enter(u)
 				l.Entry(u, side)
 			}
@@ -234,10 +234,10 @@ func TestLobbyCanBattleStart(t *testing.T) {
 func TestBattle(t *testing.T) {
 	b := NewBattle("ps2", 4)
 	l := NewLobby("ps2", 4)
-	a1, t1, n := newUser("a1"), newUser("t1"), newUser("n")
+	a1, t1, n := newLbsUser("a1"), newLbsUser("t1"), newLbsUser("n")
 	a1.Entry, t1.Entry = EntryAeug, EntryTitans
 	a1.Lobby = l
-	for _, u := range []*User{a1, t1, n} {
+	for _, u := range []*LbsUser{a1, t1, n} {
 		b.Add(u)
 	}
 	if b.Users[0].Lobby != nil || a1.Lobby != l {

@@ -20,9 +20,9 @@ import (
 // HandshakeTimeout bounds a client's TLS handshake; Accept never waits for one.
 const HandshakeTimeout = 10 * time.Second
 
-// ServerConfig loads certFile (PEM: the server certificate, then the CA certificate) and
+// TLSServerConfig loads certFile (PEM: the server certificate, then the CA certificate) and
 // keyFile (the server key).
-func ServerConfig(certFile, keyFile string) (*tls.Config, error) {
+func TLSServerConfig(certFile, keyFile string) (*tls.Config, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
@@ -33,18 +33,18 @@ func ServerConfig(certFile, keyFile string) (*tls.Config, error) {
 	return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}, nil
 }
 
-// Pin is the hex SHA-256 of the certificate's SubjectPublicKeyInfo.
-func Pin(cert *x509.Certificate) string {
+// TLSPin is the hex SHA-256 of the certificate's SubjectPublicKeyInfo.
+func TLSPin(cert *x509.Certificate) string {
 	sum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	return hex.EncodeToString(sum[:])
 }
 
-// ClientConfig accepts a server whose certificate has one of pins or is signed by a
+// TLSClientConfig accepts a server whose certificate has one of pins or is signed by a
 // certificate in its chain that has one.
-func ClientConfig(pins ...string) *tls.Config {
+func TLSClientConfig(pins ...string) *tls.Config {
 	pinned := func(c *x509.Certificate) bool {
 		for _, p := range pins {
-			if Pin(c) == p {
+			if TLSPin(c) == p {
 				return true
 			}
 		}
@@ -75,23 +75,23 @@ func ClientConfig(pins ...string) *tls.Config {
 	}
 }
 
-// NewListener serves TLS on inner. Accept returns connections whose handshake is done;
+// NewTLSListener serves TLS on inner. Accept returns connections whose handshake is done;
 // a failed handshake is logged and closed. Accept errors other than a closed listener
 // are logged and skipped.
-func NewListener(inner net.Listener, cfg *tls.Config) net.Listener {
-	l := &listener{Listener: inner, conns: make(chan net.Conn), done: make(chan struct{})}
+func NewTLSListener(inner net.Listener, cfg *tls.Config) net.Listener {
+	l := &tlsListener{Listener: inner, conns: make(chan net.Conn), done: make(chan struct{})}
 	go l.run(cfg)
 	return l
 }
 
-type listener struct {
+type tlsListener struct {
 	net.Listener
 	conns     chan net.Conn
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
-func (l *listener) run(cfg *tls.Config) {
+func (l *tlsListener) run(cfg *tls.Config) {
 	for {
 		c, err := l.Listener.Accept()
 		if err != nil {
@@ -108,7 +108,7 @@ func (l *listener) run(cfg *tls.Config) {
 	}
 }
 
-func (l *listener) handshake(c *tls.Conn) {
+func (l *tlsListener) handshake(c *tls.Conn) {
 	c.SetDeadline(time.Now().Add(HandshakeTimeout))
 	if err := c.Handshake(); err != nil {
 		zlog.Info("tls handshake", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
@@ -123,7 +123,7 @@ func (l *listener) handshake(c *tls.Conn) {
 	}
 }
 
-func (l *listener) Accept() (net.Conn, error) {
+func (l *tlsListener) Accept() (net.Conn, error) {
 	select {
 	case c := <-l.conns:
 		return c, nil
@@ -132,7 +132,7 @@ func (l *listener) Accept() (net.Conn, error) {
 	}
 }
 
-func (l *listener) Close() error {
+func (l *tlsListener) Close() error {
 	err := net.ErrClosed
 	l.closeOnce.Do(func() {
 		close(l.done)

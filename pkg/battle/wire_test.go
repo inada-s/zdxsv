@@ -9,7 +9,7 @@ import (
 )
 
 func TestWireRoundTrip(t *testing.T) {
-	msgs := []Message{{UserID: "U1", Seq: 7, Body: []byte{1, 2, 3}}, {UserID: "USER02", Seq: 1 << 31, Body: []byte{}}}
+	msgs := []McsMessage{{UserID: "U1", Seq: 7, Body: []byte{1, 2, 3}}, {UserID: "USER02", Seq: 1 << 31, Body: []byte{}}}
 	for _, c := range []struct {
 		b    []byte
 		want Packet
@@ -28,7 +28,7 @@ func TestWireRoundTrip(t *testing.T) {
 }
 
 func TestWireBad(t *testing.T) {
-	full := AppendBattle(nil, 1, 0, []Message{{UserID: "U1", Seq: 1, Body: []byte{9, 9}}})
+	full := AppendBattle(nil, 1, 0, []McsMessage{{UserID: "U1", Seq: 1, Body: []byte{9, 9}}})
 	for i := 3; i < len(full); i++ {
 		if i == 10 {
 			continue // no messages is valid

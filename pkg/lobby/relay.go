@@ -728,7 +728,7 @@ type relayProvisioning struct {
 // SetRelayProvisioning makes the lobby start a relay in each of regions while relays may be
 // needed, and shut down a relay of these regions once unneeded for relayIdleShutdown with no
 // sessions. Call before Serve.
-func (a *App) SetRelayProvisioning(regions []string, prov RelayProvisioner) {
+func (a *Lbs) SetRelayProvisioning(regions []string, prov RelayProvisioner) {
 	a.relayProv = &relayProvisioning{
 		regions:    regions,
 		prov:       prov,
@@ -739,7 +739,7 @@ func (a *App) SetRelayProvisioning(regions []string, prov RelayProvisioner) {
 
 // relayNeeded reports whether a battle's worth of relay-capable players is online from at
 // least two region groups.
-func (a *App) relayNeeded() bool {
+func (a *Lbs) relayNeeded() bool {
 	users := 0
 	first, mixed := "", false
 	for _, p := range a.users {
@@ -774,7 +774,7 @@ func bestRelayRegion(info map[string]string) string {
 	return best
 }
 
-func (a *App) updateRelays(now time.Time) {
+func (a *Lbs) updateRelays(now time.Time) {
 	rp := a.relayProv
 	if rp == nil {
 		return

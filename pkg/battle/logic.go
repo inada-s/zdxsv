@@ -10,46 +10,46 @@ import (
 	"zdxsv/pkg/message"
 )
 
-type BasePeer struct {
+type BaseMcsPeer struct {
 	sessionID string
 	userID    string
 	position  int
 	roomID    int
 }
 
-func (p *BasePeer) SetUserID(userID string) {
+func (p *BaseMcsPeer) SetUserID(userID string) {
 	p.userID = userID
 }
 
-func (p *BasePeer) SetSessionID(sessionID string) {
+func (p *BaseMcsPeer) SetSessionID(sessionID string) {
 	p.sessionID = sessionID
 }
 
-func (p *BasePeer) SessionID() string {
+func (p *BaseMcsPeer) SessionID() string {
 	return p.sessionID
 }
 
-func (p *BasePeer) UserID() string {
+func (p *BaseMcsPeer) UserID() string {
 	return p.userID
 }
 
-func (p *BasePeer) SetPosition(pos int) {
+func (p *BaseMcsPeer) SetPosition(pos int) {
 	p.position = pos
 }
 
-func (p *BasePeer) Position() int {
+func (p *BaseMcsPeer) Position() int {
 	return p.position
 }
 
-func (p *BasePeer) SetRoomID(id int) {
+func (p *BaseMcsPeer) SetRoomID(id int) {
 	p.roomID = id
 }
 
-func (p *BasePeer) RoomID() int {
+func (p *BaseMcsPeer) RoomID() int {
 	return p.roomID
 }
 
-type Peer interface {
+type McsPeer interface {
 	SetUserID(string)
 	SetSessionID(string)
 	UserID() string
@@ -59,14 +59,14 @@ type Peer interface {
 	SetRoomID(int)
 	RoomID() int
 	AddSendData([]byte)
-	AddSendMessage(Message)
+	AddSendMessage(McsMessage)
 	Address() string
 	Close() error
 }
 
 const MaxRoom = 128
 
-type User struct {
+type McsUser struct {
 	UserID    string
 	SessionID string
 	Name      string
@@ -76,26 +76,26 @@ type User struct {
 }
 
 type BattleInfo struct {
-	Users  []User
+	Users  []McsUser
 	RoomID int
 }
 
-type Logic struct {
+type Mcs struct {
 	mtx        sync.Mutex
 	nextRoomID int
 	waiting    map[string]*BattleInfo
-	rooms      []*Room
+	rooms      []*McsRoom
 }
 
-func NewLogic() *Logic {
-	return &Logic{
+func NewMcs() *Mcs {
+	return &Mcs{
 		waiting: make(map[string]*BattleInfo),
-		rooms:   make([]*Room, MaxRoom),
+		rooms:   make([]*McsRoom, MaxRoom),
 	}
 }
 
 // AddBattle takes the users of a battle the lobby started. Each joins by its session id.
-func (m *Logic) AddBattle(users []User) {
+func (m *Mcs) AddBattle(users []McsUser) {
 	m.mtx.Lock()
 	info := &BattleInfo{Users: users, RoomID: m.nextRoomID}
 	m.nextRoomID = (m.nextRoomID + 1) % MaxRoom
@@ -106,17 +106,17 @@ func (m *Logic) AddBattle(users []User) {
 	zlog.Info("battle users", zap.Any("info", *info))
 }
 
-func (m *Logic) GetBattleInfo(sessionID string) *BattleInfo {
+func (m *Mcs) GetBattleInfo(sessionID string) *BattleInfo {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	return m.waiting[sessionID]
 }
 
-func (m *Logic) FindWaitingUser(sessionID string) (*User, bool) {
-	return findUser(m.GetBattleInfo(sessionID), sessionID)
+func (m *Mcs) FindWaitingUser(sessionID string) (*McsUser, bool) {
+	return findMcsUser(m.GetBattleInfo(sessionID), sessionID)
 }
 
-func findUser(info *BattleInfo, sessionID string) (*User, bool) {
+func findMcsUser(info *BattleInfo, sessionID string) (*McsUser, bool) {
 	if info == nil {
 		zlog.Error("BattleInfo not found", zap.Any("session_id", sessionID))
 		return nil, false
@@ -130,10 +130,10 @@ func findUser(info *BattleInfo, sessionID string) (*User, bool) {
 	return nil, false
 }
 
-func (m *Logic) Join(p Peer, sessionID string) *Room {
+func (m *Mcs) Join(p McsPeer, sessionID string) *McsRoom {
 	m.mtx.Lock()
 	info := m.waiting[sessionID]
-	user, ok := findUser(info, sessionID)
+	user, ok := findMcsUser(info, sessionID)
 	if !ok {
 		m.mtx.Unlock()
 		return nil
@@ -141,7 +141,7 @@ func (m *Logic) Join(p Peer, sessionID string) *Room {
 	delete(m.waiting, sessionID)
 	room := m.rooms[info.RoomID]
 	if room == nil {
-		room = newRoom(info.RoomID)
+		room = newMcsRoom(info.RoomID)
 		m.rooms[info.RoomID] = room
 	}
 	m.mtx.Unlock()

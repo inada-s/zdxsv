@@ -25,7 +25,7 @@ import (
 
 // OnGetBattleInfo returns the P2PMatching for an emulator that runs
 // the zproxy bridge itself (platform info "udp=1"), else nil.
-func (a *App) OnGetBattleInfo(p *AppPeer) *proto.P2PMatching {
+func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *proto.P2PMatching {
 	b := p.Battle
 	if b == nil {
 		return nil
@@ -46,7 +46,7 @@ func (a *App) OnGetBattleInfo(p *AppPeer) *proto.P2PMatching {
 // differs from its own.
 var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
-func p2pMatching(p *AppPeer, info func(userID string) map[string]string) *proto.P2PMatching {
+func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.P2PMatching {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == model.PlatformConsole || p.PlatformInfo["udp"] != "1" {
 		return nil
@@ -181,7 +181,7 @@ func tcpSourceAddr(ip string, addrs []string) string {
 // liveUplink returns the GGPO player that streams the battle to live spectators
 // (Spectators): the lowest udp_rtt (platform info, ms to the lobby's UDP
 // socket), ties and unknown in battle order; "" if no player has GGPO.
-func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]string) string {
+func liveUplink(p *LbsPeer, users []string, info func(userID string) map[string]string) string {
 	best, bestRtt := "", math.MaxInt32
 	for _, id := range users {
 		pi := p.PlatformInfo
@@ -208,7 +208,7 @@ func liveUplink(p *AppPeer, users []string, info func(userID string) map[string]
 // relayServers offers the relays of battleRelays to a GGPO battle, only
 // when every player reports relay_server=1 (platform info). The relay session is the
 // battle's ggpo_session, so every player gets the same token.
-func relayServers(p *AppPeer, users []string, info func(userID string) map[string]string, session uint32) []*proto.RelayServer {
+func relayServers(p *LbsPeer, users []string, info func(userID string) map[string]string, session uint32) []*proto.RelayServer {
 	if info == nil || p.PlatformInfo["relay_server"] != "1" {
 		return nil
 	}
@@ -273,7 +273,7 @@ func pilotName(bin string) string {
 }
 
 // OnP2PMatchingReport logs how a battle ran and saves its used_ms.
-func (a *App) OnP2PMatchingReport(p *AppPeer, report *proto.P2PMatchingReport) {
+func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, report *proto.P2PMatchingReport) {
 	if p.PlatformInfo == nil {
 		zlog.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
 		return
@@ -353,7 +353,7 @@ func p2pMatchingReportFields(report *proto.P2PMatchingReport) []zap.Field {
 	return line
 }
 
-func battlePlatformInfo(peer *AppPeer) map[string]string {
+func battlePlatformInfo(peer *LbsPeer) map[string]string {
 	pi := maps.Clone(peer.PlatformInfo)
 	if pi == nil {
 		pi = map[string]string{}
@@ -368,7 +368,7 @@ func battlePlatformInfo(peer *AppPeer) map[string]string {
 }
 
 // liveUsers returns the battle's players for the /lbs/live list, as /lbs/replay's users.
-func liveUsers(b *model.Battle) []*db.ReplayUser {
+func liveUsers(b *model.LbsBattle) []*db.ReplayUser {
 	users := make([]*db.ReplayUser, 0, len(b.Users))
 	for _, u := range b.Users {
 		users = append(users, &db.ReplayUser{

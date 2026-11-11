@@ -7,7 +7,7 @@ import (
 	. "zdxsv/pkg/message"
 )
 
-func SendLobbyChatHackNotice(p *AppPeer, s *db.LobbySetting) {
+func SendLobbyChatHackNotice(p *LbsPeer, s *db.MLobbySetting) {
 	if lobbyHasHack(s, model.HackZproxyTest) {
 		NoticeChatMessage(p, "SERVER", "＞", "自動選抜に入ることでＵＤＰプロキシの")
 		NoticeChatMessage(p, "SERVER", "＞", "接続テスト対戦を行うことができます。")
@@ -31,7 +31,7 @@ func SendLobbyChatHackNotice(p *AppPeer, s *db.LobbySetting) {
 	}
 }
 
-func LobbyChatHack(p *AppPeer, str string) {
+func LobbyChatHack(p *LbsPeer, str string) {
 	if (str != "ｗ０" && str != "ｗ１") || !platformHasWideScreen(p.Platform) {
 		return
 	}
@@ -41,19 +41,19 @@ func LobbyChatHack(p *AppPeer, str string) {
 		NoticeChatMessage(p, "SERVER", "＞", "ワイドスクリーンパッチを無効化")
 		NoticeChatMessage(p, "SERVER", "＞", "戦場選択画面に戻ってください")
 		NoticeChatMessage(p, "SERVER", "＞", "この設定はユーザ別に保存されます")
-		db.DefaultDB.UpdateUser(&p.User.User)
+		db.DefaultDB.UpdateUser(&p.LbsUser.DBUser)
 	case "ｗ１":
 		p.System = (p.System & uint32(0xffffff00)) | 0x01
 		NoticeChatMessage(p, "SERVER", "＞", "ワイドスクリーンパッチを有効化")
 		NoticeChatMessage(p, "SERVER", "＞", "戦場選択画面に戻ってください")
 		NoticeChatMessage(p, "SERVER", "＞", "この設定はユーザ別に保存されます")
-		db.DefaultDB.UpdateUser(&p.User.User)
+		db.DefaultDB.UpdateUser(&p.LbsUser.DBUser)
 	}
 }
 
 // SetPadDelayLobbyHack writes answer of LobbyExplain message
 // with a function that sets pad delay to static value.
-func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
+func SetPadDelayLobbyHack(p *LbsPeer, m *LbsMessage) *LbsMessage {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()
@@ -112,7 +112,7 @@ func SetPadDelayLobbyHack(p *AppPeer, m *Message) *Message {
 
 // SetWideScreenLobbyHack writes answer of LobbyExplain message
 // with a function that sets widescreen patch.
-func SetWideScreenLobbyHack(p *AppPeer, m *Message) *Message {
+func SetWideScreenLobbyHack(p *LbsPeer, m *LbsMessage) *LbsMessage {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	w := a.Writer()

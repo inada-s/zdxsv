@@ -21,8 +21,8 @@ var (
 )
 
 func newDevSite(t *testing.T) (*httptest.Server, *http.Client) {
-	dbtest.Use(t)
-	s := &Server{Provider: DevProvider(), Store: db.DefaultDB}
+	dbtest.UseTestDB(t)
+	s := &AuthServer{Provider: DevProvider(), Store: db.DefaultDB}
 	site := httptest.NewServer(s)
 	t.Cleanup(site.Close)
 	s.PublicURL = site.URL
@@ -101,7 +101,7 @@ func TestDevSignInDenyAndBadID(t *testing.T) {
 }
 
 func TestDevAuthorizeOffForDiscord(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	if resp, _ := get(t, http.DefaultClient, r.site.URL+"/auth/dev/authorize?state=x"); resp.StatusCode != http.StatusNotFound {
 		t.Fatal("dev page served by the discord provider", resp.StatusCode)
 	}
@@ -132,7 +132,7 @@ func TestDevCarryCode(t *testing.T) {
 		t.Fatal("carried account", key, got.LoginKey)
 	}
 
-	r := newRig(t)
+	r := newAuthRig(t)
 	if resp, _ := get(t, http.DefaultClient, r.site.URL+"/auth/dev/carry"); resp.StatusCode != http.StatusNotFound {
 		t.Fatal("dev carry served by the discord provider", resp.StatusCode)
 	}

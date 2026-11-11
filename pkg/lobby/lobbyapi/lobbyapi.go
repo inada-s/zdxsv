@@ -25,7 +25,7 @@ type RegisterProxyResponse struct {
 	Message    string
 	SessionID  string
 	UserID     string
-	LobbyUsers []User
+	LobbyUsers []ZproxyUser
 }
 
 type BattleInfoRequest struct {
@@ -35,13 +35,13 @@ type BattleInfoRequest struct {
 type BattleInfoResponse struct {
 	Result   bool
 	Message  string
-	Users    []User
+	Users    []ZproxyUser
 	BattleIP net.IP
 	Port     uint16
 	IsTest   bool
 }
 
-type User struct {
+type ZproxyUser struct {
 	UserID   string
 	Name     string
 	Team     string
@@ -50,14 +50,14 @@ type User struct {
 	Platform string
 }
 
-type Battle struct {
-	Users     []User
+type ZproxyBattle struct {
+	Users     []ZproxyUser
 	AeugIDs   []string
 	TitansIDs []string
 	Platform  string
 }
 
 type StatusResponse struct {
-	LobbyUsers []User
-	Battles    []Battle
+	LobbyUsers []ZproxyUser
+	Battles    []ZproxyBattle
 }

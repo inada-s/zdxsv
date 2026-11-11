@@ -16,7 +16,7 @@ import (
 )
 
 var loadTLS = sync.OnceValues(func() (*tls.Config, error) {
-	return tlsconf.ServerConfig(config.Conf.TLS.CertFile, config.Conf.TLS.KeyFile)
+	return tlsconf.TLSServerConfig(config.Conf.TLS.CertFile, config.Conf.TLS.KeyFile)
 })
 
 // tlsListen opens the TLS port addr (like the game ports, on all interfaces) for the
@@ -34,7 +34,7 @@ func tlsListen(name, addr string) net.Listener {
 		zlog.Fatal("tls", zap.String("name", name), zap.Error(err))
 	}
 	zlog.Info("tls listen", zap.String("name", name), zap.Any("addr", addr))
-	return tlsconf.NewListener(l, cfg)
+	return tlsconf.NewTLSListener(l, cfg)
 }
 
 // mainTLSCheck connects to the TLS port addr, prints the pin of each certificate the
@@ -42,14 +42,14 @@ func tlsListen(name, addr string) net.Listener {
 // matches one of pins or the server sends nothing within 5 s.
 func mainTLSCheck(addr string, pins []string) {
 	d := &net.Dialer{Timeout: 10 * time.Second}
-	c, err := tls.DialWithDialer(d, "tcp", addr, tlsconf.ClientConfig(pins...))
+	c, err := tls.DialWithDialer(d, "tcp", addr, tlsconf.TLSClientConfig(pins...))
 	if err != nil {
 		fmt.Println("FAIL", addr, err)
 		os.Exit(1)
 	}
 	defer c.Close()
 	for _, cert := range c.ConnectionState().PeerCertificates {
-		fmt.Println("chain", tlsconf.Pin(cert), cert.Subject.CommonName)
+		fmt.Println("chain", tlsconf.TLSPin(cert), cert.Subject.CommonName)
 	}
 	c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	buf := make([]byte, 4096)

@@ -7,7 +7,7 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-var _ = register(0x6401, "GetRoomCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6401, "GetRoomCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	count := p.app.OnGetRoomCount(p)
 	w := a.Writer()
@@ -15,7 +15,7 @@ var _ = register(0x6401, "GetRoomCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6402, "GetRoomName", func(p *AppPeer, m *Message) {
+var _ = register(0x6402, "GetRoomName", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	name := p.app.OnGetRoomName(p, roomID)
 	a := NewServerAnswer(m)
@@ -25,7 +25,7 @@ var _ = register(0x6402, "GetRoomName", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x640B, "GetRoomJoinInfo", func(p *AppPeer, m *Message) {
+var _ = register(0x640B, "GetRoomJoinInfo", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	max := p.app.OnGetRoomJoinInfo(p, roomID)
 	a := NewServerAnswer(m)
@@ -39,7 +39,7 @@ var _ = register(0x640B, "GetRoomJoinInfo", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6403, "GetRoomUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6403, "GetRoomUserCount", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	count := p.app.OnGetRoomUserCount(p, roomID)
 	maxCount := p.app.OnGetRoomJoinInfo(p, roomID)
@@ -54,7 +54,7 @@ var _ = register(0x6403, "GetRoomUserCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6404, "GetRoomStatus", func(p *AppPeer, m *Message) {
+var _ = register(0x6404, "GetRoomStatus", func(p *LbsPeer, m *LbsMessage) {
 	// 0:not avaibale X この部屋は使用できません
 	// 1:empty room 空き
 	// 2:prepareing 準備中
@@ -70,7 +70,7 @@ var _ = register(0x6404, "GetRoomStatus", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6405, "GetRoomPasswordInfo", func(p *AppPeer, m *Message) {
+var _ = register(0x6405, "GetRoomPasswordInfo", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	pass, ok := p.app.OnGetRoomPasswordInfo(p, roomID)
 	a := NewServerAnswer(m)
@@ -85,7 +85,7 @@ var _ = register(0x6405, "GetRoomPasswordInfo", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6407, "RequestCreateRoom", func(p *AppPeer, m *Message) {
+var _ = register(0x6407, "RequestCreateRoom", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	ok := p.app.OnRequestCreateRoom(p, roomID)
 	a := NewServerAnswer(m)
@@ -99,7 +99,7 @@ var _ = register(0x6407, "RequestCreateRoom", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6603, "GetRuleCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6603, "GetRuleCount", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	count := p.app.OnRequestGetRuleCount(p, roomID)
 	a := NewServerAnswer(m)
@@ -108,7 +108,7 @@ var _ = register(0x6603, "GetRuleCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6601, "GetNamePermission", func(p *AppPeer, m *Message) {
+var _ = register(0x6601, "GetNamePermission", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	result := p.app.OnGetNamePermission(p, roomID)
 	a := NewServerAnswer(m)
@@ -117,7 +117,7 @@ var _ = register(0x6601, "GetNamePermission", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6602, "GetPasswordPermission", func(p *AppPeer, m *Message) {
+var _ = register(0x6602, "GetPasswordPermission", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	result := p.app.OnGetPasswordPermission(p, roomID)
 	a := NewServerAnswer(m)
@@ -126,7 +126,7 @@ var _ = register(0x6602, "GetPasswordPermission", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6604, "GetRuleName", func(p *AppPeer, m *Message) {
+var _ = register(0x6604, "GetRuleName", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -138,7 +138,7 @@ var _ = register(0x6604, "GetRuleName", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6605, "GetRulePermission", func(p *AppPeer, m *Message) {
+var _ = register(0x6605, "GetRulePermission", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -150,7 +150,7 @@ var _ = register(0x6605, "GetRulePermission", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6606, "GetRuleDefaultIndex", func(p *AppPeer, m *Message) {
+var _ = register(0x6606, "GetRuleDefaultIndex", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -162,7 +162,7 @@ var _ = register(0x6606, "GetRuleDefaultIndex", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6608, "GetRuleElementName", func(p *AppPeer, m *Message) {
+var _ = register(0x6608, "GetRuleElementName", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -176,7 +176,7 @@ var _ = register(0x6608, "GetRuleElementName", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x660E, "GetRuleControl", func(p *AppPeer, m *Message) {
+var _ = register(0x660E, "GetRuleControl", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -190,7 +190,7 @@ var _ = register(0x660E, "GetRuleControl", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6607, "GetRuleElementCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6607, "GetRuleElementCount", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	ruleID := r.Read8()
@@ -202,14 +202,14 @@ var _ = register(0x6607, "GetRuleElementCount", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6609, "DecideRoomName", func(p *AppPeer, m *Message) {
+var _ = register(0x6609, "DecideRoomName", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	name := r.ReadEncryptedString()
 	p.app.OnDecideRoomName(p, name)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x660A, "DecideRoomPassword", func(p *AppPeer, m *Message) {
+var _ = register(0x660A, "DecideRoomPassword", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	pass := r.ReadEncryptedString()
 	p.app.OnDecideRoomPassword(p, pass)
@@ -217,7 +217,7 @@ var _ = register(0x660A, "DecideRoomPassword", func(p *AppPeer, m *Message) {
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x660B, "DecideRule", func(p *AppPeer, m *Message) {
+var _ = register(0x660B, "DecideRule", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	ruleID := r.Read8()
 	elemID := r.Read8()
@@ -228,12 +228,12 @@ var _ = register(0x660B, "DecideRule", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x660C, "DecideRuleFinish", func(p *AppPeer, m *Message) {
+var _ = register(0x660C, "DecideRuleFinish", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnDecideRuleFinish(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6409, "GetRoomRestTime", func(p *AppPeer, m *Message) {
+var _ = register(0x6409, "GetRoomRestTime", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	a := NewServerAnswer(m)
 	sec := p.app.OnGetRoomRestTime(p, roomID)
@@ -243,7 +243,7 @@ var _ = register(0x6409, "GetRoomRestTime", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x640A, "GetRoomMember", func(p *AppPeer, m *Message) {
+var _ = register(0x640A, "GetRoomMember", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	count, users := p.app.OnGetRoomMember(p, roomID)
 	a := NewServerAnswer(m)
@@ -256,7 +256,7 @@ var _ = register(0x640A, "GetRoomMember", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6413, "GetRoomEntryList", func(p *AppPeer, m *Message) {
+var _ = register(0x6413, "GetRoomEntryList", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	count, ids, sides := p.app.OnGetRoomEntryList(p, roomID)
 	a := NewServerAnswer(m)
@@ -270,7 +270,7 @@ var _ = register(0x6413, "GetRoomEntryList", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6504, "EntryRoomMatch", func(p *AppPeer, m *Message) {
+var _ = register(0x6504, "EntryRoomMatch", func(p *LbsPeer, m *LbsMessage) {
 	side := m.Reader().Read8()
 	p.app.OnEntryRoomMatch(p, side)
 	a := NewServerAnswer(m)
@@ -279,7 +279,7 @@ var _ = register(0x6504, "EntryRoomMatch", func(p *AppPeer, m *Message) {
 	p.SendMessage(a)
 })
 
-var _ = register(0x6406, "EnterRoom", func(p *AppPeer, m *Message) {
+var _ = register(0x6406, "EnterRoom", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	unk1 := r.Read16()
@@ -289,12 +289,12 @@ var _ = register(0x6406, "EnterRoom", func(p *AppPeer, m *Message) {
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6501, "ExitRoom", func(p *AppPeer, m *Message) {
+var _ = register(0x6501, "ExitRoom", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnExitRoom(p)
 	p.SendMessage(NewServerAnswer(m))
 })
 
-var _ = register(0x6412, "GetRoomMatchEntryUserCount", func(p *AppPeer, m *Message) {
+var _ = register(0x6412, "GetRoomMatchEntryUserCount", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
 	aeug, titans := p.app.OnGetRoomMatchEntryUserCount(p, roomID)
@@ -306,11 +306,11 @@ var _ = register(0x6412, "GetRoomMatchEntryUserCount", func(p *AppPeer, m *Messa
 	p.SendMessage(a)
 })
 
-var _ = register(0x6508, "NoticeRoomBattleStart", func(p *AppPeer, m *Message) {
+var _ = register(0x6508, "NoticeRoomBattleStart", func(p *LbsPeer, m *LbsMessage) {
 	p.app.OnNoticeRoomBattleStart(p)
 })
 
-func NoticeRoomEntry(p *AppPeer, roomID uint16, userID string, side byte) {
+func NoticeRoomEntry(p *LbsPeer, roomID uint16, userID string, side byte) {
 	n := NewServerNotice(0x6414)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -319,7 +319,7 @@ func NoticeRoomEntry(p *AppPeer, roomID uint16, userID string, side byte) {
 	p.SendMessage(n)
 }
 
-func NoticeRoomName(p *AppPeer, roomID uint16, name string) {
+func NoticeRoomName(p *LbsPeer, roomID uint16, name string) {
 	n := NewServerNotice(0x6402)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -327,7 +327,7 @@ func NoticeRoomName(p *AppPeer, roomID uint16, name string) {
 	p.SendMessage(n)
 }
 
-func NoticeRoomEntryUserCountForLobbyUser(p *AppPeer, roomID, aeug, titans uint16) {
+func NoticeRoomEntryUserCountForLobbyUser(p *LbsPeer, roomID, aeug, titans uint16) {
 	n := NewServerNotice(0x6412)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -336,7 +336,7 @@ func NoticeRoomEntryUserCountForLobbyUser(p *AppPeer, roomID, aeug, titans uint1
 	p.SendMessage(n)
 }
 
-func NoticeRoomStatus(p *AppPeer, roomID uint16, status byte) {
+func NoticeRoomStatus(p *LbsPeer, roomID uint16, status byte) {
 	n := NewServerNotice(0x6404)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -344,7 +344,7 @@ func NoticeRoomStatus(p *AppPeer, roomID uint16, status byte) {
 	p.SendMessage(n)
 }
 
-func NoticeRoomUserCount(p *AppPeer, roomID, count uint16) {
+func NoticeRoomUserCount(p *LbsPeer, roomID, count uint16) {
 	n := NewServerNotice(0x6403)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -352,7 +352,7 @@ func NoticeRoomUserCount(p *AppPeer, roomID, count uint16) {
 	p.SendMessage(n)
 }
 
-func NoticeRoomJoinInfo(p *AppPeer, roomID, max uint16) {
+func NoticeRoomJoinInfo(p *LbsPeer, roomID, max uint16) {
 	n := NewServerNotice(0x640B)
 	w := n.Writer()
 	w.Write16(roomID)
@@ -364,7 +364,7 @@ func NoticeRoomJoinInfo(p *AppPeer, roomID, max uint16) {
 	p.SendMessage(n)
 }
 
-func NoticeExitRoom(p *AppPeer, userID, name, team string) {
+func NoticeExitRoom(p *LbsPeer, userID, name, team string) {
 	n := NewServerNotice(0x6502)
 	w := n.Writer()
 	w.WriteString(userID)
@@ -373,7 +373,7 @@ func NoticeExitRoom(p *AppPeer, userID, name, team string) {
 	p.SendMessage(n)
 }
 
-func NoticeJoinRoom(p *AppPeer, userID, name, team string) {
+func NoticeJoinRoom(p *LbsPeer, userID, name, team string) {
 	n := NewServerNotice(0x6503)
 	w := n.Writer()
 	w.WriteString(userID)
@@ -382,7 +382,7 @@ func NoticeJoinRoom(p *AppPeer, userID, name, team string) {
 	p.SendMessage(n)
 }
 
-func NoticeRemoveRoom(p *AppPeer) {
+func NoticeRemoveRoom(p *LbsPeer) {
 	n := NewServerNotice(0x6505)
 	w := n.Writer()
 	w.WriteString("<BODY><LF=6><CENTER>部屋が解散になりました。<END>")

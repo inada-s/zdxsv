@@ -91,4 +91,4 @@ var tplStart = template.Must(template.New("start").Parse(head +
 	`{{range .Notice}}<p>{{.}}</p>{{end}}
 <p><a class="b" href="{{.ProviderURL}}">{{.Button}}</a></p></body></html>`))
 
-var tplMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></body></html>`))
+var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></body></html>`))

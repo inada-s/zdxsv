@@ -7,7 +7,7 @@ import (
 )
 
 func TestSerializeHeaderLayout(t *testing.T) {
-	m := &Message{
+	m := &LbsMessage{
 		Direction: ServerToClient,
 		Category:  CategoryAnswer,
 		Command:   0x6101,
@@ -25,7 +25,7 @@ func TestSerializeHeaderLayout(t *testing.T) {
 }
 
 func TestDeserializeRoundTrip(t *testing.T) {
-	m := &Message{
+	m := &LbsMessage{
 		Direction: ClientToServer,
 		Category:  CategoryNotice,
 		Command:   0x1234,
@@ -45,7 +45,7 @@ func TestDeserializeRoundTrip(t *testing.T) {
 }
 
 func TestDeserializeIncomplete(t *testing.T) {
-	full := (&Message{Body: []byte{1, 2, 3}}).Serialize()
+	full := (&LbsMessage{Body: []byte{1, 2, 3}}).Serialize()
 	for _, n := range []int{0, 1, HeaderSize - 1, HeaderSize, len(full) - 1} {
 		if k, m := Deserialize(full[:n]); k != 0 || m != nil {
 			t.Errorf("Deserialize(%d bytes) = %d, %v; want 0, nil", n, k, m)
@@ -54,10 +54,10 @@ func TestDeserializeIncomplete(t *testing.T) {
 }
 
 func TestConstructors(t *testing.T) {
-	req := &Message{Command: 0x4242, Seq: 9}
+	req := &LbsMessage{Command: 0x4242, Seq: 9}
 	cases := []struct {
 		name     string
-		m        *Message
+		m        *LbsMessage
 		dir, cat byte
 		command  uint16
 		keepSeq  bool
@@ -139,14 +139,14 @@ func TestWriterReaderRoundTrip(t *testing.T) {
 }
 
 func TestReadStringTrimsNul(t *testing.T) {
-	m := &Message{Body: []byte{0x00, 0x04, 'a', 'b', 0x00, 0x00}}
+	m := &LbsMessage{Body: []byte{0x00, 0x04, 'a', 'b', 0x00, 0x00}}
 	if got := m.Reader().ReadString(); got != "ab" {
 		t.Errorf("ReadString = %q, want ab", got)
 	}
 }
 
 func TestLittleEndianWriters(t *testing.T) {
-	m := &Message{}
+	m := &LbsMessage{}
 	m.Writer().Write8LE(0x01).Write16LE(0x0203).Write32LE(0x04050607)
 	want := []byte{0x01, 0x03, 0x02, 0x07, 0x06, 0x05, 0x04}
 	if !bytes.Equal(m.Body, want) {
@@ -166,25 +166,25 @@ func TestReadEncryptedStringRejects(t *testing.T) {
 		"checksum":  bad,
 	}
 	for name, body := range cases {
-		m := &Message{Seq: 405, Body: body}
+		m := &LbsMessage{Seq: 405, Body: body}
 		if got := m.Reader().ReadEncryptedString(); got != "" {
 			t.Errorf("%s: ReadEncryptedString = %q, want empty", name, got)
 		}
 	}
-	if got := (&Message{Seq: 405, Body: good}).Reader().ReadEncryptedString(); got != "＾ゞ）" {
+	if got := (&LbsMessage{Seq: 405, Body: good}).Reader().ReadEncryptedString(); got != "＾ゞ）" {
 		t.Errorf("control: ReadEncryptedString = %q", got)
 	}
 }
 
 func TestString(t *testing.T) {
 	cases := []struct {
-		m    *Message
+		m    *LbsMessage
 		want string
 	}{
-		{&Message{Direction: ClientToServer, Category: CategoryQuestion, Command: 0xAB, Seq: 3}, "C->S [Q] ID:0xAB Seq:3 Body(0 bytes):"},
-		{&Message{Direction: ServerToClient, Category: CategoryAnswer, Body: []byte{1}}, "C<-S [A] ID:0x0 Seq:0 Body(1 bytes):"},
-		{&Message{Direction: ServerToClient, Category: CategoryNotice}, "C<-S [N]"},
-		{&Message{Direction: ServerToClient, Category: CategoryCustom}, "C<-S [C]"},
+		{&LbsMessage{Direction: ClientToServer, Category: CategoryQuestion, Command: 0xAB, Seq: 3}, "C->S [Q] ID:0xAB Seq:3 Body(0 bytes):"},
+		{&LbsMessage{Direction: ServerToClient, Category: CategoryAnswer, Body: []byte{1}}, "C<-S [A] ID:0x0 Seq:0 Body(1 bytes):"},
+		{&LbsMessage{Direction: ServerToClient, Category: CategoryNotice}, "C<-S [N]"},
+		{&LbsMessage{Direction: ServerToClient, Category: CategoryCustom}, "C<-S [C]"},
 	}
 	for _, c := range cases {
 		if got := c.m.String(); !strings.HasPrefix(got, c.want) {

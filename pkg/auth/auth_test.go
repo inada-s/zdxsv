@@ -48,19 +48,19 @@ func newFakeProvider(t *testing.T) *fakeProvider {
 	return f
 }
 
-type rig struct {
+type authRig struct {
 	t        *testing.T
 	provider *fakeProvider
-	auth     *Server
+	auth     *AuthServer
 	site     *httptest.Server
 	noFollow *http.Client
 }
 
-func newRig(t *testing.T) *rig {
-	dbtest.Use(t)
+func newAuthRig(t *testing.T) *authRig {
+	dbtest.UseTestDB(t)
 	p := newFakeProvider(t)
-	r := &rig{t: t, provider: p}
-	r.auth = &Server{
+	r := &authRig{t: t, provider: p}
+	r.auth = &AuthServer{
 		Provider: Provider{Name: "discord", AuthURL: p.URL + "/authorize", TokenURL: p.URL + "/token",
 			UserURL: p.URL + "/user", Scope: "identify", ClientID: "cid", ClientSecret: "secret"},
 		Store: db.DefaultDB,
@@ -86,7 +86,7 @@ var buttonRe = regexp.MustCompile(`href="([^"]+)"`)
 
 // signIn runs the browser part and returns the one-time code given to the emulator, or the
 // status of the page that stopped it.
-func (r *rig) signIn(discordID string) (string, int) {
+func (r *authRig) signIn(discordID string) (string, int) {
 	r.provider.userID = discordID
 	q := url.Values{"redirect_port": {"50123"}, "state": {"st"}, "code_challenge": {challenge(verifier)}, "lang": {"en"}}
 	resp, err := http.Get(r.site.URL + "/auth/start?" + q.Encode())
@@ -120,7 +120,7 @@ func (r *rig) signIn(discordID string) (string, int) {
 }
 
 // tokenFor signs in and returns the emulator's token.
-func (r *rig) tokenFor(discordID string) string {
+func (r *authRig) tokenFor(discordID string) string {
 	code, st := r.signIn(discordID)
 	if st != http.StatusFound {
 		r.t.Fatal("sign in", st)
@@ -132,7 +132,7 @@ func (r *rig) tokenFor(discordID string) string {
 	return token
 }
 
-func (r *rig) token(code, v string) (string, int) {
+func (r *authRig) token(code, v string) (string, int) {
 	resp, err := http.PostForm(r.site.URL+"/auth/token", url.Values{"code": {code}, "code_verifier": {v}})
 	if err != nil {
 		r.t.Fatal(err)
@@ -143,11 +143,11 @@ func (r *rig) token(code, v string) (string, int) {
 	return got.Token, resp.StatusCode
 }
 
-func (r *rig) lbsLogin(token string) (login.APILoginResponse, int) {
+func (r *authRig) lbsLogin(token string) (login.APILoginResponse, int) {
 	return r.lbsLoginAs(token, "")
 }
 
-func (r *rig) lbsLoginAs(token, account string) (login.APILoginResponse, int) {
+func (r *authRig) lbsLoginAs(token, account string) (login.APILoginResponse, int) {
 	v := url.Values{"token": {token}}
 	if account != "" {
 		v.Set("account", account)
@@ -163,7 +163,7 @@ func (r *rig) lbsLoginAs(token, account string) (login.APILoginResponse, int) {
 }
 
 func TestSignInCreatesNoAccount(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	code, st := r.signIn("1111")
 	if st != http.StatusFound {
 		t.Fatal("sign in", st)
@@ -230,7 +230,7 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	}
 }
 
-func (r *rig) carry(token, code string) (accountList, int) {
+func (r *authRig) carry(token, code string) (accountList, int) {
 	resp, err := http.PostForm(r.site.URL+"/auth/accounts/carry", url.Values{"token": {token}, "code": {code}})
 	if err != nil {
 		r.t.Fatal(err)
@@ -242,7 +242,7 @@ func (r *rig) carry(token, code string) (accountList, int) {
 }
 
 func TestCarryOverLinksExistingAccount(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	old, err := db.DefaultDB.RegisterAccount("198.51.100.8")
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +300,7 @@ type accountList struct {
 	Added      int
 }
 
-func (r *rig) accounts(path, token string) (accountList, int) {
+func (r *authRig) accounts(path, token string) (accountList, int) {
 	resp, err := http.PostForm(r.site.URL+path, url.Values{"token": {token}})
 	if err != nil {
 		r.t.Fatal(err)
@@ -312,7 +312,7 @@ func (r *rig) accounts(path, token string) (accountList, int) {
 }
 
 func TestAccountLimits(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	token := r.tokenFor("5555")
 	for n := 1; n <= db.MaxIdentityNewAccounts; n++ {
 		if got, st := r.lbsLoginAs(token, "new"); st != 200 || got.Account != n {
@@ -385,7 +385,7 @@ func TestAccountLimits(t *testing.T) {
 }
 
 func TestCarryOverMissesLock(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	a, _ := db.DefaultDB.RegisterAccount("198.51.100.8")
 	token := r.tokenFor("5555")
 	for i := 0; i < carryMaxMisses; i++ {
@@ -397,7 +397,7 @@ func TestCarryOverMissesLock(t *testing.T) {
 }
 
 func TestStartRejectsBadRequests(t *testing.T) {
-	r := newRig(t)
+	r := newAuthRig(t)
 	ok := url.Values{"redirect_port": {"50123"}, "state": {"st"}, "code_challenge": {challenge(verifier)}}
 	for _, c := range []struct{ k, v string }{
 		{"redirect_port", "80"}, {"redirect_port", "x"}, {"state", ""}, {"code_challenge", "short"},

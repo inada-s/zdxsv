@@ -36,13 +36,13 @@ func mainAll() {
 	zlog.Info("dnas listen", zap.String("addr", config.Conf.DNAS.Addr), zap.String("https_backend", config.Conf.DNAS.HTTPSBackend))
 	serve("dnas", func() error { return dnasRouter.ListenAndServe(config.Conf.DNAS.Addr) })
 
-	logic := battle.NewLogic()
+	logic := battle.NewMcs()
 	battleAddr := stripHost(config.Conf.Battle.Addr)
 	zlog.Info("battle listen", zap.Any("addr", battleAddr))
 	serve("battle udp", func() error { return battle.NewUDPServer(logic).ListenAndServe(battleAddr) })
 	serve("battle tcp", func() error { return battle.NewTCPServer(logic).ListenAndServe(battleAddr) })
 
-	app := lobby.NewApp()
+	app := lobby.NewLbs()
 	app.SetBattleServer(logic)
 	serveLobby(app)
 }

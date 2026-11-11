@@ -9,7 +9,7 @@ import (
 )
 
 // tcpPair starts a TCPPeer for one accepted connection and returns the client side.
-func tcpPair(t *testing.T, ln *net.TCPListener, logic *Logic) *net.TCPConn {
+func tcpPair(t *testing.T, ln *net.TCPListener, logic *Mcs) *net.TCPConn {
 	t.Helper()
 	c, err := net.DialTCP("tcp", nil, ln.Addr().(*net.TCPAddr))
 	if err != nil {
@@ -40,8 +40,8 @@ func hello(encoded string) []byte {
 }
 
 func TestTCPRelay(t *testing.T) {
-	logic := NewLogic()
-	logic.AddBattle([]User{
+	logic := NewMcs()
+	logic.AddBattle([]McsUser{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
 	})
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -84,7 +84,7 @@ func TestTCPUnknownSessionClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	c := tcpPair(t, ln, NewLogic())
+	c := tcpPair(t, ln, NewMcs())
 	readN(t, c, 12)
 	c.Write(hello("0123505679"))
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))

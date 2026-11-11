@@ -61,7 +61,7 @@ type Provider struct {
 	dev          bool
 }
 
-func Discord(clientID, clientSecret string) Provider {
+func DiscordProvider(clientID, clientSecret string) Provider {
 	return Provider{
 		Name:         "discord",
 		AuthURL:      "https://discord.com/oauth2/authorize",
@@ -79,9 +79,9 @@ type Store interface {
 	RevokeAuthToken(token string) error
 	TokenAccounts(token string) (string, []string, error)
 	CarryTokenAccount(token, loginKey string) error
-	RegisterAccount(ip string) (*db.Account, error)
+	RegisterAccount(ip string) (*db.DBAccount, error)
 	AccountCarried(loginKey string) (bool, error)
-	GetUserList(loginKey string) ([]*db.User, error)
+	GetUserList(loginKey string) ([]*db.DBUser, error)
 	FindBan(loginKey string) (*db.MasterBan, error)
 }
 
@@ -103,7 +103,7 @@ type carryCode struct {
 	expires  time.Time
 }
 
-type Server struct {
+type AuthServer struct {
 	Provider Provider
 	// PublicURL is where players reach /auth/ (https://host), the provider's redirect base.
 	PublicURL string
@@ -118,21 +118,21 @@ type Server struct {
 	misses map[string]int
 }
 
-func (s *Server) now() time.Time {
+func (s *AuthServer) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
 	}
 	return time.Now()
 }
 
-func (s *Server) client() *http.Client {
+func (s *AuthServer) client() *http.Client {
 	if s.Client != nil {
 		return s.Client
 	}
 	return &http.Client{Timeout: 15 * time.Second}
 }
 
-func randomString(n int) string {
+func authRandomString(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
@@ -143,7 +143,7 @@ func randomString(n int) string {
 const carryAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 // IssueCarryCode returns a single use code that links loginKey to a signed-in identity.
-func (s *Server) IssueCarryCode(loginKey string) string {
+func (s *AuthServer) IssueCarryCode(loginKey string) string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
@@ -167,7 +167,7 @@ func (s *Server) IssueCarryCode(loginKey string) string {
 	return code
 }
 
-func (s *Server) gc() {
+func (s *AuthServer) gc() {
 	now := s.now()
 	for k, f := range s.flows {
 		if now.After(f.expires) {
@@ -186,7 +186,7 @@ func (s *Server) gc() {
 	}
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/auth/start":
 		s.serveStart(w, r)
@@ -225,11 +225,11 @@ func validChallenge(c string) bool {
 	return err == nil
 }
 
-func (s *Server) redirectURI() string {
+func (s *AuthServer) redirectURI() string {
 	return strings.TrimSuffix(s.PublicURL, "/") + "/auth/" + s.Provider.Name + "/callback"
 }
 
-func (s *Server) serveStart(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	port, err := strconv.Atoi(q.Get("redirect_port"))
 	state := q.Get("state")
@@ -238,7 +238,7 @@ func (s *Server) serveStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	id := randomString(24)
+	id := authRandomString(24)
 	s.mu.Lock()
 	s.gc()
 	if s.flows == nil {
@@ -275,15 +275,15 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-func (s *Server) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
+func (s *AuthServer) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
 	p := pageText(pickLang(r))
 	p.Message = msg(&p)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
-	tplMessage.Execute(w, p)
+	tplAuthMessage.Execute(w, p)
 }
 
-func (s *Server) serveCallback(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	s.mu.Lock()
 	f := s.flows[q.Get("state")]
@@ -303,7 +303,7 @@ func (s *Server) serveCallback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, func(p *page) string { return p.ProviderError })
 		return
 	}
-	code := randomString(24)
+	code := authRandomString(24)
 	s.mu.Lock()
 	if s.codes == nil {
 		s.codes = map[string]*issued{}
@@ -314,7 +314,7 @@ func (s *Server) serveCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("http://127.0.0.1:%d/callback?%s", f.port, back.Encode()), http.StatusFound)
 }
 
-func (s *Server) providerUser(code string) (string, error) {
+func (s *AuthServer) providerUser(code string) (string, error) {
 	if s.Provider.dev {
 		if !validDevUserID(code) {
 			return "", fmt.Errorf("dev: bad user id %q", code)
@@ -361,7 +361,7 @@ func (s *Server) providerUser(code string) (string, error) {
 	return u.ID, nil
 }
 
-func (s *Server) serveToken(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -389,7 +389,7 @@ func (s *Server) serveToken(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"token": token})
 }
 
-func (s *Server) serveRevoke(w http.ResponseWriter, r *http.Request) {
+func (s *AuthServer) serveRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -420,7 +420,7 @@ const (
 	accountsCarry
 )
 
-func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, op accountsOp) {
+func (s *AuthServer) serveAccounts(w http.ResponseWriter, r *http.Request, op accountsOp) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -476,7 +476,7 @@ func (s *Server) serveAccounts(w http.ResponseWriter, r *http.Request, op accoun
 }
 
 // carryAccount returns the carried account's login key, or "" after answering the error.
-func (s *Server) carryAccount(w http.ResponseWriter, r *http.Request, token string) string {
+func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token string) string {
 	ip := clientIP(r)
 	code := strings.ToUpper(strings.TrimSpace(r.FormValue("code")))
 	s.mu.Lock()

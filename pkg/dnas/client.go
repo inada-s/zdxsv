@@ -112,9 +112,9 @@ func (c *tlsConn) clientHandshake() error {
 	return nil
 }
 
-// Query sends one HTTP/1.0 request over conn as the PS2 does and returns
+// DnasQuery sends one HTTP/1.0 request over conn as the PS2 does and returns
 // the response status and body.
-func Query(conn net.Conn, method, urlPath string, body []byte) (int, []byte, error) {
+func DnasQuery(conn net.Conn, method, urlPath string, body []byte) (int, []byte, error) {
 	c := &tlsConn{Conn: conn}
 	defer c.Close()
 	if err := c.clientHandshake(); err != nil {

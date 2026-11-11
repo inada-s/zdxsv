@@ -7,16 +7,16 @@ import (
 )
 
 type fakePeer struct {
-	BasePeer
+	BaseMcsPeer
 	mu     sync.Mutex
-	msgs   []Message
+	msgs   []McsMessage
 	data   [][]byte
 	addr   string
 	closed bool
 }
 
 func (p *fakePeer) AddSendData(b []byte) { p.mu.Lock(); p.data = append(p.data, b); p.mu.Unlock() }
-func (p *fakePeer) AddSendMessage(m Message) {
+func (p *fakePeer) AddSendMessage(m McsMessage) {
 	p.mu.Lock()
 	p.msgs = append(p.msgs, m)
 	p.mu.Unlock()
@@ -55,7 +55,7 @@ func TestIsFinData(t *testing.T) {
 }
 
 func TestBasePeer(t *testing.T) {
-	var p BasePeer
+	var p BaseMcsPeer
 	p.SetUserID("U1")
 	p.SetSessionID("S1")
 	p.SetPosition(3)
@@ -66,7 +66,7 @@ func TestBasePeer(t *testing.T) {
 }
 
 func TestRoomRelay(t *testing.T) {
-	r := newRoom(5)
+	r := newMcsRoom(5)
 	peers := []*fakePeer{{addr: "a"}, {addr: "b"}, {addr: "c"}}
 	for i, p := range peers {
 		r.Join(p)
@@ -74,7 +74,7 @@ func TestRoomRelay(t *testing.T) {
 			t.Fatalf("peer %d: pos %d room %d", i, p.Position(), p.RoomID())
 		}
 	}
-	msg := Message{Body: []byte{1}}
+	msg := McsMessage{Body: []byte{1}}
 	r.SendMessage(peers[1], msg)
 	if len(peers[0].msgs) != 1 || len(peers[1].msgs) != 0 || len(peers[2].msgs) != 1 {
 		t.Errorf("relay counts %d %d %d, want 1 0 1", len(peers[0].msgs), len(peers[1].msgs), len(peers[2].msgs))
@@ -101,8 +101,8 @@ func TestRoomRelay(t *testing.T) {
 }
 
 func TestLogicJoin(t *testing.T) {
-	l := NewLogic()
-	for _, g := range [][]User{
+	l := NewMcs()
+	for _, g := range [][]McsUser{
 		{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}},
 		{{UserID: "U3", SessionID: "S3"}},
 	} {
@@ -120,14 +120,14 @@ func TestLogicJoin(t *testing.T) {
 		t.Fatalf("rooms %p %p %p", r1, r2, r3)
 	}
 	if p1.UserID() != "U1" || p1.SessionID() != "S1" || p2.Position() != 1 || p3.RoomID() != 1 {
-		t.Errorf("peer state: %+v %+v %+v", p1.BasePeer, p2.BasePeer, p3.BasePeer)
+		t.Errorf("peer state: %+v %+v %+v", p1.BaseMcsPeer, p2.BaseMcsPeer, p3.BaseMcsPeer)
 	}
 	if room := l.Join(&fakePeer{}, "S1"); room != nil {
 		t.Errorf("session joined twice")
 	}
 
 	// a battle info that does not list the session itself
-	l.AddBattle([]User{{SessionID: "S4"}})
+	l.AddBattle([]McsUser{{SessionID: "S4"}})
 	info := l.GetBattleInfo("S4")
 	info.Users[0].SessionID = "other"
 	if _, ok := l.FindWaitingUser("S4"); ok {
@@ -136,8 +136,8 @@ func TestLogicJoin(t *testing.T) {
 }
 
 func TestAddBattleRoomIDWraps(t *testing.T) {
-	l := NewLogic()
-	users := []User{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
+	l := NewMcs()
+	users := []McsUser{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
 	for i := 0; i < MaxRoom+1; i++ {
 		l.AddBattle(users)
 	}
@@ -149,7 +149,7 @@ func TestAddBattleRoomIDWraps(t *testing.T) {
 	}
 }
 
-func waitJoined(t *testing.T, m *Logic, n int) {
+func waitJoined(t *testing.T, m *Mcs, n int) {
 	t.Helper()
 	joined := func() int {
 		m.mtx.Lock()

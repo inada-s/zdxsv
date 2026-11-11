@@ -19,7 +19,7 @@ import (
 // startLoginServer serves the login handlers the way src/zdxsv newLoginHandler routes them.
 func startLoginServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	Prepare()
+	PrepareLoginPages()
 	oldConf := config.Conf
 	config.Conf.Lobby.PublicAddr = "198.51.100.7:8200"
 	t.Cleanup(func() { config.Conf = oldConf })
@@ -80,7 +80,7 @@ func TestTopPage(t *testing.T) {
 }
 
 func TestRegisterThenLogin(t *testing.T) {
-	dbtest.Use(t)
+	dbtest.UseTestDB(t)
 	ts := startLoginServer(t)
 
 	code, _, body := fetch(t)(http.Get(ts.URL + "/register"))
@@ -123,7 +123,7 @@ func TestRegisterThenLogin(t *testing.T) {
 }
 
 func TestLoginUnknownKey(t *testing.T) {
-	dbtest.Use(t)
+	dbtest.UseTestDB(t)
 	ts := startLoginServer(t)
 
 	for _, key := range []string{"", "short", "AbCdE12345", "ElevenChars"} {
@@ -140,8 +140,8 @@ func TestLoginUnknownKey(t *testing.T) {
 }
 
 func TestDBErrorPages(t *testing.T) {
-	conn := dbtest.Use(t)
-	Prepare()
+	conn := dbtest.UseTestDB(t)
+	PrepareLoginPages()
 	conn.Close()
 
 	for _, tc := range []struct {

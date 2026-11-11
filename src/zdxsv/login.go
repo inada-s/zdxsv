@@ -81,7 +81,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 }
 
 func newLoginHandler() http.Handler {
-	login.Prepare()
+	login.PrepareLoginPages()
 	router := http.NewServeMux()
 	router.HandleFunc("/health", handleHealth)
 	router.HandleFunc("/assets/", handleAssets)

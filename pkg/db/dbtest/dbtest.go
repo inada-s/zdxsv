@@ -10,9 +10,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Use points db.DefaultDB at a new SQLite DB in t.TempDir() until the test ends.
+// UseTestDB points db.DefaultDB at a new SQLite DB in t.TempDir() until the test ends.
 // The returned connection is for checks the DB interface does not cover.
-func Use(t testing.TB) *sqlx.DB {
+func UseTestDB(t testing.TB) *sqlx.DB {
 	t.Helper()
 	conn, err := sqlx.Open("sqlite3", filepath.Join(t.TempDir(), "zdxsv_test.db"))
 	if err != nil {

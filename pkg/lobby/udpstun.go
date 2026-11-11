@@ -19,7 +19,7 @@ const UDPTestUserID = "udptest"
 // ServeUDPStunServer answers Ping with Pong (the sender's public address) on addr, and
 // on addr's port + 1 (the test socket). Clients compare both public addresses to tell
 // a cone NAT (same mapped port) from a symmetric one.
-func (s *Server) ServeUDPStunServer(addr string) error {
+func (s *LbsServer) ServeUDPStunServer(addr string) error {
 	zlog.Info("start UDPStun", zap.Any("addr", addr))
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
@@ -47,7 +47,7 @@ func (s *Server) ServeUDPStunServer(addr string) error {
 }
 
 // ServeUDPStun answers Ping with Pong on addr, without the test socket.
-func (s *Server) ServeUDPStun(addr string) error {
+func (s *LbsServer) ServeUDPStun(addr string) error {
 	zlog.Info("start UDPStun", zap.Any("addr", addr))
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {

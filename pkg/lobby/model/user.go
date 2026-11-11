@@ -10,14 +10,14 @@ const (
 	EntryTitans = 2
 )
 
-type User struct {
-	db.User
+type LbsUser struct {
+	db.DBUser
 	Entry byte
 	Bin   string
 	// Sync is the emulator's sync fingerprint: lobby battles start only among equal ones.
 	Sync string
 
-	Room   *Room
-	Lobby  *Lobby
-	Battle *Battle
+	Room   *LbsRoom
+	Lobby  *LbsLobby
+	Battle *LbsBattle
 }

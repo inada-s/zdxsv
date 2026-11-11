@@ -12,17 +12,17 @@ import (
 	"zdxsv/pkg/zlog"
 )
 
-type TCPServer struct {
-	logic *Logic
+type McsTCPServer struct {
+	logic *Mcs
 }
 
-func NewTCPServer(logic *Logic) *TCPServer {
-	return &TCPServer{
+func NewTCPServer(logic *Mcs) *McsTCPServer {
+	return &McsTCPServer{
 		logic: logic,
 	}
 }
 
-func (s *TCPServer) ListenAndServe(addr string) error {
+func (s *McsTCPServer) ListenAndServe(addr string) error {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -31,7 +31,7 @@ func (s *TCPServer) ListenAndServe(addr string) error {
 }
 
 // Serve accepts connections on l until l is closed.
-func (s *TCPServer) Serve(l net.Listener) error {
+func (s *McsTCPServer) Serve(l net.Listener) error {
 	for {
 		conn, err := l.Accept()
 		if errors.Is(err, net.ErrClosed) {
@@ -45,27 +45,27 @@ func (s *TCPServer) Serve(l net.Listener) error {
 	}
 }
 
-type TCPPeer struct {
-	BasePeer
+type McsTCPPeer struct {
+	BaseMcsPeer
 
 	sendMtx sync.Mutex
 	conn    net.Conn
-	room    *Room
+	room    *McsRoom
 	seq     uint32
 }
 
-func NewTCPPeer(conn net.Conn) *TCPPeer {
-	return &TCPPeer{
+func NewTCPPeer(conn net.Conn) *McsTCPPeer {
+	return &McsTCPPeer{
 		conn: conn,
 		seq:  1,
 	}
 }
 
-func (u *TCPPeer) Close() error {
+func (u *McsTCPPeer) Close() error {
 	return u.conn.Close()
 }
 
-func (u *TCPPeer) Serve(logic *Logic) {
+func (u *McsTCPPeer) Serve(logic *Mcs) {
 	zlog.Info("tcp serve start", zap.Any("addr", u.Address()))
 	defer zlog.Info("tcp serve end", zap.Any("addr", u.Address()))
 	data, _ := hex.DecodeString("280110310000000100ffffff")
@@ -78,11 +78,11 @@ func (u *TCPPeer) Serve(logic *Logic) {
 	u.conn.Close()
 }
 
-func (u *TCPPeer) AddSendMessage(msg Message) {
+func (u *McsTCPPeer) AddSendMessage(msg McsMessage) {
 	u.AddSendData(msg.Body)
 }
 
-func (u *TCPPeer) AddSendData(data []byte) {
+func (u *McsTCPPeer) AddSendData(data []byte) {
 	u.sendMtx.Lock()
 	defer u.sendMtx.Unlock()
 	for sum := 0; sum < len(data); {
@@ -95,11 +95,11 @@ func (u *TCPPeer) AddSendData(data []byte) {
 	}
 }
 
-func (u *TCPPeer) Address() string {
+func (u *McsTCPPeer) Address() string {
 	return u.conn.RemoteAddr().String()
 }
 
-func (u *TCPPeer) readLoop(logic *Logic) {
+func (u *McsTCPPeer) readLoop(logic *Mcs) {
 	buf := make([]byte, 1024)
 	inbuf := make([]byte, 0, 128)
 
@@ -150,7 +150,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 				}
 			}
 			if 0 < len(tmp) {
-				msg := Message{UserID: u.UserID(), Seq: u.seq, Body: tmp}
+				msg := McsMessage{UserID: u.UserID(), Seq: u.seq, Body: tmp}
 				u.seq++
 				u.room.SendMessage(u, msg)
 			}

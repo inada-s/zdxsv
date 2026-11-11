@@ -44,8 +44,8 @@ func (c *testClient) heard() []string {
 }
 
 func TestLobbyChatScope(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 
 	const lobbyID, roomID = 4, 1
 	var cs []*testClient
@@ -115,11 +115,11 @@ func TestLobbyChatScope(t *testing.T) {
 // A zproxy_test lobby starts a one player test battle on entry, which needs a UDP proxy
 // registered within the last 20 seconds.
 func TestLobbyTestBattleWithoutProxy(t *testing.T) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr := startLobby(t, battle.NewLogic())
+	addr := startLobby(t, battle.NewMcs())
 
 	c := dialLobby(t, addr)
 	c.login(registerAccount(t), "******", "pilot")
@@ -143,8 +143,8 @@ func TestLobbyTestBattleWithoutProxy(t *testing.T) {
 // Each chat notice ends with 4 zero bytes after the text: type and the ID, name
 // and text colors, which mean the default colors.
 func TestChatNoticeColorBytes(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 
 	c := dialLobby(t, addr)
 	c.login(registerAccount(t), "******", "pilot")
@@ -178,8 +178,8 @@ func TestChatNoticeColorBytes(t *testing.T) {
 }
 
 func TestLobbyChatDropsTextLongerThanGameInput(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 	var cs []*testClient
 	var ids []string
 	for _, name := range []string{"pilot0", "pilot1"} {
@@ -215,17 +215,17 @@ func TestLobbyChatDropsTextLongerThanGameInput(t *testing.T) {
 }
 
 // addPeer adds a logged in peer to app; sent messages stay in its Conn's outbuf.
-func addPeer(t *testing.T, app *App, userID string) *AppPeer {
+func addPeer(t *testing.T, app *Lbs, userID string) *LbsPeer {
 	t.Helper()
 	c, _ := newPipe(t)
-	p := &AppPeer{app: app, conn: NewConn(c), Platform: model.PlatformConsole}
-	p.User = model.User{User: db.User{UserID: userID, Name: userID, SessionID: "S" + userID}}
+	p := &LbsPeer{app: app, conn: NewLbsConn(c), Platform: model.PlatformConsole}
+	p.LbsUser = model.LbsUser{DBUser: db.DBUser{UserID: userID, Name: userID, SessionID: "S" + userID}}
 	app.users[userID] = p
 	return p
 }
 
 // chatLines returns the chat lines in p's unsent output and clears it.
-func chatLines(p *AppPeer) []string {
+func chatLines(p *LbsPeer) []string {
 	var got []string
 	buf := p.conn.outbuf
 	for len(buf) > 0 {
@@ -248,23 +248,23 @@ func chatLines(p *AppPeer) []string {
 // Chat in the battle after room reaches only the battle's users in that
 // room, not a battle user still elsewhere.
 func TestChatInBattleAfterRoom(t *testing.T) {
-	app := NewApp()
+	app := NewLbs()
 	a, b, c := addPeer(t, app, "A"), addPeer(t, app, "B"), addPeer(t, app, "C")
 	battle := model.NewBattle(model.PlatformConsole, 0)
-	for _, p := range []*AppPeer{a, b, c} {
-		battle.Add(&p.User)
+	for _, p := range []*LbsPeer{a, b, c} {
+		battle.Add(&p.LbsUser)
 		app.battles[p.SessionID] = battle
 	}
 	app.OnEnterBattleAfterRoom(a)
 	app.OnEnterBattleAfterRoom(b)
 	c.Battle = battle
-	for _, p := range []*AppPeer{a, b, c} {
+	for _, p := range []*LbsPeer{a, b, c} {
 		chatLines(p)
 	}
 
 	app.OnSendChatMessage(a, "gg")
 	for _, w := range []struct {
-		p    *AppPeer
+		p    *LbsPeer
 		want string
 	}{{a, "[A:gg]"}, {b, "[A:gg]"}, {c, "[]"}} {
 		if got := chatLines(w.p); fmt.Sprint(got) != w.want {

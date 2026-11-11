@@ -251,7 +251,7 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 	// relayed RTT 50, 120, 200, then asia-east1 (B has no latency to it); the lobby's relay
 	// is the 5th and dropped
 	want := []string{"198.51.100.1", "198.51.100.2", "198.51.100.4", "198.51.100.3"}
-	for _, peer := range []*AppPeer{p, q} {
+	for _, peer := range []*LbsPeer{p, q} {
 		got := battleInfo(t, testBattleInfoNotice(peer, lookup)).Relays
 		if len(got) != len(want) {
 			t.Fatalf("%s: relays %v, want %v", peer.UserID, got, want)
@@ -496,8 +496,8 @@ func (s *relayStarter) startedRegions() []string {
 	return append([]string(nil), s.started...)
 }
 
-func addRelayUser(a *App, id string, info map[string]string) {
-	p := &AppPeer{PlatformInfo: info}
+func addRelayUser(a *Lbs, id string, info map[string]string) {
+	p := &LbsPeer{PlatformInfo: info}
 	p.UserID = id
 	a.users[id] = p
 }
@@ -513,7 +513,7 @@ func TestRelayProvisioning(t *testing.T) {
 	defer cancel()
 	starter := &relayStarter{t: t, ctx: ctx, lobbyAddr: l.Addr().String(), addrs: map[string]string{}, done: map[string]chan error{}}
 
-	a := NewApp()
+	a := NewLbs()
 	a.SetRelayProvisioning([]string{"asia-northeast1", "us-west2"}, starter)
 	t0 := time.Now()
 

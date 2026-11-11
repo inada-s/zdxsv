@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-type Battle struct {
+type LbsBattle struct {
 	BattleCode string
 	ServerIP   net.IP
 	ServerPort uint16
-	Users      []User
+	Users      []LbsUser
 	AeugIDs    []string
 	TitansIDs  []string
 	UDPUsers   map[string]bool
@@ -30,9 +30,9 @@ type Battle struct {
 	PlatformInfo map[string]map[string]string
 }
 
-func NewBattle(platform string, lobbyID uint16) *Battle {
-	return &Battle{
-		Users:        make([]User, 0),
+func NewBattle(platform string, lobbyID uint16) *LbsBattle {
+	return &LbsBattle{
+		Users:        make([]LbsUser, 0),
 		AeugIDs:      make([]string, 0),
 		TitansIDs:    make([]string, 0),
 		UDPUsers:     map[string]bool{},
@@ -45,11 +45,11 @@ func NewBattle(platform string, lobbyID uint16) *Battle {
 	}
 }
 
-func (b *Battle) SetRule(rule *Rule) {
+func (b *LbsBattle) SetRule(rule *Rule) {
 	b.Rule = rule
 }
 
-func (b *Battle) Add(s *User) {
+func (b *LbsBattle) Add(s *LbsUser) {
 	cp := *s
 	cp.Battle = nil
 	cp.Lobby = nil
@@ -62,16 +62,16 @@ func (b *Battle) Add(s *User) {
 	}
 }
 
-func (b *Battle) NumOfEntryUsers() uint16 {
+func (b *LbsBattle) NumOfEntryUsers() uint16 {
 	return uint16(len(b.AeugIDs) + len(b.TitansIDs))
 }
 
-func (b *Battle) SetBattleServer(ip net.IP, port uint16) {
+func (b *LbsBattle) SetBattleServer(ip net.IP, port uint16) {
 	b.ServerIP = ip
 	b.ServerPort = port
 }
 
-func (b *Battle) GetPosition(userID string) byte {
+func (b *LbsBattle) GetPosition(userID string) byte {
 	for i, u := range b.Users {
 		if userID == u.UserID {
 			return byte(i + 1)
@@ -80,7 +80,7 @@ func (b *Battle) GetPosition(userID string) byte {
 	return 0
 }
 
-func (b *Battle) GetUserByPos(pos byte) *User {
+func (b *LbsBattle) GetUserByPos(pos byte) *LbsUser {
 	if pos == 0 || len(b.Users) < int(pos) {
 		return nil
 	}

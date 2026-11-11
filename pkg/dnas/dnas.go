@@ -70,9 +70,9 @@ func mustHex(s string) []byte {
 	return b
 }
 
-// Answer returns the answer to query q at gateway gw (gai-gw, us-gw, eu-gw):
+// DnasAnswer returns the answer to query q at gateway gw (gai-gw, us-gw, eu-gw):
 // connect = i-connect, else others. note names the packet used, or why error.raw.
-func Answer(gw string, connect bool, q []byte) (ans []byte, note string) {
+func DnasAnswer(gw string, connect bool, q []byte) (ans []byte, note string) {
 	errRaw, err := data.ReadFile(path.Join("data/www", gw, "error.raw"))
 	if err != nil {
 		return nil, "no gateway " + gw
@@ -115,7 +115,7 @@ func pemBlocks(name string) ([][]byte, error) {
 	}
 }
 
-func loadTLS(region string) (*tlsConfig, error) {
+func loadDnasTLS(region string) (*tlsConfig, error) {
 	certs, err := pemBlocks("data/etc/cert-" + region + ".pem")
 	if err != nil {
 		return nil, err
@@ -146,20 +146,20 @@ func loadTLS(region string) (*tlsConfig, error) {
 	return &tlsConfig{certs: certs, key: key}, nil
 }
 
-// Server answers DNAS on the PS2's TLS dialect.
-type Server struct {
+// DnasServer answers DNAS on the PS2's TLS dialect.
+type DnasServer struct {
 	tls *tlsConfig
 	mux *http.ServeMux
 }
 
-// NewServer: region selects the certificate (jp, us, eu); login serves the zdxsv login
+// NewDnasServer: region selects the certificate (jp, us, eu); login serves the zdxsv login
 // pages behind /00000020/.
-func NewServer(region string, login http.Handler) (*Server, error) {
-	cfg, err := loadTLS(region)
+func NewDnasServer(region string, login http.Handler) (*DnasServer, error) {
+	cfg, err := loadDnasTLS(region)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{tls: cfg, mux: http.NewServeMux()}
+	s := &DnasServer{tls: cfg, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/", handleDNAS)
 	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", login))
 	return s, nil
@@ -173,9 +173,9 @@ func handleDNAS(w http.ResponseWriter, r *http.Request) {
 	var note string
 	switch {
 	case strings.HasSuffix(base, "i-connect"):
-		ans, note = Answer(gw, true, q)
+		ans, note = DnasAnswer(gw, true, q)
 	case strings.HasSuffix(base, "others"):
-		ans, note = Answer(gw, false, q)
+		ans, note = DnasAnswer(gw, false, q)
 	}
 	if ans == nil {
 		zlog.Info("dnas 404", zap.String("method", r.Method), zap.Stringer("url", r.URL))
@@ -188,7 +188,7 @@ func handleDNAS(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListenAndServe listens on addr (e.g. ":443") and serves until an accept error.
-func (s *Server) ListenAndServe(addr string) error {
+func (s *DnasServer) ListenAndServe(addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -196,7 +196,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	return s.Serve(ln)
 }
 
-func (s *Server) Serve(ln net.Listener) error {
+func (s *DnasServer) Serve(ln net.Listener) error {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -207,9 +207,9 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 // ServeConn serves one accepted connection (for pkg/router's Console).
-func (s *Server) ServeConn(c net.Conn) { s.serveConn(c) }
+func (s *DnasServer) ServeConn(c net.Conn) { s.serveConn(c) }
 
-func (s *Server) serveConn(c net.Conn) {
+func (s *DnasServer) serveConn(c net.Conn) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	tc := &tlsConn{Conn: c, cfg: s.tls}
@@ -224,7 +224,7 @@ func (s *Server) serveConn(c net.Conn) {
 
 // serveHTTP answers HTTP/1.x requests on c until it closes. Responses are
 // HTTP/1.0 with Content-Length.
-func (s *Server) serveHTTP(c net.Conn) {
+func (s *DnasServer) serveHTTP(c net.Conn) {
 	br := bufio.NewReader(c)
 	for {
 		c.SetReadDeadline(time.Now().Add(60 * time.Second))

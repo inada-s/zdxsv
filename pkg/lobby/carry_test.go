@@ -12,12 +12,12 @@ import (
 )
 
 func TestCarryCodeCommand(t *testing.T) {
-	conn := dbtest.Use(t)
+	conn := dbtest.UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'chat_command')`); err != nil {
 		t.Fatal(err)
 	}
 	var issuedFor []string
-	addr, _ := startLobbyAppWith(t, battle.NewLogic(), func(a *App) {
+	addr, _ := startLobbyAppWith(t, battle.NewMcs(), func(a *Lbs) {
 		a.SetCarryCodeIssuer(func(loginKey string) string {
 			issuedFor = append(issuedFor, loginKey)
 			return "CARRY234"
@@ -73,8 +73,8 @@ func TestCarryCodeCommand(t *testing.T) {
 }
 
 func TestTempKeyLobbyLogin(t *testing.T) {
-	dbtest.Use(t)
-	addr := startLobby(t, battle.NewLogic())
+	dbtest.UseTestDB(t)
+	addr := startLobby(t, battle.NewMcs())
 	ac := registerAccount(t)
 	id, temp := login.Sessions.Start(ac.LoginKey, true)
 	c := dialLobby(t, addr)

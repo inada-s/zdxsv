@@ -275,7 +275,7 @@ type Status struct {
 	Platforms map[string]*PlatformCount
 }
 
-func newStatusUser(u lobbyapi.User) StatusUser {
+func newStatusUser(u lobbyapi.ZproxyUser) StatusUser {
 	user := StatusUser{
 		UserID:   u.UserID,
 		Name:     u.Name,

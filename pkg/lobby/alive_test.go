@@ -12,11 +12,11 @@ import (
 )
 
 // waitPeers waits until the lobby serves n peers.
-func waitPeers(t *testing.T, app *App, n int) {
+func waitPeers(t *testing.T, app *Lbs, n int) {
 	t.Helper()
 	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
 		got := 0
-		app.Locked(func(a *App) { got = len(a.peers) })
+		app.Locked(func(a *Lbs) { got = len(a.peers) })
 		if got == n {
 			return
 		}
@@ -42,7 +42,7 @@ func expectClosed(t *testing.T, c *testClient) {
 }
 
 func TestAliveCheckIntervalLineCheck(t *testing.T) {
-	addr, _ := startLobbyAppWith(t, battle.NewLogic(), func(a *App) {
+	addr, _ := startLobbyAppWith(t, battle.NewMcs(), func(a *Lbs) {
 		a.aliveCheckInterval = 50 * time.Millisecond
 	})
 	c := dialLobby(t, addr)
@@ -51,12 +51,12 @@ func TestAliveCheckIntervalLineCheck(t *testing.T) {
 }
 
 func TestAliveCheckRecvTimeout(t *testing.T) {
-	addr, app := startLobbyApp(t, battle.NewLogic())
+	addr, app := startLobbyApp(t, battle.NewMcs())
 	c := dialLobby(t, addr)
 	waitPeers(t, app, 1)
 
 	var start time.Time
-	app.Locked(func(a *App) {
+	app.Locked(func(a *Lbs) {
 		for _, p := range a.peers {
 			start = p.lastRecvTime
 		}
@@ -64,15 +64,15 @@ func TestAliveCheckRecvTimeout(t *testing.T) {
 	})
 	c.expect(0x6001, CategoryQuestion)
 
-	app.Locked(func(a *App) { a.checkAlive(start.Add(peerRecvTimeout)) })
+	app.Locked(func(a *Lbs) { a.checkAlive(start.Add(peerRecvTimeout)) })
 	expectClosed(t, c)
 	waitPeers(t, app, 0)
 }
 
 func TestAliveCheckBattleTimeout(t *testing.T) {
-	_, app := startLobbyApp(t, battle.NewLogic())
+	_, app := startLobbyApp(t, battle.NewMcs())
 	now := time.Now()
-	app.Locked(func(a *App) {
+	app.Locked(func(a *Lbs) {
 		for sid, age := range map[string]time.Duration{"old": battleTimeout, "new": battleTimeout - time.Second} {
 			b := model.NewBattle(model.PlatformConsole, 0)
 			b.StartTime = now.Add(-age)
@@ -80,7 +80,7 @@ func TestAliveCheckBattleTimeout(t *testing.T) {
 		}
 		a.checkAlive(now)
 	})
-	app.Locked(func(a *App) {
+	app.Locked(func(a *Lbs) {
 		if _, ok := a.battles["old"]; ok {
 			t.Error("battle of battleTimeout age kept")
 		}
