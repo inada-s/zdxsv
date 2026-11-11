@@ -1,0 +1,20 @@
+{
+  "battle_code": "1696492800000",
+  "session_id": 1462212142,
+  "peer_id": 1,
+  "ping_test_duration": 7500,
+  "users": [
+    {"user_id": "AAAAAA", "user_name": "アムロ", "pilot_name": "カミーユ・ビダン", "team": 1, "ggpo_port": 7001, "sync": "fedcba9876543210"},
+    {"user_id": "BBBBBB", "user_name": "Bob", "team": 2, "sync": "0123456789abcdef"}
+  ],
+  "candidates": [
+    {"user_id": "AAAAAA", "peer_id": 0, "ip": "203.0.113.5", "port": 7001},
+    {"user_id": "AAAAAA", "peer_id": 0, "ip": "2001:db8::5", "port": 7002}
+  ],
+  "relays": [
+    {"ip": "192.168.1.8", "port": 8203, "token": 18364758544493064720, "ip6": "2001:db8::8", "port6": 8204}
+  ],
+  "spectator_uplink": true,
+  "lobby_session_id": "SBBBBBB",
+  "battle_server": "192.168.1.8:8210"
+}

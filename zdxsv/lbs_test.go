@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,10 +14,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
 )
 
 // pipeConn is one end of an in-memory connection that reports addr as its peer's address.
@@ -463,11 +460,11 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 			t.Fatalf("player %d: battle info users %v", i, m.Users)
 		}
 		for j, q := range players {
-			u, ggpo := m.Users[q.pos-1], int32(7000+j)
+			u, ggpo := m.Users[q.pos-1], 7000+j
 			if j == i {
 				ggpo = 0
 			}
-			if u.GetUserId() != q.userID || u.GetPilotName() != fmt.Sprintf("Pilot%d", j) || u.GetTeam() != int32(q.side) || u.GetGgpoPort() != ggpo {
+			if u.UserID != q.userID || u.PilotName != fmt.Sprintf("Pilot%d", j) || u.Team != int(q.side) || u.GgpoPort != ggpo {
 				t.Errorf("player %d: battle info user %d: %v", i, j, u)
 			}
 		}
@@ -494,7 +491,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		}
 	}
 
-	usedMs := [][]int32{{3, 5, 7, 9}, {4, 6, 8, 10}}
+	usedMs := [][]int{{3, 5, 7, 9}, {4, 6, 8, 10}}
 	// Each client leaves for the battle server, then reconnects with the
 	// same session: the lobby offers only the battle user, takes the result
 	// and both meet in the battle after room.
@@ -506,11 +503,11 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		p.c = dialLobby(t, addr)
 		if emu {
 			p.c.sendCustom(0x9950, platformInfo(i))
-			report := &proto.P2PMatchingReport{BattleCode: pb.String(battleCode), UserId: pb.String(p.userID)}
+			report := P2PMatchingReport{BattleCode: battleCode, UserID: p.userID}
 			for _, ms := range usedMs {
-				report.RoundData = append(report.RoundData, &proto.BattleLogRound{WinTeam: pb.Int32(1), UsedMs: ms})
+				report.RoundData = append(report.RoundData, BattleLogRound{WinTeam: 1, UsedMs: ms})
 			}
-			body, err := pb.Marshal(report)
+			body, err := json.Marshal(report)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1,14 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
-	"zdxsv/zdxsv/proto"
-
-	"encoding/json"
-
-	pb "github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
 )
 
@@ -110,22 +106,18 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *LbsPeer, m *LbsMessage) 
 })
 
 // P2PMatchingReport is sent by emulators with lobby GGPO on the first lobby connection
-// after a battle, after the platform info: a P2PMatchingReport (zdxsv.proto) on how the
-// battle ran. Custom category, no answer: logged for server-side stats and troubleshooting.
+// after a battle, after the platform info: a P2PMatchingReport (JSON) on how the battle
+// ran. Custom category, no answer: logged as received for server-side stats and
+// troubleshooting, so the body is passed on undecoded.
 var _ = register(0x9952, "P2PMatchingReport", func(p *LbsPeer, m *LbsMessage) {
-	report := &proto.P2PMatchingReport{}
-	if err := pb.Unmarshal(m.Body, report); err != nil {
-		logger.Warn("p2p matching report: bad request", zap.String("user_id", p.UserID), zap.Error(err))
-		return
-	}
-	p.app.OnP2PMatchingReport(p, report)
+	p.app.OnP2PMatchingReport(p, m.Body)
 })
 
-func battleInfoNotice(info *proto.P2PMatching) *LbsMessage {
+func battleInfoNotice(info *P2PMatching) *LbsMessage {
 	if info == nil {
 		return nil
 	}
-	body, err := pb.Marshal(info)
+	body, err := json.Marshal(info)
 	if err != nil {
 		logger.Error("battle info failed", zap.Error(err))
 		return nil

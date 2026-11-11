@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,11 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/text/encoding/japanese"
-	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func Test_ParseBattleResult(t *testing.T) {
@@ -160,29 +159,45 @@ func newUDPTestPeer(info map[string]string, test bool) *LbsPeer {
 	return p
 }
 
-func battleInfo(t *testing.T, n *LbsMessage) *proto.P2PMatching {
+func battleInfo(t *testing.T, n *LbsMessage) *P2PMatching {
 	t.Helper()
 	if n == nil {
 		t.Fatal("no notice")
 	}
-	m := &proto.P2PMatching{}
-	if err := pb.Unmarshal(n.Body, m); err != nil {
+	m := &P2PMatching{}
+	if err := json.Unmarshal(n.Body, m); err != nil {
 		t.Fatal(err)
 	}
 	return m
 }
 
-func wantBattleInfo(t *testing.T, got, want *proto.P2PMatching) {
+func wantBattleInfo(t *testing.T, got, want *P2PMatching) {
 	t.Helper()
-	if !pb.Equal(got, want) {
-		t.Fatalf("battle info\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("battle info\n%+v\nwant\n%+v", got, want)
 	}
 }
 
-func testUsers(ids ...string) []*proto.P2PUser {
-	var us []*proto.P2PUser
+// wireFixture checks body against testdata/wire/name, the JSON shared with the client's
+// tests; ZDXSV_WRITE_TESTDATA=1 writes it.
+func wireFixture(t *testing.T, name string, body []byte) {
+	t.Helper()
+	path := "../testdata/wire/" + name
+	if os.Getenv("ZDXSV_WRITE_TESTDATA") == "1" {
+		if err := os.WriteFile(path, append(body, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil || strings.TrimSuffix(string(want), "\n") != string(body) {
+		t.Errorf("body differs from %s (%v):\n%s", path, err, body)
+	}
+}
+
+func testUsers(ids ...string) []P2PUser {
+	var us []P2PUser
 	for _, id := range ids {
-		us = append(us, &proto.P2PUser{UserId: pb.String(id)})
+		us = append(us, P2PUser{UserID: id})
 	}
 	return us
 }
@@ -202,22 +217,20 @@ func TestNoBattleInfoNotice(t *testing.T) {
 }
 
 func TestBattleInfoNoticeAlone(t *testing.T) {
-	alone := func(info map[string]string) *proto.P2PMatching {
+	alone := func(info map[string]string) *P2PMatching {
 		p := newUDPTestPeer(info, false)
 		p.Battle.Users = p.Battle.Users[1:]
 		return battleInfo(t, testBattleInfoNotice(p, func(string) map[string]string { return info }))
 	}
 	m := alone(map[string]string{"emulator": "pcsx2", "udp": "1", "ggpo": "7100"})
-	if m.SessionId == nil || m.PingTestDuration != nil || len(m.Users) != 1 {
-		t.Errorf("alone with a GGPO port: %v", prototext.Format(m))
+	if m.SessionID == 0 || m.PingTestDuration != 0 || len(m.Users) != 1 {
+		t.Errorf("alone with a GGPO port: %+v", m)
 	}
-	if m := alone(map[string]string{"emulator": "pcsx2", "udp": "1"}); m.SessionId != nil {
-		t.Errorf("alone without a GGPO port: %v", prototext.Format(m))
+	if m := alone(map[string]string{"emulator": "pcsx2", "udp": "1"}); m.SessionID != 0 {
+		t.Errorf("alone without a GGPO port: %+v", m)
 	}
 }
 
-// testdata/p2p_matching.bin is the body this test builds; the client's battle info
-// decoder is tested against the same bytes.
 func TestBattleInfoNoticeP2P(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
 	p := newUDPTestPeer(emu, false)
@@ -245,28 +258,20 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	p.Battle.Users[0].Bin = capturedUserBinary
 	n := testBattleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	users := testUsers("AAAAAA", "BBBBBB", "CCCCCC", "DDDDDD")
-	users[0].UserName, users[0].PilotName, users[0].GgpoPort, users[0].Sync = pb.String("アムロ"), pb.String("カミーユ・ビダン"), pb.Int32(7001), pb.String("fedcba9876543210")
-	users[1].UserName, users[1].Sync = pb.String("Bob"), pb.String("0123456789abcdef")
-	cand := func(id string, peer int32, ip string, port int32) *proto.PlayerAddress {
-		return &proto.PlayerAddress{UserId: pb.String(id), PeerId: pb.Int32(peer), Ip: pb.String(ip), Port: pb.Int32(port)}
+	users[0].UserName, users[0].PilotName, users[0].GgpoPort, users[0].Sync = "アムロ", "カミーユ・ビダン", 7001, "fedcba9876543210"
+	users[1].UserName, users[1].Sync = "Bob", "0123456789abcdef"
+	cand := func(id string, peer int, ip string, port int) PlayerAddress {
+		return PlayerAddress{UserID: id, PeerID: peer, IP: ip, Port: port}
 	}
-	wantBattleInfo(t, battleInfo(t, n), &proto.P2PMatching{
-		BattleCode: pb.String("1696492800000"), SessionId: pb.Uint32(1462212142), PeerId: pb.Int32(1), PingTestDuration: pb.Int32(7500),
+	wantBattleInfo(t, battleInfo(t, n), &P2PMatching{
+		BattleCode: "1696492800000", SessionID: 1462212142, PeerID: 1, PingTestDuration: 7500,
 		Users: users,
-		Candidates: []*proto.PlayerAddress{
+		Candidates: []PlayerAddress{
 			cand("AAAAAA", 0, "203.0.113.5", 40001), cand("AAAAAA", 0, "192.168.1.20", 40001), cand("AAAAAA", 0, "2001:db8::5", 40001),
 			cand("CCCCCC", 2, "192.168.1.21", 40003), cand("CCCCCC", 2, "2001:db8::21", 40003), cand("CCCCCC", 2, "198.51.100.9", 40003),
 		},
-		LobbySessionId: pb.String("SBBBBBB"), BattleServer: pb.String("192.168.1.8:8210")})
-	if os.Getenv("ZDXSV_WRITE_TESTDATA") == "1" {
-		if err := os.WriteFile("testdata/p2p_matching.bin", n.Body, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	golden, err := os.ReadFile("testdata/p2p_matching.bin")
-	if err != nil || string(golden) != string(n.Body) {
-		t.Errorf("body differs from testdata/p2p_matching.bin (%v):\n%x", err, n.Body)
-	}
+		LobbySessionID: "SBBBBBB", BattleServer: "192.168.1.8:8210"})
+	wireFixture(t, "battle_info.json", n.Body)
 }
 
 // capturedUserBinary is a captured SetUserBinary body after ReadEncryptedString:
@@ -292,38 +297,82 @@ func TestPilotName(t *testing.T) {
 	}
 }
 
-// testdata/p2p_matching_report.bin is a report encoded by the client's codec.
+// testdata/wire/matching_report.json has every field the client sends.
 func TestP2PMatchingReport(t *testing.T) {
-	body, err := os.ReadFile("testdata/p2p_matching_report.bin")
+	body, err := os.ReadFile("../testdata/wire/matching_report.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := &proto.P2PMatchingReport{}
-	if err := pb.Unmarshal(body, got); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	got := P2PMatchingReport{}
+	if err := dec.Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	want := &proto.P2PMatchingReport{
-		BattleCode: pb.String("1696492800000"), UserId: pb.String("BBBBBB"), Result: pb.String("ggpo"),
-		PeerId: pb.Int32(1), PlayerCount: pb.Int32(2), InputDelay: pb.Int32(2), MinDelay: pb.Int32(1),
-		RemotePeers: []*proto.RemotePeerReport{{PeerId: pb.Int32(0), RttMs: pb.Int32(12), Addr: pb.String("203.0.113.5:7001"), Route: pb.String("direct"),
-			PingMinMs: pb.Int32(201), PingMedianMs: pb.Int32(215), PingMaxMs: pb.Int32(250), RecvLoss: pb.Int32(3), SendLoss: pb.Int32(5)}},
-		RelayCount: pb.Int32(0), PingWaitMs: pb.Int32(1500), CloseReason: pb.String("net battle end"), FrameCount: pb.Int32(21563),
-		RollbackFrames: pb.Int32(812), Mismatches: pb.Int32(0), Disconnected: pb.Bool(true), DisconnectedPeerIds: []int32{0},
-		TotalTimesync: pb.Int32(17), InputBlockCount: pb.Int32(42), FpsHistory: []int32{60, 59, 60}}
-	if !pb.Equal(got, want) {
-		t.Errorf("report\n%v\nwant\n%v", prototext.Format(got), prototext.Format(want))
+	want := P2PMatchingReport{
+		BattleCode: "1696492800000", PlayerCount: 2, PeerID: 1, CloseReason: "net battle end", FrameCount: 21563,
+		RoundData:  []BattleLogRound{{WinTeam: 1, UsedMs: []int{3, 17}}, {WinTeam: -1, UsedMs: []int{3, 0}}},
+		InputDelay: 2,
+		RemotePeers: []RemotePeerReport{{PeerID: 0, PingMinMs: 201, PingMedianMs: 215, PingMaxMs: 250, Route: "direct",
+			RttMs: 12, Addr: "203.0.113.5:7001", RecvLoss: 3, SendLoss: 5}},
+		UserID: "BBBBBB", Result: "ggpo", CutReason: "sync", Sync: "0123456789abcdef", SyncDiffer: "0", Answered: 1,
+		RelayCount: 1, PingError: "timeout", PingWaitMs: 1500, MinDelay: 1, FixedDelay: true, CutSends: 4,
+		RollbackFrames: 812, Mismatches: 2, Disconnected: true, DisconnectedPeerIDs: []int{0},
+		RollbackBudget: 2.5, RollbackBudgetUsed: 1.25, TotalTimesync: 17, InputBlockCount: 42, FpsHistory: []int{60, 59, 60}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("report\n%+v\nwant\n%+v", got, want)
 	}
-	var kv []string
-	for _, f := range p2pMatchingReportFields(got) {
-		if strings.ContainsRune(f.String, 10) {
-			t.Errorf("field %s has a newline: %q", f.Key, f.String)
+	again, _ := json.Marshal(got)
+	var a, b any
+	json.Unmarshal(body, &a)
+	json.Unmarshal(again, &b)
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("encoded again: %s", again)
+	}
+}
+
+// testdata/wire/battle_info_full.json has every battle info field; the struct keeps all of them.
+func TestBattleInfoFullFixture(t *testing.T) {
+	body, err := os.ReadFile("../testdata/wire/battle_info_full.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	var m P2PMatching
+	if err := dec.Decode(&m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Relays) != 1 || m.Relays[0].Token != 18364758544493064720 || !m.SpectatorUplink || m.Users[1].Team != 2 {
+		t.Errorf("decoded %+v", m)
+	}
+	again, _ := json.Marshal(m)
+	var a, b any
+	json.Unmarshal(body, &a)
+	json.Unmarshal(again, &b)
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("encoded again: %s", again)
+	}
+}
+
+// The log line carries the body as received: fields the server does not know, and a
+// body it cannot decode.
+func TestP2PMatchingReportLog(t *testing.T) {
+	var buf bytes.Buffer
+	saved := logger
+	logger = zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&buf), zap.InfoLevel))
+	defer func() { logger = saved }()
+	p := &LbsPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
+	p.UserID = "BBBBBB"
+	for body, want := range map[string]string{
+		`{"user_id":"BBBBBB","added_later":{"x":[1,2]}}`: `"report":{"user_id":"BBBBBB","added_later":{"x":[1,2]}}`,
+		`{"user_id":`: `"report":"{\"user_id\":"`,
+	} {
+		buf.Reset()
+		(&Lbs{}).OnP2PMatchingReport(p, []byte(body))
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("log for %s:\n%s", body, buf.String())
 		}
-		kv = append(kv, fmt.Sprintf("%s=%q", f.Key, f.String))
-	}
-	if line := strings.Join(kv, " "); !strings.HasPrefix(line, `battle_code="1696492800000" user_id="BBBBBB" result="ggpo" player_count="2" peer_id="1" close_reason="net battle end"`) ||
-		!strings.Contains(line, ` mismatches="0" disconnected="true" disconnected_peer_ids="0"`) || !strings.Contains(line, `ping_median_ms:215`) ||
-		!strings.Contains(line, ` total_timesync="17" input_block_count="42" fps_history="60, 59, 60"`) {
-		t.Errorf("report fields %q", line)
 	}
 }
 
@@ -339,9 +388,9 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	info := func(id string) map[string]string { return other }
 
 	// the relay token is derived from the battle's ggpo_session
-	want := &proto.RelayServer{Ip: pb.String("192.168.1.8"), Port: pb.Int32(8203), Token: pb.Uint64(r.SessionToken(1462212142)),
-		Ip6: pb.String("2001:db8::8"), Port6: pb.Int32(8204)}
-	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 1 || !pb.Equal(got[0], want) {
+	want := RelayServer{IP: "192.168.1.8", Port: 8203, Token: r.SessionToken(1462212142),
+		IP6: "2001:db8::8", Port6: 8204}
+	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 1 || got[0] != want {
 		t.Fatalf("relays %v, want %v", got, want)
 	}
 	if len(r.sessions) != 1 {
@@ -412,21 +461,21 @@ func TestBattleInfoAfterPeersLeft(t *testing.T) {
 		m := battleInfo(t, c.expect(0x9951, CategoryCustom))
 		peers := map[string]bool{}
 		for _, a := range m.Candidates {
-			peers[a.GetUserId()] = true
+			peers[a.UserID] = true
 		}
 		for _, u := range m.Users {
-			if u.GetSync() != "0123456789abcdef" {
-				t.Errorf("player %d: %s sync %q", i, u.GetUserId(), u.GetSync())
+			if u.Sync != "0123456789abcdef" {
+				t.Errorf("player %d: %s sync %q", i, u.UserID, u.Sync)
 			}
-			if u.GetUserId() == ids[i] {
+			if u.UserID == ids[i] {
 				continue
 			}
-			if u.GgpoPort == nil || !peers[u.GetUserId()] {
-				t.Errorf("player %d: %s ggpo port %v, candidates %v", i, u.GetUserId(), u.GgpoPort, peers[u.GetUserId()])
+			if u.GgpoPort == 0 || !peers[u.UserID] {
+				t.Errorf("player %d: %s ggpo port %v, candidates %v", i, u.UserID, u.GgpoPort, peers[u.UserID])
 			}
 		}
-		if m.SessionId == nil || len(m.Users) != len(cs) {
-			t.Errorf("player %d: battle info %v", i, pb.CompactTextString(m))
+		if m.SessionID == 0 || len(m.Users) != len(cs) {
+			t.Errorf("player %d: battle info %+v", i, m)
 		}
 		c.ask(0x6002, nil)
 		c.conn.Close()
@@ -620,12 +669,12 @@ func TestReportUsedMsSearch(t *testing.T) {
 		}
 	}
 
-	report := func(sender, code string, rounds ...[]int32) {
-		r := &proto.P2PMatchingReport{BattleCode: pb.String(code), UserId: pb.String(sender)}
+	report := func(sender, code string, rounds ...[]int) {
+		r := P2PMatchingReport{BattleCode: code, UserID: sender}
 		for _, ms := range rounds {
-			r.RoundData = append(r.RoundData, &proto.BattleLogRound{WinTeam: pb.Int32(1), UsedMs: ms})
+			r.RoundData = append(r.RoundData, BattleLogRound{WinTeam: 1, UsedMs: ms})
 		}
-		body, err := pb.Marshal(r)
+		body, err := json.Marshal(r)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -634,9 +683,9 @@ func TestReportUsedMsSearch(t *testing.T) {
 		m.Writer().Write(body)
 		defaultHandlers.handlers[0x9952](p, m)
 	}
-	report("BBBBBB", "B1", []int32{1, 9}, []int32{4, 9}, []int32{1})
-	report("CCCCCC", "B1", []int32{30, 30})
-	report("AAAAAA", "B2", []int32{2, 64})
+	report("BBBBBB", "B1", []int{1, 9}, []int{4, 9}, []int{1})
+	report("CCCCCC", "B1", []int{30, 30})
+	report("AAAAAA", "B2", []int{2, 64})
 
 	h := &APIHandler{}
 	search := func(query string) (codes []string, users map[string]string) {

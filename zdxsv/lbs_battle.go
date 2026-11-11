@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"maps"
 	"math"
 	"net"
@@ -12,14 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
-	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type LbsBattle struct {
@@ -143,9 +139,98 @@ func newGgpoSession() uint32 {
 	}
 }
 
+// P2PMatching is the battle info, lobby -> emulator custom notice 0x9951, as JSON.
+type P2PMatching struct {
+	BattleCode       string          `json:"battle_code"`
+	SessionID        uint32          `json:"session_id,omitempty"`         // the battle's GGPO ping test session; 0: no GGPO
+	PeerID           int             `json:"peer_id"`                      // the receiver's index in users
+	PingTestDuration int             `json:"ping_test_duration,omitempty"` // ms
+	Users            []P2PUser       `json:"users"`                        // every player, in battle order
+	Candidates       []PlayerAddress `json:"candidates,omitempty"`         // the other players' UDP addresses
+	Relays           []RelayServer   `json:"relays,omitempty"`
+	SpectatorUplink  bool            `json:"spectator_uplink,omitempty"`
+	LobbySessionID   string          `json:"lobby_session_id"`
+	BattleServer     string          `json:"battle_server"` // "a.b.c.d:port"
+}
+
+type P2PUser struct {
+	UserID    string `json:"user_id"`
+	UserName  string `json:"user_name,omitempty"`
+	PilotName string `json:"pilot_name,omitempty"`
+	Team      int    `json:"team,omitempty"`      // 1 / 2 (entry side), 0: unknown
+	GgpoPort  int    `json:"ggpo_port,omitempty"` // 0: none
+	Sync      string `json:"sync,omitempty"`      // settings fingerprint, 16 lowercase hex digits
+}
+
+type PlayerAddress struct {
+	UserID string `json:"user_id"`
+	PeerID int    `json:"peer_id"`
+	IP     string `json:"ip"` // IPv4 or IPv6, no brackets
+	Port   int    `json:"port"`
+}
+
+type RelayServer struct {
+	IP    string `json:"ip"`
+	Port  int    `json:"port"`
+	Token uint64 `json:"token"`
+	IP6   string `json:"ip6,omitempty"`
+	Port6 int    `json:"port6,omitempty"`
+}
+
+// P2PMatchingReport is how a GGPO battle ran, emulator -> lobby custom message 0x9952, as
+// JSON. Sent after the platform info of the first lobby connection after the battle.
+type P2PMatchingReport struct {
+	BattleCode          string             `json:"battle_code,omitempty"`
+	PlayerCount         int                `json:"player_count,omitempty"`
+	PeerID              int                `json:"peer_id,omitempty"`      // the sender's position
+	CloseReason         string             `json:"close_reason,omitempty"` // how GGPO ended; empty: it did not start
+	FrameCount          int                `json:"frame_count,omitempty"`
+	RoundData           []BattleLogRound   `json:"round_data,omitempty"` // per round played
+	InputDelay          int                `json:"input_delay,omitempty"`
+	RemotePeers         []RemotePeerReport `json:"remote_peers,omitempty"` // ping test result per other position
+	UserID              string             `json:"user_id,omitempty"`
+	Result              string             `json:"result,omitempty"` // "ggpo", "cut" or "server"
+	CutReason           string             `json:"cut_reason,omitempty"`
+	Sync                string             `json:"sync,omitempty"`        // own fingerprint, when a peer's differs
+	SyncDiffer          string             `json:"sync_differ,omitempty"` // positions with a differing fingerprint
+	Answered            int                `json:"answered,omitempty"`    // peers that answered the ping test
+	RelayCount          int                `json:"relay_count,omitempty"`
+	PingError           string             `json:"ping_error,omitempty"`
+	PingWaitMs          int                `json:"ping_wait_ms,omitempty"`
+	MinDelay            int                `json:"min_delay,omitempty"`
+	FixedDelay          bool               `json:"fixed_delay,omitempty"`
+	CutSends            int                `json:"cut_sends,omitempty"`
+	RollbackFrames      int                `json:"rollback_frames,omitempty"`
+	Mismatches          int                `json:"mismatches,omitempty"`
+	Disconnected        bool               `json:"disconnected,omitempty"`
+	DisconnectedPeerIDs []int              `json:"disconnected_peer_ids,omitempty"` // positions whose peer disconnected
+	RollbackBudget      float64            `json:"rollback_budget,omitempty"`       // frames, learned per PC from the frame slack
+	RollbackBudgetUsed  float64            `json:"rollback_budget_used,omitempty"`  // frames the input delay left to rollbacks
+	TotalTimesync       int                `json:"total_timesync,omitempty"`        // frames slept so a peer could catch up
+	InputBlockCount     int                `json:"input_block_count,omitempty"`     // frames that waited for a peer's input
+	FpsHistory          []int              `json:"fps_history,omitempty"`           // frames run in each second of the battle
+}
+
+type BattleLogRound struct {
+	WinTeam int   `json:"win_team"` // 1 / 2, -1: a draw
+	UsedMs  []int `json:"used_ms"`  // by position: the MS id + 1, 0: unknown
+}
+
+type RemotePeerReport struct {
+	PeerID       int    `json:"peer_id"`
+	PingMinMs    int    `json:"ping_min_ms,omitempty"` // GGPO ping during the battle, sampled once a second
+	PingMedianMs int    `json:"ping_median_ms,omitempty"`
+	PingMaxMs    int    `json:"ping_max_ms,omitempty"`
+	Route        string `json:"route,omitempty"`  // "direct", "peer <position>" or "relay <index>"
+	RttMs        int    `json:"rtt_ms,omitempty"` // 0: no answer
+	Addr         string `json:"addr,omitempty"`   // the address that answered
+	RecvLoss     int    `json:"recv_loss,omitempty"`
+	SendLoss     int    `json:"send_loss,omitempty"`
+}
+
 // OnGetBattleInfo returns the P2PMatching for an emulator that runs
 // the zproxy bridge itself (platform info "udp=1"), else nil.
-func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *proto.P2PMatching {
+func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *P2PMatching {
 	b := p.Battle
 	if b == nil {
 		return nil
@@ -166,7 +251,7 @@ func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *proto.P2PMatching {
 // differs from its own.
 var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
-func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.P2PMatching {
+func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMatching {
 	b := p.Battle
 	if b == nil || b.TestBattle || p.Platform == PlatformConsole || p.PlatformInfo["udp"] != "1" {
 		return nil
@@ -174,26 +259,27 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.
 	if b.ServerIP == nil || b.ServerIP.To4() == nil || b.ServerPort == 0 {
 		return nil
 	}
-	m := &proto.P2PMatching{
-		BattleCode:   pb.String(b.BattleCode),
-		BattleServer: pb.String(net.JoinHostPort(b.ServerIP.String(), strconv.Itoa(int(b.ServerPort)))),
+	m := &P2PMatching{
+		BattleCode:   b.BattleCode,
+		BattleServer: net.JoinHostPort(b.ServerIP.String(), strconv.Itoa(int(b.ServerPort))),
 	}
 	var users []string
+	self := false
 	for i, u := range b.Users {
 		users = append(users, u.UserID)
-		pu := &proto.P2PUser{UserId: pb.String(u.UserID)}
+		pu := P2PUser{UserID: u.UserID}
 		if u.UserID == p.UserID {
-			m.LobbySessionId = pb.String(u.SessionID)
-			m.PeerId = pb.Int32(int32(i))
+			m.LobbySessionID, self = u.SessionID, true
+			m.PeerID = i
 		}
 		if name := battleInfoName(u.Name); name != "" {
-			pu.UserName = pb.String(name)
+			pu.UserName = name
 		}
 		if pilot := pilotName(u.Bin); pilot != "" {
-			pu.PilotName = pb.String(pilot)
+			pu.PilotName = pilot
 		}
 		if u.Entry == EntryAeug || u.Entry == EntryTitans {
-			pu.Team = pb.Int32(int32(u.Entry))
+			pu.Team = int(u.Entry)
 		}
 		pi := p.PlatformInfo
 		if u.UserID != p.UserID {
@@ -203,11 +289,11 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.
 			}
 		}
 		if s := pi["sync"]; syncFingerprint.MatchString(s) {
-			pu.Sync = pb.String(s)
+			pu.Sync = s
 		}
 		m.Users = append(m.Users, pu)
 	}
-	if m.LobbySessionId == nil {
+	if !self {
 		return nil
 	}
 	ggpo := false
@@ -230,11 +316,11 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.
 		}
 		for _, a := range addrs {
 			ip, port, _ := splitUDPAddr(a)
-			m.Candidates = append(m.Candidates, &proto.PlayerAddress{
-				UserId: pb.String(id), PeerId: pb.Int32(int32(i)), Ip: pb.String(ip), Port: pb.Int32(int32(port))})
+			m.Candidates = append(m.Candidates, PlayerAddress{
+				UserID: id, PeerID: i, IP: ip, Port: port})
 		}
 		if port, err := strconv.Atoi(pi["ggpo"]); err == nil && 0 < port && port < 65536 {
-			m.Users[i].GgpoPort = pb.Int32(int32(port))
+			m.Users[i].GgpoPort = port
 			ggpo = true
 		}
 	}
@@ -245,13 +331,13 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *proto.
 	if ggpo {
 		// The session id is random, not derived from the battle code: the code is
 		// public (live list, replays), and the session authorizes the battle's live upload.
-		m.SessionId = pb.Uint32(b.GgpoSession)
+		m.SessionID = b.GgpoSession
 		if !alone {
-			m.PingTestDuration = pb.Int32(7500)
+			m.PingTestDuration = 7500
 		}
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
-			m.SpectatorUplink = pb.Bool(true)
+			m.SpectatorUplink = true
 		}
 		m.Relays = relayServers(p, users, info, b.GgpoSession)
 	}
@@ -328,7 +414,7 @@ func liveUplink(p *LbsPeer, users []string, info func(userID string) map[string]
 // relayServers offers the relays of battleRelays to a GGPO battle, only
 // when every player reports relay_server=1 (platform info). The relay session is the
 // battle's ggpo_session, so every player gets the same token.
-func relayServers(p *LbsPeer, users []string, info func(userID string) map[string]string, session uint32) []*proto.RelayServer {
+func relayServers(p *LbsPeer, users []string, info func(userID string) map[string]string, session uint32) []RelayServer {
 	if info == nil || p.PlatformInfo["relay_server"] != "1" {
 		return nil
 	}
@@ -343,15 +429,15 @@ func relayServers(p *LbsPeer, users []string, info func(userID string) map[strin
 		}
 		return info(id)
 	}
-	var relays []*proto.RelayServer
+	var relays []RelayServer
 	for _, rr := range battleRelays(users, playerInfo) {
 		ip, port, ok := splitUDPAddr(rr.PublicAddr)
 		if !ok {
 			continue
 		}
-		r := &proto.RelayServer{Ip: pb.String(ip), Port: pb.Int32(int32(port)), Token: pb.Uint64(rr.Sessions.SessionToken(session))}
+		r := RelayServer{IP: ip, Port: port, Token: rr.Sessions.SessionToken(session)}
 		if ip6, port6, ok := splitUDPAddr(rr.PublicAddr6); ok {
-			r.Ip6, r.Port6 = pb.String(ip6), pb.Int32(int32(port6))
+			r.IP6, r.Port6 = ip6, port6
 		}
 		relays = append(relays, r)
 	}
@@ -392,28 +478,38 @@ func pilotName(bin string) string {
 	return battleInfoName(s)
 }
 
-// OnP2PMatchingReport logs how a battle ran and saves its used_ms.
-func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, report *proto.P2PMatchingReport) {
+// OnP2PMatchingReport logs a report body as received and saves its used_ms.
+func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, body []byte) {
 	if p.PlatformInfo == nil {
 		logger.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
 		return
 	}
-	logger.Info("p2p matching report", p2pMatchingReportFields(report)...)
-	sender := p.UserID
-	if sender == "" { // the report comes before the user login
-		sender = report.GetUserId()
-	}
-	saveUsedMs(report, sender)
-}
-
-// saveUsedMs sets each player's used_ms from a battle member's report round_data. Every
-// member reports the same rounds; the last report wins.
-func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
-	rounds := report.GetRoundData()
-	if len(rounds) == 0 || report.GetBattleCode() == "" {
+	logger.Info("p2p matching report", zap.String("user_id", p.UserID), p2pMatchingReportField(body))
+	var report P2PMatchingReport
+	if err := json.Unmarshal(body, &report); err != nil {
+		logger.Warn("p2p matching report: bad request", zap.String("user_id", p.UserID), zap.Error(err))
 		return
 	}
-	records, err := DefaultDB.GetBattleRecords(report.GetBattleCode())
+	sender := p.UserID
+	if sender == "" { // the report comes before the user login
+		sender = report.UserID
+	}
+	saveUsedMs(&report, sender)
+}
+
+func p2pMatchingReportField(body []byte) zap.Field {
+	if json.Valid(body) {
+		return zap.Any("report", json.RawMessage(body))
+	}
+	return zap.ByteString("report", body)
+}
+
+func saveUsedMs(report *P2PMatchingReport, sender string) {
+	rounds := report.RoundData
+	if len(rounds) == 0 || report.BattleCode == "" {
+		return
+	}
+	records, err := DefaultDB.GetBattleRecords(report.BattleCode)
 	if err != nil {
 		logger.Warn("p2p matching report: GetBattleRecords failure", zap.Error(err))
 		return
@@ -426,8 +522,8 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 		var list []string
 		for _, rd := range rounds {
 			ms := 0
-			if i := r.Pos - 1; 0 <= i && i < len(rd.GetUsedMs()) {
-				ms = int(rd.GetUsedMs()[i])
+			if i := r.Pos - 1; 0 <= i && i < len(rd.UsedMs) {
+				ms = rd.UsedMs[i]
 			}
 			if ms < 0 || 64 <= ms {
 				ms = 0
@@ -441,36 +537,6 @@ func saveUsedMs(report *proto.P2PMatchingReport, sender string) {
 			logger.Warn("p2p matching report: SetUsedMs failure", zap.Error(err))
 		}
 	}
-}
-
-func p2pMatchingReportFields(report *proto.P2PMatchingReport) []zap.Field {
-	m := report.ProtoReflect()
-	fields := m.Descriptor().Fields()
-	head := []protoreflect.Name{"battle_code", "user_id", "result"}
-	var line []zap.Field
-	for _, name := range head {
-		line = append(line, zap.String(string(name), m.Get(fields.ByName(name)).String()))
-	}
-	for i := 0; i < fields.Len(); i++ {
-		fd := fields.Get(i)
-		if slices.Contains(head, fd.Name()) || !m.Has(fd) {
-			continue
-		}
-		s := m.Get(fd).String()
-		if fd.IsList() {
-			var items []string
-			for j, l := 0, m.Get(fd).List(); j < l.Len(); j++ {
-				if fd.Message() == nil {
-					items = append(items, l.Get(j).String())
-				} else {
-					items = append(items, prototext.MarshalOptions{}.Format(l.Get(j).Message().Interface()))
-				}
-			}
-			s = strings.Join(items, ", ")
-		}
-		line = append(line, zap.String(string(fd.Name()), s))
-	}
-	return line
 }
 
 func battlePlatformInfo(peer *LbsPeer) map[string]string {

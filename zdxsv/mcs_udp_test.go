@@ -2,14 +2,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"net"
 	"reflect"
 	"testing"
 	"time"
-
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
 )
 
 // startUDPServer serves on a local port with U1 (12345678) and U2 (87654321) waiting for battle.
@@ -260,8 +257,8 @@ func TestWireBad(t *testing.T) {
 	}
 }
 
-func TestWireNotProtobuf(t *testing.T) {
-	ping, err := pb.Marshal(&proto.Packet{Type: proto.MessageType_Ping.Enum(), PingData: &proto.PingMessage{Timestamp: pb.Int64(1)}})
+func TestWireNotStun(t *testing.T) {
+	ping, err := json.Marshal(StunPacket{Type: StunPing, Timestamp: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const protocolVersion = 1007
+const protocolVersion = 1008
 
 func isSameAddr(a, b *net.UDPAddr) bool {
 	return a.Port == b.Port && a.IP.Equal(b.IP)

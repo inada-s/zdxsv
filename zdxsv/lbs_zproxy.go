@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	requiredVersion = 1007
+	requiredVersion = 1008
 )
 
 // RegisterProxy registers the zproxy at ip of a lobby user: the user with that IP for
