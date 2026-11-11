@@ -1,0 +1,36 @@
+{
+  "battle_code": "1696492800000",
+  "player_count": 2,
+  "peer_id": 1,
+  "close_reason": "net battle end",
+  "frame_count": 21563,
+  "round_data": [
+    {"win_team": 1, "used_ms": [3, 17]},
+    {"win_team": -1, "used_ms": [3, 0]}
+  ],
+  "input_delay": 2,
+  "remote_peers": [
+    {"peer_id": 0, "ping_min_ms": 201, "ping_median_ms": 215, "ping_max_ms": 250, "route": "direct", "rtt_ms": 12, "addr": "203.0.113.5:7001", "recv_loss": 3, "send_loss": 5}
+  ],
+  "user_id": "BBBBBB",
+  "result": "ggpo",
+  "cut_reason": "sync",
+  "sync": "0123456789abcdef",
+  "sync_differ": "0",
+  "answered": 1,
+  "relay_count": 1,
+  "ping_error": "timeout",
+  "ping_wait_ms": 1500,
+  "min_delay": 1,
+  "fixed_delay": true,
+  "cut_sends": 4,
+  "rollback_frames": 812,
+  "mismatches": 2,
+  "disconnected": true,
+  "disconnected_peer_ids": [0],
+  "rollback_budget": 2.5,
+  "rollback_budget_used": 1.25,
+  "total_timesync": 17,
+  "input_block_count": 42,
+  "fps_history": [60, 59, 60]
+}

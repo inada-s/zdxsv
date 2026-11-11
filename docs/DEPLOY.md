@@ -99,6 +99,12 @@ Each line is a fixed `message` plus fields (`addr`, `user_id`, `battle_code`, `e
 Replace the binary, run `zdxsv migratedb` if the release changes the schema, restart.
 Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
 
+A release that changes a wire message (`testdata/wire/`) ships with the pcsx2 release that speaks
+it: set `min_pcsx2_version` in the master data's `m_server_setting` to that release (`zdxsv-X.Y.Z`)
+when the server goes live, so older emulators get "PLEASE UPDATE PCSX2" at login. It also refuses
+builds without a release version, except the login keys or machine ids in `pcsx2_allow`. zproxy:
+bump `protocolVersion` (`zproxy/main.go`) and `requiredVersion` (`zdxsv/lbs_zproxy.go`) together.
+
 ## Check
 
 `make smoke` runs the server on a throwaway database and checks every port, DNAS and the API, and runs

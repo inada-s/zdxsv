@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"sync"
 	"time"
 
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
 )
 
@@ -292,12 +290,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 			}
 			continue
 		}
-		req := new(proto.Packet)
-		if err := pb.Unmarshal(buf[:n], req); err != nil {
-			logger.Error("UDPStun unmarshal failed", zap.Error(err))
-			continue
-		}
-		data, test2 := udpStunAnswer(req, addr)
+		data, test2 := udpStunAnswer(buf[:n], addr)
 		if data == nil {
 			continue
 		}
@@ -308,25 +301,32 @@ func serveUDPStun(conn, test *net.UDPConn) {
 	}
 }
 
+// StunPacket is a UDP Ping or Pong of the STUN server, zproxy and emulators, as JSON.
+// Byte 0 is '{', so it never collides with battle packets.
+type StunPacket struct {
+	Type       string `json:"type"` // StunPing / StunPong
+	Timestamp  int64  `json:"timestamp"`
+	UserID     string `json:"user_id,omitempty"`
+	PublicAddr string `json:"public_addr,omitempty"` // Pong: the Ping's source address
+}
+
+const (
+	StunPing = "ping"
+	StunPong = "pong"
+)
+
 // udpStunAnswer returns the Pong for a Ping packet (nil for anything else), and
 // whether the Ping asked for the reachability test.
-func udpStunAnswer(req *proto.Packet, addr *net.UDPAddr) ([]byte, bool) {
-	if req.GetType() != proto.MessageType_Ping {
-		logger.Warn("unexpected packet received", zap.Any("req", req))
+func udpStunAnswer(b []byte, addr *net.UDPAddr) ([]byte, bool) {
+	var req StunPacket
+	if err := json.Unmarshal(b, &req); err != nil || req.Type != StunPing {
+		logger.Warn("UDPStun unexpected packet", zap.ByteString("req", b), zap.Error(err))
 		return nil, false
 	}
-	res := &proto.Packet{
-		Type: proto.MessageType_Pong.Enum(),
-		PongData: &proto.PongMessage{
-			PublicAddr: pb.String(addr.String()),
-			UserId:     pb.String("SERVER"),
-			Timestamp:  pb.Int64(req.GetPingData().GetTimestamp()),
-		},
-	}
-	data, err := pb.Marshal(res)
+	data, err := json.Marshal(StunPacket{Type: StunPong, Timestamp: req.Timestamp, UserID: "SERVER", PublicAddr: addr.String()})
 	if err != nil {
 		logger.Error("UDPStun write failed", zap.Error(err))
 		return nil, false
 	}
-	return data, req.GetPingData().GetUserId() == UDPTestUserID
+	return data, req.UserID == UDPTestUserID
 }

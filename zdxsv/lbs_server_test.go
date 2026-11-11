@@ -1,20 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
-
-	"zdxsv/zdxsv/proto"
-
-	pb "github.com/golang/protobuf/proto"
 )
 
 func stunPing(t *testing.T, c *net.UDPConn, to *net.UDPAddr, userID string) {
-	data, err := pb.Marshal(&proto.Packet{
-		Type:     proto.MessageType_Ping.Enum(),
-		PingData: &proto.PingMessage{Timestamp: pb.Int64(42), UserId: pb.String(userID)},
-	})
+	data, err := json.Marshal(StunPacket{Type: StunPing, Timestamp: 42, UserID: userID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,11 +29,32 @@ func stunPongs(t *testing.T, c *net.UDPConn, d time.Duration) map[int]string {
 		if err != nil {
 			return got
 		}
-		res := new(proto.Packet)
-		if err := pb.Unmarshal(buf[:n], res); err != nil || res.GetType() != proto.MessageType_Pong || res.GetPongData().GetTimestamp() != 42 {
+		var res StunPacket
+		if err := json.Unmarshal(buf[:n], &res); err != nil || res.Type != StunPong || res.Timestamp != 42 {
 			t.Fatalf("bad answer %q", buf[:n])
 		}
-		got[from.Port] = res.GetPongData().GetPublicAddr()
+		got[from.Port] = res.PublicAddr
+	}
+}
+
+// testdata/wire/pong.json is the answer to testdata/wire/ping.json from 203.0.113.1:8250.
+func TestUDPStunFixture(t *testing.T) {
+	ping, err := os.ReadFile("../testdata/wire/ping.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pong, err := os.ReadFile("../testdata/wire/pong.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, test := udpStunAnswer(ping, &net.UDPAddr{IP: net.IPv4(203, 0, 113, 1), Port: 8250})
+	if string(got) != strings.TrimSpace(string(pong)) || test {
+		t.Errorf("answer %s %v, want %s", got, test, pong)
+	}
+	for _, b := range []string{`{"type":"pong","timestamp":1}`, `{"type":`, "\x08\x02\x5a\x02\x08\x01"} {
+		if got, _ := udpStunAnswer([]byte(b), &net.UDPAddr{IP: net.IPv4(203, 0, 113, 1), Port: 8250}); got != nil {
+			t.Errorf("answer to %q: %s", b, got)
+		}
 	}
 }
 

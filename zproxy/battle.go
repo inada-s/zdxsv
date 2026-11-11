@@ -8,8 +8,7 @@ import (
 )
 
 // Battle UDP packets between zproxy and the battle server, and between zproxies.
-// They share zproxy's socket with protobuf Ping/Pong; byte 0 is 0, which no
-// protobuf message starts with.
+// They share zproxy's socket with JSON Ping/Pong; byte 0 is 0, never '{'.
 const (
 	KindHello       byte = 1
 	KindHelloAnswer byte = 2

@@ -257,15 +257,15 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 			t.Fatalf("%s: relays %v, want %v", peer.UserID, got, want)
 		}
 		for i, r := range got {
-			if r.GetIp() != want[i] || r.GetPort() != 8204 {
+			if r.IP != want[i] || r.Port != 8204 {
 				t.Errorf("%s: relay_%d %v, want %s:8204", peer.UserID, i, r, want[i])
 			}
-			if tok := relays[want[i]+":8204"].SessionToken(1462212142); r.GetToken() != tok {
-				t.Errorf("%s: relay_%d token %d, want the relay's session token %d", peer.UserID, i, r.GetToken(), tok)
+			if tok := relays[want[i]+":8204"].SessionToken(1462212142); r.Token != tok {
+				t.Errorf("%s: relay_%d token %d, want the relay's session token %d", peer.UserID, i, r.Token, tok)
 			}
 		}
-		if got[0].GetIp6() != "2001:db8::1" || got[1].GetIp6() != "" {
-			t.Errorf("%s: ip6 %q %q", peer.UserID, got[0].GetIp6(), got[1].GetIp6())
+		if got[0].IP6 != "2001:db8::1" || got[1].IP6 != "" {
+			t.Errorf("%s: ip6 %q %q", peer.UserID, got[0].IP6, got[1].IP6)
 		}
 	}
 
@@ -273,11 +273,11 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 	UnregisterRelay("198.51.100.3:8204")
 	UnregisterRelay("198.51.100.4:8204")
 	got := battleInfo(t, testBattleInfoNotice(p, lookup)).Relays
-	if len(got) != 3 || got[0].GetIp() != "198.51.100.1" || got[1].GetIp() != "198.51.100.2" || got[2].GetIp() != "192.168.1.8" {
+	if len(got) != 3 || got[0].IP != "198.51.100.1" || got[1].IP != "198.51.100.2" || got[2].IP != "192.168.1.8" {
 		t.Fatalf("relays %v, want asia-northeast1, asia-northeast2, the lobby's", got)
 	}
-	if got[2].GetToken() != LobbyRelay.SessionToken(1462212142) {
-		t.Errorf("lobby relay token %d", got[2].GetToken())
+	if got[2].Token != LobbyRelay.SessionToken(1462212142) {
+		t.Errorf("lobby relay token %d", got[2].Token)
 	}
 
 	// no lobby relay: the regional ones alone

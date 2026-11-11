@@ -11,10 +11,14 @@ import (
 	"testing"
 )
 
-func replayUploadRequest(t *testing.T, filename string, content []byte) *http.Request {
+// fields: form field name, value pairs written before the file.
+func replayUploadRequest(t *testing.T, filename string, content []byte, fields ...string) *http.Request {
 	t.Helper()
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
+	for i := 0; i+1 < len(fields); i += 2 {
+		mw.WriteField(fields[i], fields[i+1])
+	}
 	fw, err := mw.CreateFormFile("file", filename)
 	if err != nil {
 		t.Fatal(err)
