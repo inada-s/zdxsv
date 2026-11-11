@@ -73,16 +73,10 @@ func setupProxy(t *testing.T, probeAddr string, stun *fakeStun) (*Zproxy, bool) 
 	conf.TCPListenPort = 0
 	conf.UDPListenPort = freeUDPPort(t)
 	conf.EnableUPnP = false
-	conf.LobbyRPCAddr = stun.addr
+	conf.StunAddr = stun.addr
 	z := NewZproxy()
 	z.localIPProbeAddr = probeAddr
 	ok := z.Setup()
-	if lobbyRPCClient != nil {
-		t.Cleanup(func() {
-			lobbyRPCClient.Stop()
-			lobbyRPCClient = nil
-		})
-	}
 	return z, ok
 }
 
@@ -99,9 +93,6 @@ func TestSetup(t *testing.T) {
 	want := []string{"203.0.113.5:9000", fmt.Sprint("127.0.0.1:", conf.UDPListenPort)}
 	if !reflect.DeepEqual(z.selfUDPAddrs, want) {
 		t.Errorf("UDP addrs %v, want %v", z.selfUDPAddrs, want)
-	}
-	if lobbyRPCClient == nil || lobbyRPCClient.Addr != stun.addr {
-		t.Errorf("lobby RPC client not set up for %s", stun.addr)
 	}
 }
 

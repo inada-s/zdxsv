@@ -1,19 +1,15 @@
-package lobbyrpc
+// Package lobbyapi holds the JSON bodies zproxy exchanges with the lobby's HTTP API
+// (lobby.APIHandler) and the lobby status.
+package lobbyapi
 
 import (
 	"net"
-
-	"github.com/valyala/gorpc"
 )
 
-func init() {
-	gorpc.RegisterType(new(RegisterProxyRequest))
-	gorpc.RegisterType(new(RegisterProxyResponse))
-	gorpc.RegisterType(new(BattleInfoRequest))
-	gorpc.RegisterType(new(BattleInfoResponse))
-	gorpc.RegisterType(new(StatusRequest))
-	gorpc.RegisterType(new(StatusResponse))
-}
+const (
+	RegisterProxyPath = "/lbs/zproxy/register"
+	BattleInfoPath    = "/lbs/zproxy/battle_info"
+)
 
 type RegisterProxyRequest struct {
 	CurrentVersion int
@@ -43,9 +39,6 @@ type BattleInfoResponse struct {
 	BattleIP net.IP
 	Port     uint16
 	IsTest   bool
-}
-
-type StatusRequest struct {
 }
 
 type User struct {

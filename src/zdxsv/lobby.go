@@ -12,15 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 	"zdxsv/pkg/auth"
 	"zdxsv/pkg/chatops"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby"
-	"zdxsv/pkg/lobby/lobbyrpc"
 
-	"github.com/valyala/gorpc"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/google"
 	"zdxsv/pkg/zlog"
@@ -45,9 +42,6 @@ func serveLobby(app *lobby.App) {
 	if authServer != nil {
 		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
-	if err := app.StartRPC(stripHost(config.Conf.Lobby.RPCAddr)); err != nil {
-		zlog.Error("lobby setup failed", zap.Error(err))
-	}
 	go app.Serve()
 	sv := lobby.NewServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))
@@ -55,7 +49,7 @@ func serveLobby(app *lobby.App) {
 		go sv.Serve(l)
 	}
 	go sv.ServeUDPStunServer(stripHost(config.Conf.Lobby.StunAddr))
-	go sv.ServeUDPStun(stripHost(config.Conf.Lobby.RPCAddr))
+	go sv.ServeUDPStun(stripHost(config.Conf.Lobby.ZproxyStunAddr))
 	go lobby.Spectators.Run(nil)
 	if c := config.Conf.Lobby; c.RelayAddr != "" {
 		public := c.RelayPublicAddr
@@ -87,7 +81,7 @@ func serveLobby(app *lobby.App) {
 	if c := config.Conf.Lobby; c.APIAddr != "" {
 		go func() {
 			zlog.Info("start public api", zap.Any("addr", c.APIAddr))
-			api := &lobby.APIHandler{Status: app.Status}
+			api := &lobby.APIHandler{Status: app.Status, RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}
 			if authServer != nil {
 				api.Auth = authServer
 			}
@@ -219,18 +213,4 @@ func newDiscord() *chatops.Discord {
 		Allow:     allow,
 		Commands:  chatops.MasterCommands(sheet, &chatops.MasterUpdater{Sheet: sheet}),
 	}
-}
-
-// mainLobbyRPCCheck asks the lobby RPC at addr for its status.
-func mainLobbyRPCCheck(addr string) {
-	c := gorpc.NewTCPClient(addr)
-	c.Start()
-	defer c.Stop()
-	res, err := c.CallTimeout(&lobbyrpc.StatusRequest{}, 5*time.Second)
-	st, ok := res.(*lobbyrpc.StatusResponse)
-	if err != nil || !ok {
-		fmt.Println("FAIL", addr, err, res)
-		os.Exit(1)
-	}
-	fmt.Println("OK", addr, "lobby users", len(st.LobbyUsers), "battles", len(st.Battles))
 }

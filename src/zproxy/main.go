@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/proto"
 
 	pb "github.com/golang/protobuf/proto"
@@ -187,10 +187,10 @@ func (z *Zproxy) Setup() bool {
 		}
 	})
 
-	if conf.LobbyRPCAddr == z.selfLocalIP.String() {
+	if conf.StunAddr == z.selfLocalIP.String() {
 		log.Println("ローカルモード使用します")
 	}
-	svAddr, err := net.ResolveUDPAddr("udp4", conf.LobbyRPCAddr)
+	svAddr, err := net.ResolveUDPAddr("udp4", conf.StunAddr)
 	for i := 0; i < 5; i++ {
 		if stunok.Load().(bool) {
 			break
@@ -212,7 +212,6 @@ func (z *Zproxy) Setup() bool {
 	z.selfUDPAddrs = append(z.selfUDPAddrs, fmt.Sprint(z.selfLocalIP, ":", conf.UDPListenPort))
 	log.Println("UDPアドレス:", z.selfUDPAddrs)
 
-	setupLobbyRPC()
 	if conf.EnableUPnP {
 		go addUDPPortMapping(z.selfLocalIP.String(), conf.UDPListenPort)
 	}
@@ -226,7 +225,7 @@ func (z *Zproxy) PollLobby() error {
 		prevMessage string
 
 		mtx          sync.Mutex
-		lobbyUsers   []lobbyrpc.User
+		lobbyUsers   []lobbyapi.User
 		pongReceived = make(map[string]pingResult)
 	)
 
@@ -295,7 +294,7 @@ func (z *Zproxy) PollLobby() error {
 		}
 		mtx.Unlock()
 
-		resp, err := registerProxy(&lobbyrpc.RegisterProxyRequest{
+		resp, err := registerProxy(&lobbyapi.RegisterProxyRequest{
 			CurrentVersion: protocolVersion,
 			UserID:         conf.RegisterUserID,
 			Port:           conf.TCPListenPort,
@@ -334,7 +333,7 @@ func (z *Zproxy) PollLobby() error {
 	}
 
 	prepareBattle := func() error {
-		resp, err := getBattleInfo(&lobbyrpc.BattleInfoRequest{SessionID: z.sessionID})
+		resp, err := getBattleInfo(&lobbyapi.BattleInfoRequest{SessionID: z.sessionID})
 		if err != nil {
 			return err
 		}

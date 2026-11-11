@@ -25,7 +25,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	want := Config{
 		DNS:   DNSConfig{Addr: ":53"},
 		DNAS:  DNASConfig{Addr: ":443", Region: "jp"},
-		Lobby: LobbyConfig{StunAddr: ":8221"},
+		Lobby: LobbyConfig{ZproxyStunAddr: ":8201", StunAddr: ":8221"},
 		TLS:   TLSConfig{LobbyAddr: ":8220"},
 		Relay: RelayConfig{Addr: ":8223"},
 	}
@@ -45,7 +45,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		"ZDXSV_DNS_ADDR":                 "192.168.1.3:53",
 		"ZDXSV_LOGIN_PUBLIC_ADDR":        "1.2.3.4:9876",
 		"ZDXSV_LOBBY_ADDR":               ":8200",
-		"ZDXSV_LOBBY_RPC_ADDR":           ":8201",
+		"ZDXSV_LOBBY_ZPROXY_STUN_ADDR":   ":8201",
 		"ZDXSV_LOBBY_PUBLIC_ADDR":        "1.2.3.4:8200",
 		"ZDXSV_LOBBY_STUN_ADDR":          ":18221",
 		"ZDXSV_LOBBY_RELAY_ADDR":         ":8202",
@@ -77,7 +77,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		Login: LoginConfig{PublicAddr: "1.2.3.4:9876"},
 		Lobby: LobbyConfig{
 			Addr:             ":8200",
-			RPCAddr:          ":8201",
+			ZproxyStunAddr:   ":8201",
 			PublicAddr:       "1.2.3.4:8200",
 			StunAddr:         ":18221",
 			RelayAddr:        ":8202",
