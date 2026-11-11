@@ -33,6 +33,7 @@ set -a
 set +a
 export ZDXSV_DNAS_PUBLIC_ADDR=$IP ZDXSV_LOGIN_PUBLIC_ADDR=$IP
 export ZDXSV_LOBBY_PUBLIC_ADDR=$IP:8200 ZDXSV_BATTLE_PUBLIC_ADDR=$IP:8210
+export ZDXSV_DNAS_DATA_DIR=${ZDXSV_DNAS_DATA_DIR:-$(scripts/dnasrep.sh)}
 export ZDXSV_TLS_CERT_FILE=${ZDXSV_TLS_CERT_FILE:-zdxsv/testdata/server.crt}
 export ZDXSV_TLS_KEY_FILE=${ZDXSV_TLS_KEY_FILE:-zdxsv/testdata/server.key}
 

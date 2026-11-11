@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # Writes golden.txt: DNASrep's (PHP) answer to a query for every canned packet.
-# Run from the repo root against the old docker/legacyweb (git 78dc17c) on :8443:
+# Run from the repo root (DNASrep in dnasrep/: scripts/dnasrep.sh) against the old
+# docker/legacyweb (git 78dc17c) on :8443:
 #   docker build -t legacyweb docker/legacyweb && docker run -d -p 8443:443 legacyweb
 #   python3 zdxsv/testdata/golden.py https://127.0.0.1:8443 > zdxsv/testdata/golden.txt
 # Line: gateway kind packet query_len answer_len answer_sha256. Queries: see query().
 import hashlib, os, subprocess, sys, tempfile
 
-DATA = "zdxsv/dnas/www"
+DATA = "dnasrep/www/dnas"
 
 
 def query(gw, kind, packet, n):

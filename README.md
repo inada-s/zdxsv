@@ -22,6 +22,8 @@ Releases (the server for linux/amd64, and zproxy for every platform when its cod
 
 `zdxsv` command uses `ZDXSV_*` environment variables. Please see `.env` file the list of available environment variables.
 
+The DNAS certificates and answers are not in this repository: `scripts/dnasrep.sh` fetches [DNASrep](https://github.com/FogNo23/DNASrep) into `dnasrep/` and prints the path for `ZDXSV_DNAS_DATA_DIR`. `make test` skips the tests that need it when that variable is unset; `make smoke` and `scripts/run-local.sh` fetch it themselves.
+
 To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Commands

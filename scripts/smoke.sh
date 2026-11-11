@@ -37,6 +37,7 @@ fi
 
 # the server's environment: .env, but never the real database
 set -a; . ./.env; set +a
+export ZDXSV_DNAS_DATA_DIR=${ZDXSV_DNAS_DATA_DIR:-$(scripts/dnasrep.sh)} || exit 1
 export ZDXSV_DB_NAME=smoke.db
 # and the TLS ports on the test keys (zdxsv/testdata), never the real one
 td=zdxsv/testdata

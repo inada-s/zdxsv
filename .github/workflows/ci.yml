@@ -25,6 +25,8 @@ jobs:
       - name: zproxy vet and test
         working-directory: zproxy
         run: go vet ./... && go test ./...
+      - name: DNASrep (the DNAS data tests and the smoke test use)
+        run: echo "ZDXSV_DNAS_DATA_DIR=$(scripts/dnasrep.sh)" >> "$GITHUB_ENV"
       - name: go test
         run: make cover
       - name: coverage summary

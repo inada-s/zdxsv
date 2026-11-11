@@ -8,6 +8,9 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 - Linux x86_64 with a public IPv4 address
 - The binary: `zdxsv` in a release's `zdxsv-server_<ver>_linux-x86_64.tar.gz`, or `make build`
 - `CAP_NET_BIND_SERVICE` (or root) for ports 53 and 443
+- The DNAS data: a [DNASrep](https://github.com/FogNo23/DNASrep) checkout, which holds the certificates the
+  PS2 accepts and the canned DNAS answers. This repository does not carry them. `scripts/dnasrep.sh <dir>`
+  fetches the commit zdxsv is tested against; point `ZDXSV_DNAS_DATA_DIR` at it.
 - Open ports:
 
 | port | proto | use | public / internal | used by |
@@ -36,6 +39,7 @@ If systemd-resolved holds port 53, set `DNSStubListener=no` in `/etc/systemd/res
 
 ```sh
 ZDXSV_DNAS_PUBLIC_ADDR=203.0.113.10
+ZDXSV_DNAS_DATA_DIR=/opt/zdxsv/dnasrep
 ZDXSV_LOGIN_PUBLIC_ADDR=203.0.113.10
 ZDXSV_LOBBY_ADDR=:8200
 ZDXSV_LOBBY_PUBLIC_ADDR=203.0.113.10:8200
@@ -110,7 +114,8 @@ bump `protocolVersion` (`zproxy/main.go`) and `requiredVersion` (`zdxsv/lbs_zpro
 
 `make smoke` runs the server on a throwaway database and checks every port, DNAS and the API, and runs
 the real zproxy against it (STUN, register, battle info).
-On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere.
+On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere
+(with `ZDXSV_DNAS_DATA_DIR`: it compares the answers with its own).
 
 ## Releases
 
