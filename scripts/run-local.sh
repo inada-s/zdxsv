@@ -2,7 +2,7 @@
 # Runs the whole server on this machine for local play: .env with this machine's LAN address as the
 # public address, a database made if absent, TLS ports with the test certificate.
 # Usage: [IP=<address>] scripts/run-local.sh [zdxsv flags]
-# Emulator clients must trust the test CA (pkg/tlsconf/testdata), never use it on a public server.
+# Emulator clients must trust the test CA (zdxsv/testdata), never use it on a public server.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -33,12 +33,12 @@ set -a
 set +a
 export ZDXSV_DNAS_PUBLIC_ADDR=$IP ZDXSV_LOGIN_PUBLIC_ADDR=$IP
 export ZDXSV_LOBBY_PUBLIC_ADDR=$IP:8200 ZDXSV_BATTLE_PUBLIC_ADDR=$IP:8210
-export ZDXSV_TLS_CERT_FILE=${ZDXSV_TLS_CERT_FILE:-pkg/tlsconf/testdata/server.crt}
-export ZDXSV_TLS_KEY_FILE=${ZDXSV_TLS_KEY_FILE:-pkg/tlsconf/testdata/server.key}
+export ZDXSV_TLS_CERT_FILE=${ZDXSV_TLS_CERT_FILE:-zdxsv/testdata/server.crt}
+export ZDXSV_TLS_KEY_FILE=${ZDXSV_TLS_KEY_FILE:-zdxsv/testdata/server.key}
 
 bin=bin/zdxsv$(go env GOEXE)
 mkdir -p bin
-go build -o "$bin" ./src/zdxsv
+go build -o "$bin" ./zdxsv
 [ -f "$ZDXSV_DB_NAME" ] || "$bin" initdb
 echo "zdxsv on $IP (db $ZDXSV_DB_NAME)"
 exec "$bin" -logtostderr "$@"

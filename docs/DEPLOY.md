@@ -59,11 +59,11 @@ Optional:
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
 - Master data from a Google Spreadsheet by a Discord slash command: see [Master data](#master-data)
-- Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `pkg/config/config.go`
+- Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `zdxsv/config.go`
 
 ## Master data
 
-Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link. Tables and columns: `pkg/chatops/master.go`.
+Discord `/op master-up` loads the Google Spreadsheet into the DB; `/op master` answers its link. Tables and columns: `zdxsv/chatops_master.go`.
 
 Setup: set `ZDXSV_DISCORD_PUBLIC_KEY`, `ZDXSV_MASTER_SPREADSHEET_ID` and `ZDXSV_DISCORD_COMMAND_ALLOW` (user and role ids), share the sheet with the service account (viewer), point the Discord Interactions Endpoint at `/discord/interactions` on `ZDXSV_LOBBY_API_ADDR`, and register `/op` once:
 

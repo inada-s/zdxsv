@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-// The lobby server decodes the same bodies (pkg/lobby/lobbyapi), so
+// The lobby server decodes the same bodies (zdxsv/lbs_zproxy_api.go), so
 // both sides read and write the same keys.
 func TestZproxyAPIKeys(t *testing.T) {
-	raw, err := os.ReadFile("../../pkg/lobby/lobbyapi/testdata/zproxy_api.json")
+	raw, err := os.ReadFile("../../zdxsv/testdata/zproxy_api.json")
 	if err != nil {
 		t.Fatal(err)
 	}

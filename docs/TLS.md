@@ -70,6 +70,6 @@ Check from anywhere: `zdxsv tlscheck <host>:8220 <CA pin>` (lobby, prints the ch
 
 ## Tests
 
-`pkg/tlsconf/testdata` holds a test CA, backup CA and two server keys (`server` signed by the CA,
+`zdxsv/testdata` holds a test CA, backup CA and two server keys (`server` signed by the CA,
 `server-backup` by the backup CA), made with `TLS_KEYS_NOPASS=1 scripts/tls-keys.sh`. They are
 public: nothing in production may trust them. `scripts/smoke.sh` runs the TLS port on them.
