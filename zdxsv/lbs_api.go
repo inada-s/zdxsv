@@ -26,7 +26,7 @@ const (
 //	  204 when none. user_id, user_name and pilot_name may repeat; names are LIKE patterns.
 //	  used_ms: an MS id + 1 that a player matching the player filters (any player without them) used.
 //	GET /lbs/live: the battles streamed to live spectators (LiveBattle, running first), [] when none;
-//	/lbs/live_stream: a battle's live stream, POST from its uplink, GET to watch (spectator.go).
+//	/lbs/live_stream: a battle's live stream, POST from its uplink, GET to watch (lbs_spectator.go).
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
 //	POST /lbs/login (form token): logs in like the login server's /login, as JSON
@@ -36,7 +36,7 @@ const (
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
 //	POST /lbs/zproxy/register, /lbs/zproxy/battle_info: zproxy's calls, JSON in and out
-//	  (lobbyapi).
+//	  (lbs_zproxy.go).
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *FindReplayQuery) ([]*FoundReplay, error)

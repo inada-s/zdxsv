@@ -87,7 +87,7 @@ type LbsConfig struct {
 	// empty: RelayStartCommand is run with a region as its argument to start a relay there.
 	RelayRegions      string `env:"ZDXSV_LOBBY_RELAY_REGIONS"`
 	RelayStartCommand string `env:"ZDXSV_LOBBY_RELAY_START_COMMAND"`
-	// Public HTTP API (lobby.APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
+	// Public HTTP API (APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
 	// Unlike the game ports, the host part is bound (127.0.0.1:8203 stays on loopback).
 	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
 	// Where /lbs/replay_upload stores replays: a public GCS bucket, else a directory served by the
