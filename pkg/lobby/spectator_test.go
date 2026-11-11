@@ -78,7 +78,7 @@ func TestLiveStream(t *testing.T) {
 	}
 	up := startUpload(t, sv.URL, "B1", "7")
 	up.w.Write([]byte("head"))
-	time.Sleep(50 * time.Millisecond)
+	waitFor(t, "the first upload", func() bool { l := r.List(); return len(l) == 1 && l[0].Bytes == 4 })
 	if u := startUpload(t, sv.URL, "B1", "7"); func() int { u.w.Close(); return <-u.done }() != 409 {
 		t.Fatal("second upload accepted")
 	}

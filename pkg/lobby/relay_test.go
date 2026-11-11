@@ -431,10 +431,17 @@ func TestRelayServeMaintained(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var calls atomic.Int32
+	var calls, late atomic.Int32
 	returned := make(chan struct{})
 	go func() {
-		NewRelay().serveMaintained(conn, 5*time.Millisecond, func() { calls.Add(1) })
+		NewRelay().serveMaintained(conn, 5*time.Millisecond, func() {
+			select {
+			case <-returned:
+				late.Add(1)
+			default:
+			}
+			calls.Add(1)
+		})
 		close(returned)
 	}()
 	for end := time.Now().Add(5 * time.Second); calls.Load() < 2; time.Sleep(time.Millisecond) {
@@ -449,10 +456,8 @@ func TestRelayServeMaintained(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("serveMaintained did not return after the conn closed")
 	}
-	n := calls.Load()
-	time.Sleep(50 * time.Millisecond)
-	if m := calls.Load(); m != n {
-		t.Errorf("maintain called %d times after serveMaintained returned", m-n)
+	if n := late.Load(); n != 0 {
+		t.Errorf("maintain called %d times after serveMaintained returned", n)
 	}
 }
 

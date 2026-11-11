@@ -193,10 +193,11 @@ func test202SetReplayURL(t *testing.T) {
 
 func test204FindReplay(t *testing.T) {
 	// after Test202: replaycode (r1, r2) has a replay, othercode none
-	time.Sleep(10 * time.Millisecond)
 	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r4", PilotName: "zaku", Players: 2, Pos: 2, Side: 2}))
 	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r3", PilotName: "gundam", Players: 2, Pos: 1, Side: 1}))
 	must(t, testDB.SetReplayURL("replaycode2", "https://example.com/replaycode2.pb"))
+	_, err := testDB.(SQLiteDB).Exec(`UPDATE battle_record SET created = ? WHERE battle_code = "replaycode2"`, time.Now().Add(time.Second))
+	must(t, err)
 
 	codes := func(q *FindReplayQuery) []string {
 		found, err := testDB.FindReplay(q)

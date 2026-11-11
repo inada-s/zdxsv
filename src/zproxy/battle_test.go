@@ -15,7 +15,7 @@ import (
 )
 
 // startBattleServer runs the real battle UDP server with U1 (12345678) and U2 (87654321) waiting.
-func startBattleServer(t *testing.T) *net.UDPAddr {
+func startBattleServer(t *testing.T) (*net.UDPAddr, *battle.Logic) {
 	t.Helper()
 	logic := battle.NewLogic()
 	var reply int
@@ -28,7 +28,7 @@ func startBattleServer(t *testing.T) *net.UDPAddr {
 	}
 	t.Cleanup(func() { c.Close() })
 	go battle.NewUDPServer(logic).Serve(c)
-	return c.LocalAddr().(*net.UDPAddr)
+	return c.LocalAddr().(*net.UDPAddr), logic
 }
 
 // battleProxy is one zproxy in ServeBattle with a fake PS2 on its TCP side.
@@ -132,7 +132,7 @@ func frame(s string) []byte {
 
 func startPair(t *testing.T, p2p bool) (*battleProxy, *battleProxy) {
 	t.Helper()
-	sv := startBattleServer(t)
+	sv, logic := startBattleServer(t)
 	a := newBattleProxy(t, sv, "U1", "12345678", "U2")
 	b := newBattleProxy(t, sv, "U2", "87654321", "U1")
 	if p2p {
@@ -148,7 +148,16 @@ func startPair(t *testing.T, p2p bool) (*battleProxy, *battleProxy) {
 	// "0123505679" parses to "12345678": see battle.ParseSessionID
 	a.ps2.Write(ps2Join("0123505679"))
 	b.ps2.Write(ps2Join("0876604322"))
-	time.Sleep(200 * time.Millisecond) // both joined before relaying
+	for _, s := range []string{"12345678", "87654321"} {
+		for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+			if _, waiting := logic.FindWaitingUser(s); !waiting {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("session %s did not join", s)
+			}
+		}
+	}
 	return a, b
 }
 
@@ -168,7 +177,6 @@ func TestServeBattleRelay(t *testing.T) {
 			if got := a.read(t, 7); !bytes.Equal(got, frame("from-b")) {
 				t.Errorf("a got %q", got)
 			}
-			time.Sleep(50 * time.Millisecond)
 			a.ps2.Write(frame("from-a-2"))
 			if got := b.read(t, 9); !bytes.Equal(got, frame("from-a-2")) {
 				t.Errorf("b got %q", got)
@@ -187,7 +195,7 @@ func TestServeBattleRelay(t *testing.T) {
 }
 
 func TestServeBattleUnknownSession(t *testing.T) {
-	sv := startBattleServer(t)
+	sv, _ := startBattleServer(t)
 	p := newBattleProxy(t, sv, "U9", "99999999", "U1")
 	p.start()
 	if err := p.wait(t); err == nil {
