@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
-
-	"zproxy/stun"
 )
 
 // fakeStun is the UDP server Setup pings for its public address. It answers
@@ -32,15 +30,15 @@ func startFakeStun(t *testing.T, publicAddr string, silent bool) *fakeStun {
 			if err != nil {
 				return
 			}
-			req, err := stun.Unmarshal(buf[:n])
-			if err != nil || req.Type != stun.Ping {
+			req, err := UnmarshalStun(buf[:n])
+			if err != nil || req.Type != StunPing {
 				continue
 			}
 			s.pings.Add(1)
 			if silent {
 				continue
 			}
-			c.WriteToUDP(stun.Marshal(stun.Packet{Type: stun.Pong, PublicAddr: publicAddr, UserID: "SERVER", Timestamp: req.Timestamp}), from)
+			c.WriteToUDP(MarshalStun(StunPacket{Type: StunPong, PublicAddr: publicAddr, UserID: "SERVER", Timestamp: req.Timestamp}), from)
 		}
 	}()
 	return s

@@ -13,9 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"zproxy/battle"
-	"zproxy/stun"
 )
 
 const protocolVersion = 1007
@@ -170,9 +167,9 @@ func (z *Zproxy) Setup() bool {
 	go z.udpcl.ReadLoop(context.Background())
 
 	defer z.udpcl.Unsubscribe("stun")
-	z.udpcl.SubscribePacket("stun", func(pkt stun.Packet, addr *net.UDPAddr) {
+	z.udpcl.SubscribePacket("stun", func(pkt StunPacket, addr *net.UDPAddr) {
 		switch pkt.Type {
-		case stun.Pong:
+		case StunPong:
 			if pkt.UserID == "SERVER" {
 				nanoRtt := time.Now().UnixNano() - pkt.Timestamp
 				publicAddr = pkt.PublicAddr
@@ -192,7 +189,7 @@ func (z *Zproxy) Setup() bool {
 		if stunok.Load().(bool) {
 			break
 		}
-		z.udpcl.SendPacket(stun.Packet{Type: stun.Ping, Timestamp: time.Now().UnixNano()}, svAddr)
+		z.udpcl.SendPacket(StunPacket{Type: StunPing, Timestamp: time.Now().UnixNano()}, svAddr)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -236,9 +233,9 @@ func (z *Zproxy) PollLobby() error {
 	}
 
 	defer z.udpcl.Unsubscribe("poll_lobby")
-	z.udpcl.SubscribePacket("poll_lobby", func(pkt stun.Packet, addr *net.UDPAddr) {
+	z.udpcl.SubscribePacket("poll_lobby", func(pkt StunPacket, addr *net.UDPAddr) {
 		switch pkt.Type {
-		case stun.Ping:
+		case StunPing:
 			userID := pkt.UserID
 			log.Println("Ping received from", userID)
 			if conf.Verbose {
@@ -252,7 +249,7 @@ func (z *Zproxy) PollLobby() error {
 			if userID != myUserID {
 				z.udpcl.SendPong(pkt, myUserID, addr)
 			}
-		case stun.Pong:
+		case StunPong:
 			rttNano := time.Now().UnixNano() - pkt.Timestamp
 			userID := pkt.UserID
 			log.Println("Pong received from", userID, "RTT:", rttNano/(1000*1000), "[ms]")
@@ -397,8 +394,8 @@ func (z *Zproxy) PollLobby() error {
 func (z *Zproxy) GreetBattleServer() bool {
 	answer := make(chan *net.UDPAddr, 1)
 	defer z.udpcl.Unsubscribe("greet")
-	z.udpcl.SubscribeBattle("greet", func(pkt battle.Packet, from *net.UDPAddr) {
-		if pkt.Kind != battle.KindHelloAnswer {
+	z.udpcl.SubscribeBattle("greet", func(pkt BattlePacket, from *net.UDPAddr) {
+		if pkt.Kind != KindHelloAnswer {
 			return
 		}
 		if !pkt.OK {
@@ -411,7 +408,7 @@ func (z *Zproxy) GreetBattleServer() bool {
 		}
 	})
 
-	hello := battle.AppendHello(nil, z.sessionID)
+	hello := AppendHello(nil, z.sessionID)
 	for i := 0; i < 10; i++ {
 		z.udpcl.Send(hello, z.svAddr)
 		select {
@@ -426,7 +423,7 @@ func (z *Zproxy) GreetBattleServer() bool {
 
 type battlePeer struct {
 	addr *net.UDPAddr
-	buf  *battle.BattleBuffer
+	buf  *BattleBuffer
 }
 
 func (z *Zproxy) ServeBattle() error {
@@ -454,11 +451,11 @@ func (z *Zproxy) ServeBattle() error {
 		return fmt.Errorf("Failed to greet battle server")
 	}
 
-	msgFilter := battle.NewMessageFilter(z.otherIDs)
-	server := battlePeer{z.svAddr, battle.NewBattleBuffer("server")}
+	msgFilter := NewMessageFilter(z.otherIDs)
+	server := battlePeer{z.svAddr, NewBattleBuffer("server")}
 	var p2p []battlePeer
 	for id, addr := range z.p2pAddr {
-		p2p = append(p2p, battlePeer{addr, battle.NewBattleBuffer(id)})
+		p2p = append(p2p, battlePeer{addr, NewBattleBuffer(id)})
 	}
 	chFlush := make(chan struct{}, 1)
 	flush := func() {
@@ -469,8 +466,8 @@ func (z *Zproxy) ServeBattle() error {
 	}
 
 	defer z.udpcl.Unsubscribe("battle")
-	z.udpcl.SubscribeBattle("battle", func(pkt battle.Packet, addr *net.UDPAddr) {
-		if pkt.Kind != battle.KindBattle {
+	z.udpcl.SubscribeBattle("battle", func(pkt BattlePacket, addr *net.UDPAddr) {
+		if pkt.Kind != KindBattle {
 			return
 		}
 		if isSameAddr(addr, server.addr) {

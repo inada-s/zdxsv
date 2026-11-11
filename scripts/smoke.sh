@@ -75,12 +75,12 @@ stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
 check "lobby status api" sh -c "echo '$stat' | grep -q '\"platforms\":{.*\"console\".*\"emu\"'"
 
-# zproxy (built from src/zproxy, or $ZPROXY_BIN) against this server: STUN gives it a public
+# zproxy (built from zproxy, or $ZPROXY_BIN) against this server: STUN gives it a public
 # address, it registers, and a PS2 connection makes it ask for battle info. No user is logged
 # in, so both answers are refusals.
 zbin=${ZPROXY_BIN:-bin/zproxy}
 if [ -z "${ZPROXY_BIN:-}" ]; then
-	(cd src/zproxy && go build -o ../../bin/zproxy .) || exit 1
+	(cd zproxy && go build -o ../bin/zproxy .) || exit 1
 fi
 zport=${ZPROXY_PORT:-8250}
 "$zbin" -updatecheck=false -upnp=false -lobbyapi=http://127.0.0.1:8203 -stunaddr=127.0.0.1:8201 \
