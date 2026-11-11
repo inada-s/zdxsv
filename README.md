@@ -50,8 +50,6 @@ ZDXSV_DB_NAME=zdxsv.db ./bin/zdxsv initdb
 There is the .env file in the root of this repository.
 You must configure these environment variables to fit your environment.
 
-The `auto-env-local` and `auto-env-dev` scripts might help you.
-
 ### Run
 ```
 set -a; . ./.env; set +a
