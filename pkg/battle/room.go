@@ -5,8 +5,6 @@ import (
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
-
-	"zdxsv/pkg/proto"
 )
 
 type Room struct {
@@ -20,7 +18,7 @@ func newRoom(id int) *Room {
 	return &Room{id: id}
 }
 
-func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
+func (r *Room) SendMessage(peer Peer, msg Message) {
 	k := peer.Position()
 
 	r.RLock()
@@ -32,7 +30,7 @@ func (r *Room) SendMessage(peer Peer, msg *proto.BattleMessage) {
 		other := r.peers[i]
 		if other != nil {
 			if zlog.DebugEnabled() {
-				zlog.Debug("room message", zap.Any("from", peer.UserID()), zap.Any("to", other.UserID()), zap.Binary("body", msg.GetBody()))
+				zlog.Debug("room message", zap.Any("from", peer.UserID()), zap.Any("to", other.UserID()), zap.Binary("body", msg.Body))
 			}
 			other.AddSendMessage(msg)
 		}

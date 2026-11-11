@@ -63,7 +63,7 @@ func AppendBattle(b []byte, seq, ack uint32, msgs []Message) []byte {
 
 var errShort = errors.New("battle packet: short")
 
-// ParsePacket decodes b. Message bodies alias b.
+// ParsePacket decodes b. Message bodies are copies.
 func ParsePacket(b []byte) (Packet, error) {
 	var p Packet
 	if !IsWirePacket(b) {
@@ -100,7 +100,7 @@ func ParsePacket(b []byte) (Packet, error) {
 			if len(b) < size {
 				return p, errShort
 			}
-			m.Body = b[:size:size]
+			m.Body = append([]byte{}, b[:size]...)
 			b = b[size:]
 			p.Messages = append(p.Messages, m)
 		}

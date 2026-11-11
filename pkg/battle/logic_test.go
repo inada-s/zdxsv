@@ -4,21 +4,19 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"zdxsv/pkg/proto"
 )
 
 type fakePeer struct {
 	BasePeer
 	mu     sync.Mutex
-	msgs   []*proto.BattleMessage
+	msgs   []Message
 	data   [][]byte
 	addr   string
 	closed bool
 }
 
 func (p *fakePeer) AddSendData(b []byte) { p.mu.Lock(); p.data = append(p.data, b); p.mu.Unlock() }
-func (p *fakePeer) AddSendMessage(m *proto.BattleMessage) {
+func (p *fakePeer) AddSendMessage(m Message) {
 	p.mu.Lock()
 	p.msgs = append(p.msgs, m)
 	p.mu.Unlock()
@@ -76,7 +74,7 @@ func TestRoomRelay(t *testing.T) {
 			t.Fatalf("peer %d: pos %d room %d", i, p.Position(), p.RoomID())
 		}
 	}
-	msg := &proto.BattleMessage{Body: []byte{1}}
+	msg := Message{Body: []byte{1}}
 	r.SendMessage(peers[1], msg)
 	if len(peers[0].msgs) != 1 || len(peers[1].msgs) != 0 || len(peers[2].msgs) != 1 {
 		t.Errorf("relay counts %d %d %d, want 1 0 1", len(peers[0].msgs), len(peers[1].msgs), len(peers[2].msgs))

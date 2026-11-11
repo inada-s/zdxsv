@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
-	"zdxsv/pkg/proto"
 	"zdxsv/pkg/zlog"
 )
 
@@ -31,9 +29,7 @@ func NewUDPServer(logic *Logic) *UDPServer {
 func (s *UDPServer) readLoop() error {
 	zlog.Info("udp readLoop start")
 	defer zlog.Info("udp readLoop end")
-	pkt := proto.GetPacket()
 	buf := make([]byte, 4096)
-	pbuf := pb.NewBuffer(nil)
 
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
@@ -53,20 +49,18 @@ func (s *UDPServer) readLoop() error {
 		peer, found := s.peers[key]
 		s.Unlock()
 
-		pkt.Reset()
-		pbuf.SetBuf(buf[:n])
-		if err := pbuf.Unmarshal(pkt); err != nil {
-			zlog.Error("failed to unmarshal udp packet", zap.Any("addr", key), zap.Binary("data", buf[:n]))
+		pkt, err := ParsePacket(buf[:n])
+		if err != nil {
+			zlog.Error("bad udp packet", zap.Any("addr", key), zap.Error(err), zap.Binary("data", buf[:n]))
 			continue
 		}
 
-		switch pkt.GetType() {
-		case proto.MessageType_HelloServer:
+		switch pkt.Kind {
+		case KindHello:
 			// 対戦前に正しいUDPパケットを送ってきたクライアントのみ受け付ける
 			// セッションIDが正しいかの検証を行う
 			// UDPのためクライアントは複数回このリクエストを送ってくる
-			sessionID := pkt.GetHelloServerData().GetSessionId()
-			user, valid := s.logic.FindWaitingUser(sessionID)
+			user, valid := s.logic.FindWaitingUser(pkt.SessionID)
 			if !found && valid {
 				zlog.Info("join udp peer", zap.Any("addr", key))
 				peer := NewUDPPeer(s.conn, addr, user.UserID)
@@ -86,25 +80,15 @@ func (s *UDPServer) readLoop() error {
 					s.Unlock()
 				}(key)
 			}
-			pkt.Reset()
-			pkt.Type = proto.MessageType_HelloServer.Enum()
-			pkt.HelloServerData = &proto.HelloServerMessage{
-				Ok:        pb.Bool(valid),
-				SessionId: pb.String(sessionID),
-			}
-			if data, err := pb.Marshal(pkt); err != nil {
-				zlog.Error("udp packet failure", zap.Error(err))
-			} else {
-				s.conn.WriteToUDP(data, addr)
-			}
-		case proto.MessageType_Battle:
+			s.conn.WriteToUDP(AppendHelloAnswer(nil, pkt.SessionID, valid), addr)
+		case KindBattle:
 			if !found {
-				zlog.Error("battle data received but peer not found", zap.Any("pkt", pkt))
+				zlog.Error("battle data received but peer not found", zap.Any("addr", key))
 				continue
 			}
 			peer.OnReceive(pkt)
 		default:
-			zlog.Error("received unexpected packet type", zap.Any("pkt", pkt))
+			zlog.Error("received unexpected packet kind", zap.Any("addr", key), zap.Uint8("kind", pkt.Kind))
 		}
 	}
 }
@@ -135,14 +119,14 @@ type UDPPeer struct {
 
 	addr    *net.UDPAddr
 	conn    *net.UDPConn
-	rudp    *proto.BattleBuffer
-	filter  *proto.MessageFilter
+	rudp    *BattleBuffer
+	filter  *MessageFilter
 	chFlush chan struct{}
 	chRecv  chan struct{}
 
 	readingMtx sync.Mutex
-	reading    []*proto.BattleMessage
-	reading2   []*proto.BattleMessage
+	reading    []Message
+	reading2   []Message
 
 	closeFunc func()
 }
@@ -153,8 +137,8 @@ func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *UDPPeer {
 		conn:    conn,
 		chFlush: make(chan struct{}, 1),
 		chRecv:  make(chan struct{}, 1),
-		rudp:    proto.NewBattleBuffer(userID),
-		filter:  proto.NewMessageFilter([]string{userID}),
+		rudp:    NewBattleBuffer(userID),
+		filter:  NewMessageFilter([]string{userID}),
 	}
 }
 
@@ -176,7 +160,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 	ctx, cancel := context.WithCancel(context.Background())
 	u.closeFunc = cancel
 	defer cancel()
-	pbuf := pb.NewBuffer(nil)
+	var sendBuf []byte
 
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
@@ -201,20 +185,8 @@ func (u *UDPPeer) Serve(logic *Logic) {
 			}
 		case <-u.chFlush:
 			lastSend = time.Now()
-			data, seq, ack := u.rudp.GetSendData()
-			pkt := proto.GetPacket()
-			pkt.Type = proto.MessageType_Battle.Enum()
-			pkt.BattleData = data
-			pkt.Ack = pb.Uint32(ack)
-			pkt.Seq = pb.Uint32(seq)
-			pbuf.Reset()
-			err := pbuf.Marshal(pkt)
-			proto.PutPacket(pkt)
-			if err != nil {
-				zlog.Error("marshal error", zap.Error(err))
-				return
-			}
-			u.conn.WriteTo(pbuf.Bytes(), u.addr)
+			sendBuf = u.rudp.AppendPacket(sendBuf[:0])
+			u.conn.WriteTo(sendBuf, u.addr)
 		case <-u.chRecv:
 			lastRecv = time.Now()
 			u.readingMtx.Lock()
@@ -223,12 +195,12 @@ func (u *UDPPeer) Serve(logic *Logic) {
 
 			for _, msg := range u.reading2 {
 				if u.room == nil {
-					if len(msg.GetBody()) != 22 {
+					if len(msg.Body) != 22 {
 						zlog.Error("unexpected length", zap.Any("msg", msg))
 						u.Close()
 						break
 					}
-					value := string(msg.GetBody()[12:22])
+					value := string(msg.Body[12:22])
 					sessionID, err := ParseSessionID(value)
 					if err != nil {
 						zlog.Error("udp session id", zap.Error(err))
@@ -243,7 +215,7 @@ func (u *UDPPeer) Serve(logic *Logic) {
 						break
 					}
 					u.room = room
-				} else if IsFinData(msg.GetBody()) {
+				} else if IsFinData(msg.Body) {
 					return
 				} else {
 					u.room.SendMessage(u, msg)
@@ -254,11 +226,11 @@ func (u *UDPPeer) Serve(logic *Logic) {
 	}
 }
 
-func (u *UDPPeer) OnReceive(pkt *proto.Packet) {
-	u.rudp.ApplySeqAck(pkt.GetSeq(), pkt.GetAck())
+func (u *UDPPeer) OnReceive(pkt Packet) {
+	u.rudp.ApplySeqAck(pkt.Seq, pkt.Ack)
 
 	u.readingMtx.Lock()
-	for _, msg := range pkt.GetBattleData() {
+	for _, msg := range pkt.Messages {
 		if u.filter.Filter(msg) {
 			u.reading = append(u.reading, msg)
 		}
@@ -279,8 +251,8 @@ func (u *UDPPeer) AddSendData(data []byte) {
 	zlog.Fatal("AddSendData called", zap.Binary("data", data))
 }
 
-func (u *UDPPeer) AddSendMessage(msg *proto.BattleMessage) {
-	u.rudp.PushBattleMessage(msg)
+func (u *UDPPeer) AddSendMessage(msg Message) {
+	u.rudp.Push(msg)
 	select {
 	case u.chFlush <- struct{}{}:
 	default:

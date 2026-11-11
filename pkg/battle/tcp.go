@@ -8,9 +8,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
-	"zdxsv/pkg/proto"
 	"zdxsv/pkg/zlog"
 )
 
@@ -80,8 +78,8 @@ func (u *TCPPeer) Serve(logic *Logic) {
 	u.conn.Close()
 }
 
-func (u *TCPPeer) AddSendMessage(msg *proto.BattleMessage) {
-	u.AddSendData(msg.GetBody())
+func (u *TCPPeer) AddSendMessage(msg Message) {
+	u.AddSendData(msg.Body)
 }
 
 func (u *TCPPeer) AddSendData(data []byte) {
@@ -152,10 +150,7 @@ func (u *TCPPeer) readLoop(logic *Logic) {
 				}
 			}
 			if 0 < len(tmp) {
-				msg := proto.GetBattleMessage()
-				msg.Body = tmp
-				msg.UserId = pb.String(u.UserID())
-				msg.Seq = pb.Uint32(u.seq)
+				msg := Message{UserID: u.UserID(), Seq: u.seq, Body: tmp}
 				u.seq++
 				u.room.SendMessage(u, msg)
 			}
