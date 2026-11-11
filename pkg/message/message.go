@@ -1,3 +1,4 @@
+// Package message is the game protocol of the lobby and battle servers.
 package message
 
 import (

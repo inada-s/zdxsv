@@ -3,7 +3,7 @@ package lobby
 import (
 	"strconv"
 	"strings"
-	. "zdxsv/pkg/lobby/message"
+	. "zdxsv/pkg/message"
 
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/proto"

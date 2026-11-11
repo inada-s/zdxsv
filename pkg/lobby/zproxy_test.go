@@ -10,12 +10,12 @@ import (
 	"reflect"
 	"testing"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/lobbyapi"
-	"zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/message"
 )
 
 // zproxyAPI is the lobby API as zproxy reaches it: through the reverse proxy on the lobby
@@ -78,7 +78,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	api := newZproxyAPI(app)
 
 	type player struct {

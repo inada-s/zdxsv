@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/japanese"
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/lobby/message"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/message"
+	. "zdxsv/pkg/message"
 )
 
 // say sends a chat line. The lobby does not answer it.
@@ -45,7 +45,7 @@ func (c *testClient) heard() []string {
 
 func TestLobbyChatScope(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 
 	const lobbyID, roomID = 4, 1
 	var cs []*testClient
@@ -119,7 +119,7 @@ func TestLobbyTestBattleWithoutProxy(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 
 	c := dialLobby(t, addr)
 	c.login(registerAccount(t), "******", "pilot")
@@ -144,7 +144,7 @@ func TestLobbyTestBattleWithoutProxy(t *testing.T) {
 // and text colors, which mean the default colors.
 func TestChatNoticeColorBytes(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 
 	c := dialLobby(t, addr)
 	c.login(registerAccount(t), "******", "pilot")
@@ -179,7 +179,7 @@ func TestChatNoticeColorBytes(t *testing.T) {
 
 func TestLobbyChatDropsTextLongerThanGameInput(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	var cs []*testClient
 	var ids []string
 	for _, name := range []string{"pilot0", "pilot1"} {

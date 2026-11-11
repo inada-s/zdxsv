@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/battle/battlerpc"
-	. "zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 // waitPeers waits until the lobby serves n peers.
@@ -42,7 +42,7 @@ func expectClosed(t *testing.T, c *testClient) {
 }
 
 func TestAliveCheckIntervalLineCheck(t *testing.T) {
-	addr, _ := startLobbyAppWith(t, battlerpc.NewBattleRpc(), func(a *App) {
+	addr, _ := startLobbyAppWith(t, battle.NewLogic(), func(a *App) {
 		a.aliveCheckInterval = 50 * time.Millisecond
 	})
 	c := dialLobby(t, addr)
@@ -51,7 +51,7 @@ func TestAliveCheckIntervalLineCheck(t *testing.T) {
 }
 
 func TestAliveCheckRecvTimeout(t *testing.T) {
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	c := dialLobby(t, addr)
 	waitPeers(t, app, 1)
 
@@ -70,7 +70,7 @@ func TestAliveCheckRecvTimeout(t *testing.T) {
 }
 
 func TestAliveCheckBattleTimeout(t *testing.T) {
-	_, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	_, app := startLobbyApp(t, battle.NewLogic())
 	now := time.Now()
 	app.Locked(func(a *App) {
 		for sid, age := range map[string]time.Duration{"old": battleTimeout, "new": battleTimeout - time.Second} {

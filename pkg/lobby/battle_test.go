@@ -14,12 +14,12 @@ import (
 	pb "github.com/golang/protobuf/proto"
 	"golang.org/x/text/encoding/japanese"
 	"google.golang.org/protobuf/encoding/prototext"
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/lobbyapi"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 	"zdxsv/pkg/proto"
 )
 
@@ -387,7 +387,7 @@ func testBattleInfoNotice(p *AppPeer, info func(userID string) map[string]string
 // lobby for the battle still gets their battle info.
 func TestBattleInfoAfterPeersLeft(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	const lobbyID = 4
 	sides := []byte{model.EntryAeug, model.EntryTitans, model.EntryAeug, model.EntryTitans}
 	var cs []*testClient
@@ -443,7 +443,7 @@ func TestLobbyBattleSameSyncOnly(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	const lobbyID = 2
 	enter := func(i int, sync string, side byte) *testClient {
 		c := dialLobby(t, addr)
@@ -492,7 +492,7 @@ func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
@@ -559,7 +559,7 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'zproxy_test')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)

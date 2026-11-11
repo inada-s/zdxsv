@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/session"
@@ -17,7 +17,7 @@ func TestCarryCodeCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	var issuedFor []string
-	addr, _ := startLobbyAppWith(t, battlerpc.NewBattleRpc(), func(a *App) {
+	addr, _ := startLobbyAppWith(t, battle.NewLogic(), func(a *App) {
 		a.SetCarryCodeIssuer(func(loginKey string) string {
 			issuedFor = append(issuedFor, loginKey)
 			return "CARRY234"
@@ -74,7 +74,7 @@ func TestCarryCodeCommand(t *testing.T) {
 
 func TestTempKeyLobbyLogin(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	ac := registerAccount(t)
 	id, temp := session.Default.Start(ac.LoginKey, true)
 	c := dialLobby(t, addr)

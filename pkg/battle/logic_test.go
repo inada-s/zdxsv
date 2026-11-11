@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
 )
 
@@ -105,12 +104,11 @@ func TestRoomRelay(t *testing.T) {
 
 func TestLogicJoin(t *testing.T) {
 	l := NewLogic()
-	var reply int
-	for _, g := range [][]battlerpc.User{
+	for _, g := range [][]User{
 		{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}},
 		{{UserID: "U3", SessionID: "S3"}},
 	} {
-		l.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: g}, &reply)
+		l.AddBattle(g)
 	}
 
 	if room := l.Join(&fakePeer{}, "unknown"); room != nil {
@@ -131,7 +129,7 @@ func TestLogicJoin(t *testing.T) {
 	}
 
 	// a battle info that does not list the session itself
-	l.BattleRpc.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{{SessionID: "S4"}}}, &reply)
+	l.AddBattle([]User{{SessionID: "S4"}})
 	info := l.GetBattleInfo("S4")
 	info.Users[0].SessionID = "other"
 	if _, ok := l.FindWaitingUser("S4"); ok {
@@ -139,11 +137,25 @@ func TestLogicJoin(t *testing.T) {
 	}
 }
 
+func TestAddBattleRoomIDWraps(t *testing.T) {
+	l := NewLogic()
+	users := []User{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
+	for i := 0; i < MaxRoom+1; i++ {
+		l.AddBattle(users)
+	}
+	if info := l.GetBattleInfo("S2"); info == nil || info.RoomID != 0 || len(info.Users) != 2 {
+		t.Fatalf("GetBattleInfo = %+v", info)
+	}
+	if l.Join(&fakePeer{}, "S2") == nil || l.GetBattleInfo("S2") != nil || l.GetBattleInfo("S1") == nil {
+		t.Errorf("Join cleared the wrong session")
+	}
+}
+
 func waitJoined(t *testing.T, m *Logic, n int) {
 	t.Helper()
 	joined := func() int {
-		m.roomsMtx.Lock()
-		defer m.roomsMtx.Unlock()
+		m.mtx.Lock()
+		defer m.mtx.Unlock()
 		c := 0
 		for _, r := range m.rooms {
 			if r == nil {

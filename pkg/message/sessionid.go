@@ -1,14 +1,13 @@
-// Package sessionid decodes the session id the game sends to the lobby and battle servers.
-package sessionid
+package message
 
 import (
 	"fmt"
 	"strconv"
 )
 
-// Decode turns the game's value (up to 10 digits) into the 8 digit session id:
+// DecodeSessionID turns the game's value (up to 10 digits) into the 8 digit session id:
 // value - 100001, zero padded to 10 digits, without digits 0 and 5.
-func Decode(value string) (string, error) {
+func DecodeSessionID(value string) (string, error) {
 	if len(value) == 0 || len(value) > 10 {
 		return "", fmt.Errorf("session id value %q: want 1 to 10 digits", value)
 	}

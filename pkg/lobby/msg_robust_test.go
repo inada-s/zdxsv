@@ -8,8 +8,8 @@ import (
 
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 // newRobustPeer returns a logged in peer of a new App; sent messages stay in its Conn's outbuf.

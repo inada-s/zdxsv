@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/text/encoding/japanese"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
+	. "zdxsv/pkg/message"
 )
 
 var reRankingRow = regexp.MustCompile(`(\d+)位\s*<TD[^>]*><FONT COLOR=#FFA100>(\w+)</FONT>`)
@@ -40,7 +40,7 @@ func (c *testClient) rankingPage(path string) (string, []string) {
 
 func TestLobbyRankingPages(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 
 	// 12 ranked users: user i has i+1 wins, 12-i Aeug wins and 2i kills.
 	var ids []string

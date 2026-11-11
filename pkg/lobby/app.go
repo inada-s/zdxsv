@@ -5,9 +5,9 @@ import (
 	"net"
 	"time"
 
-	"zdxsv/pkg/battle/battlerpc"
-	"zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/message"
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
@@ -94,7 +94,7 @@ func (p *AppPeer) IP() string {
 
 type App struct {
 	*handlerHolder
-	battleServer *battlerpc.BattleRpc
+	battleServer *battle.Logic
 	users        map[string]*AppPeer
 	lobbys       map[string]map[uint16]*model.Lobby // platform -> lobby id -> lobby
 	battles      map[string]*model.Battle
@@ -174,8 +174,8 @@ func (a *App) AddHandler(id uint16, name string, f MessageHandler) {
 	a.handlerNames[id] = name
 }
 
-// SetBattleServer gives the lobby the battle logic it notifies of battle users. Call it before Serve.
-func (a *App) SetBattleServer(b *battlerpc.BattleRpc) {
+// SetBattleServer gives the lobby the battle logic it hands battle users to. Call it before Serve.
+func (a *App) SetBattleServer(b *battle.Logic) {
 	a.battleServer = b
 }
 

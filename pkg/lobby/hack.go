@@ -3,8 +3,8 @@ package lobby
 import (
 	"fmt"
 	"zdxsv/pkg/db"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 func SendLobbyChatHackNotice(p *AppPeer, s *db.LobbySetting) {

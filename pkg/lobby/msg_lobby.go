@@ -3,8 +3,8 @@ package lobby
 
 import (
 	"fmt"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 var _ = register(0x6203, "GetPlazaCount", func(p *AppPeer, m *Message) {

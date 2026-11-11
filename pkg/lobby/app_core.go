@@ -15,7 +15,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
@@ -422,13 +422,13 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		}
 	}
 
-	battle := model.NewBattle(platform, lobbyID)
+	b := model.NewBattle(platform, lobbyID)
 	if rule != nil {
-		battle.Rule = rule
+		b.Rule = rule
 	}
 
 	// 各クライアントが UDPプロキシの使用と, P2P通信の使用を確定する.
-	// 以後 battle.UDPUsers, battle.P2PMap を正とする.
+	// 以後 b.UDPUsers, b.P2PMap を正とする.
 	for i, u := range users {
 		p, ok := a.users[u.UserID]
 		if !ok {
@@ -436,8 +436,8 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		}
 		if time.Since(p.proxyRegTime).Seconds() < 20 {
 			p.proxyUseTime = time.Now()
-			battle.UDPUsers[p.UserID] = true
-			battle.P2PMap[p.UserID] = map[string]struct{}{}
+			b.UDPUsers[p.UserID] = true
+			b.P2PMap[p.UserID] = map[string]struct{}{}
 			if p.proxyP2PConnected == nil {
 				p.proxyP2PConnected = map[string]struct{}{}
 			}
@@ -447,31 +447,25 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 				}
 				_, ok := p.proxyP2PConnected[other.UserID]
 				if ok {
-					battle.P2PMap[p.UserID][other.UserID] = struct{}{}
+					b.P2PMap[p.UserID][other.UserID] = struct{}{}
 				}
 			}
-			zlog.Info("zproxy user", zap.String("user_id", p.UserID), zap.Any("p2p_map", battle.P2PMap[p.UserID]))
+			zlog.Info("zproxy user", zap.String("user_id", p.UserID), zap.Any("p2p_map", b.P2PMap[p.UserID]))
 		}
 	}
 
-	var reply int
-	args := &battlerpc.BattleInfoArgs{}
+	var battleUsers []battle.User
 	for _, u := range users {
-		args.Users = append(args.Users, battlerpc.User{
+		battleUsers = append(battleUsers, battle.User{
 			UserID:    u.UserID,
 			SessionID: u.SessionID,
 			Name:      u.Name,
 			Team:      u.Team,
 			Entry:     u.Entry,
-			P2PMap:    battle.P2PMap[u.UserID],
+			P2PMap:    b.P2PMap[u.UserID],
 		})
 	}
-
-	err := a.battleServer.NotifyBattleUsers(args, &reply)
-	if err != nil {
-		zlog.Error("NotifyBattleUsers failed", zap.Error(err))
-		return false
-	}
+	a.battleServer.AddBattle(battleUsers)
 
 	host, port, err := net.SplitHostPort(config.Conf.Battle.PublicAddr)
 	if err != nil {
@@ -485,23 +479,23 @@ func (a *App) startBattle(platform string, lobbyID uint16, users []*model.User, 
 		return false
 	}
 
-	battle.SetBattleServer(net.ParseIP(host), uint16(portNum))
-	battle.StartTime = time.Now()
-	battle.BattleCode = db.GenBattleCode()
+	b.SetBattleServer(net.ParseIP(host), uint16(portNum))
+	b.StartTime = time.Now()
+	b.BattleCode = db.GenBattleCode()
 
 	for _, u := range users {
 		peer, ok := a.users[u.UserID]
 		if ok {
-			battle.Add(u)
-			battle.PlatformInfo[u.UserID] = battlePlatformInfo(peer)
-			peer.Battle = battle
+			b.Add(u)
+			b.PlatformInfo[u.UserID] = battlePlatformInfo(peer)
+			peer.Battle = b
 			err = db.DefaultDB.AddBattleRecord(&db.BattleRecord{
-				BattleCode: battle.BattleCode,
+				BattleCode: b.BattleCode,
 				Aggregate:  1,
 				UserID:     u.UserID,
 				PilotName:  pilotName(u.Bin),
 				Players:    len(users),
-				Pos:        int(battle.GetPosition(u.UserID)),
+				Pos:        int(b.GetPosition(u.UserID)),
 				Side:       int(u.Entry),
 			})
 			if err != nil {

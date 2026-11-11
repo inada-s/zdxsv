@@ -1,7 +1,7 @@
 package lobby
 
 import (
-	. "zdxsv/pkg/lobby/message"
+	. "zdxsv/pkg/message"
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"

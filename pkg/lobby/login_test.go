@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 func TestLobbyBan(t *testing.T) {
 	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	ban := func(bans ...*db.MasterBan) {
 		t.Helper()
 		if err := db.DefaultDB.ReplaceMaster(&db.Master{Bans: bans}); err != nil {
@@ -62,7 +62,7 @@ func TestLobbyBan(t *testing.T) {
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {
 	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	loggedIn := func(userID string) (peer *AppPeer) {
 		app.Locked(func(a *App) { peer = a.users[userID] })
 		return
@@ -128,7 +128,7 @@ func TestAccountUsersLogInAtOnce(t *testing.T) {
 
 func TestAccountUserLimit(t *testing.T) {
 	sqldb := dbtest.Use(t)
-	addr, _ := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, _ := startLobbyApp(t, battle.NewLogic())
 	countUsers := func(loginKey string) (n int) {
 		if err := sqldb.Get(&n, `SELECT COUNT(*) FROM user WHERE login_key = ?`, loginKey); err != nil {
 			t.Fatal(err)
@@ -197,7 +197,7 @@ func TestAccountUserLimit(t *testing.T) {
 
 func TestUserOfAnotherAccountRefused(t *testing.T) {
 	dbtest.Use(t)
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	peerOf := func(userID string) (p *AppPeer) {
 		app.Locked(func(a *App) { p = a.users[userID] })
 		return
@@ -290,7 +290,7 @@ func TestUserOfAnotherAccountRefused(t *testing.T) {
 
 func TestLobbyOutdatedClient(t *testing.T) {
 	conn := dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	set := func(key, v string) {
 		t.Helper()
 		if _, err := conn.Exec(`INSERT OR REPLACE INTO m_server_setting (key, value) VALUES (?, ?)`, key, v); err != nil {
