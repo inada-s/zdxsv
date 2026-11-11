@@ -5,7 +5,6 @@ all: build
 build:
 	mkdir -p bin
 	go build -o ./bin/zdxsv ./src/zdxsv
-	go build -o ./bin/bench ./src/bench
 	go build -o ./bin/zproxy ./src/zproxy
 
 # smoke test of the server binary (scripts/smoke.sh; ports 53 and 443 need cap_net_bind_service).
@@ -41,7 +40,6 @@ assets:
 ci:
 	mkdir -p bin
 	go build -o ./bin/zdxsv ./src/zdxsv
-	go build -o ./bin/bench ./src/bench
 	go build -o ./bin/zproxy ./src/zproxy
 	go test -v zdxsv/...
 
