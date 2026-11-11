@@ -95,6 +95,10 @@ func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
 }
 
 func (a *App) OnFirstData(p *AppPeer) {
+	if p.LoginKey == "" {
+		zlog.Error("loginKey not set")
+		return
+	}
 	battle, ok := a.battles[p.SessionID]
 	if ok {
 		for _, u := range battle.Users {
