@@ -19,7 +19,7 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
-	"zdxsv/pkg/session"
+	"zdxsv/pkg/login"
 	"zdxsv/pkg/zlog"
 )
 
@@ -57,7 +57,7 @@ func (a *App) removeUser(p *AppPeer) {
 }
 
 func (a *App) OnKeePair(p *AppPeer, loginKey, sessionID string) {
-	accountKey, ok := session.Default.Use(sessionID, loginKey)
+	accountKey, ok := login.Sessions.Use(sessionID, loginKey)
 	if !ok {
 		zlog.Error("no login session", zap.Any("session_id", sessionID))
 		return
@@ -348,7 +348,7 @@ func (a *App) OnUserGotoBattle(p *AppPeer) {
 	if p.Battle != nil {
 		a.battles[p.SessionID] = p.Battle
 		// The client comes back with this session after the battle.
-		session.Default.Touch(p.SessionID)
+		login.Sessions.Touch(p.SessionID)
 	}
 	if p.Lobby != nil {
 		a.OnExitLobby(p)

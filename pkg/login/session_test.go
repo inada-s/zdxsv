@@ -1,4 +1,4 @@
-package session
+package login
 
 import (
 	"regexp"
@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func TestStore(t *testing.T) {
-	s := NewStore()
+func TestSessionStore(t *testing.T) {
+	s := NewSessionStore()
 	now := time.Unix(1_800_000_000, 0)
 	s.now = func() time.Time { return now }
 
@@ -34,11 +34,11 @@ func TestStore(t *testing.T) {
 		}
 	}
 
-	now = now.Add(TTL - time.Minute)
+	now = now.Add(SessionTTL - time.Minute)
 	s.Touch(second)
 	now = now.Add(2 * time.Minute)
 	if _, ok := s.Use(first, "key1"); ok {
-		t.Error("a session unused for TTL opens")
+		t.Error("a session unused for SessionTTL opens")
 	}
 	if _, ok := s.Use(second, temp); !ok {
 		t.Error("a touched session ended")
@@ -46,7 +46,7 @@ func TestStore(t *testing.T) {
 
 	other, _ := s.Start("key2", false)
 	var ids []string
-	for i := 0; i < MaxPerAccount; i++ {
+	for i := 0; i < MaxSessionsPerAccount; i++ {
 		now = now.Add(time.Second)
 		id, _ := s.Start("key1", false)
 		ids = append(ids, id)
@@ -56,13 +56,13 @@ func TestStore(t *testing.T) {
 	}
 	for _, id := range ids {
 		if _, ok := s.Use(id, "key1"); !ok {
-			t.Errorf("session %s of the latest %d ended", id, MaxPerAccount)
+			t.Errorf("session %s of the latest %d ended", id, MaxSessionsPerAccount)
 		}
 	}
 	if _, ok := s.Use(other, "key2"); !ok {
 		t.Error("another account's session ended")
 	}
-	if len(s.sessions) != MaxPerAccount+1 {
+	if len(s.sessions) != MaxSessionsPerAccount+1 {
 		t.Errorf("%d sessions kept", len(s.sessions))
 	}
 }
