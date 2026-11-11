@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"strings"
@@ -503,15 +504,8 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		p.c = dialLobby(t, addr)
 		if emu {
 			p.c.sendCustom(0x9950, platformInfo(i))
-			report := P2PMatchingReport{BattleCode: battleCode, UserID: p.userID}
-			for _, ms := range usedMs {
-				report.RoundData = append(report.RoundData, BattleLogRound{WinTeam: 1, UsedMs: ms})
-			}
-			body, err := json.Marshal(report)
-			if err != nil {
-				t.Fatal(err)
-			}
-			p.c.sendCustom(0x9952, body)
+			body := fmt.Sprintf(`{"battle_code":%q,"user_id":%q,"round_data":[{"win_team":1,"used_ms":[1,2,3,4]}]}`, battleCode, p.userID)
+			p.c.sendCustom(0x9952, []byte(body))
 		}
 		userID, listed, ask := p.c.login(p.ac, p.userID, fmt.Sprintf("pilot%d", i))
 		if userID != p.userID || len(listed) != 1 || listed[0] != p.userID {
@@ -535,6 +529,15 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 	}
 	if n := players[1].c.ask(0x6212, nil).Reader().Read16(); int(n) != len(players) {
 		t.Errorf("battle after room user count %d", n)
+	}
+	if emu {
+		ms, _ := json.Marshal(usedMs)
+		h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, replayUploadRequest(t, battleCode+".pb", []byte("replay"), "used_ms", string(ms)))
+		if w.Code != 200 {
+			t.Fatalf("replay upload code %d body %s", w.Code, w.Body.String())
+		}
 	}
 
 	for i, p := range players {

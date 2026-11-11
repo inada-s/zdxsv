@@ -8,7 +8,6 @@ import (
 	"math"
 	"net"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -175,57 +174,6 @@ type RelayServer struct {
 	Token uint64 `json:"token"`
 	IP6   string `json:"ip6,omitempty"`
 	Port6 int    `json:"port6,omitempty"`
-}
-
-// P2PMatchingReport is how a GGPO battle ran, emulator -> lobby custom message 0x9952, as
-// JSON. Sent after the platform info of the first lobby connection after the battle.
-type P2PMatchingReport struct {
-	BattleCode          string             `json:"battle_code,omitempty"`
-	PlayerCount         int                `json:"player_count,omitempty"`
-	PeerID              int                `json:"peer_id,omitempty"`      // the sender's position
-	CloseReason         string             `json:"close_reason,omitempty"` // how GGPO ended; empty: it did not start
-	FrameCount          int                `json:"frame_count,omitempty"`
-	RoundData           []BattleLogRound   `json:"round_data,omitempty"` // per round played
-	InputDelay          int                `json:"input_delay,omitempty"`
-	RemotePeers         []RemotePeerReport `json:"remote_peers,omitempty"` // ping test result per other position
-	UserID              string             `json:"user_id,omitempty"`
-	Result              string             `json:"result,omitempty"` // "ggpo", "cut" or "server"
-	CutReason           string             `json:"cut_reason,omitempty"`
-	Sync                string             `json:"sync,omitempty"`        // own fingerprint, when a peer's differs
-	SyncDiffer          string             `json:"sync_differ,omitempty"` // positions with a differing fingerprint
-	Answered            int                `json:"answered,omitempty"`    // peers that answered the ping test
-	RelayCount          int                `json:"relay_count,omitempty"`
-	PingError           string             `json:"ping_error,omitempty"`
-	PingWaitMs          int                `json:"ping_wait_ms,omitempty"`
-	MinDelay            int                `json:"min_delay,omitempty"`
-	FixedDelay          bool               `json:"fixed_delay,omitempty"`
-	CutSends            int                `json:"cut_sends,omitempty"`
-	RollbackFrames      int                `json:"rollback_frames,omitempty"`
-	Mismatches          int                `json:"mismatches,omitempty"`
-	Disconnected        bool               `json:"disconnected,omitempty"`
-	DisconnectedPeerIDs []int              `json:"disconnected_peer_ids,omitempty"` // positions whose peer disconnected
-	RollbackBudget      float64            `json:"rollback_budget,omitempty"`       // frames, learned per PC from the frame slack
-	RollbackBudgetUsed  float64            `json:"rollback_budget_used,omitempty"`  // frames the input delay left to rollbacks
-	TotalTimesync       int                `json:"total_timesync,omitempty"`        // frames slept so a peer could catch up
-	InputBlockCount     int                `json:"input_block_count,omitempty"`     // frames that waited for a peer's input
-	FpsHistory          []int              `json:"fps_history,omitempty"`           // frames run in each second of the battle
-}
-
-type BattleLogRound struct {
-	WinTeam int   `json:"win_team"` // 1 / 2, -1: a draw
-	UsedMs  []int `json:"used_ms"`  // by position: the MS id + 1, 0: unknown
-}
-
-type RemotePeerReport struct {
-	PeerID       int    `json:"peer_id"`
-	PingMinMs    int    `json:"ping_min_ms,omitempty"` // GGPO ping during the battle, sampled once a second
-	PingMedianMs int    `json:"ping_median_ms,omitempty"`
-	PingMaxMs    int    `json:"ping_max_ms,omitempty"`
-	Route        string `json:"route,omitempty"`  // "direct", "peer <position>" or "relay <index>"
-	RttMs        int    `json:"rtt_ms,omitempty"` // 0: no answer
-	Addr         string `json:"addr,omitempty"`   // the address that answered
-	RecvLoss     int    `json:"recv_loss,omitempty"`
-	SendLoss     int    `json:"send_loss,omitempty"`
 }
 
 // OnGetBattleInfo returns the P2PMatching for an emulator that runs
@@ -478,23 +426,13 @@ func pilotName(bin string) string {
 	return battleInfoName(s)
 }
 
-// OnP2PMatchingReport logs a report body as received and saves its used_ms.
+// OnP2PMatchingReport logs a report body as received; the server reads nothing from it.
 func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, body []byte) {
 	if p.PlatformInfo == nil {
 		logger.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
 		return
 	}
 	logger.Info("p2p matching report", zap.String("user_id", p.UserID), p2pMatchingReportField(body))
-	var report P2PMatchingReport
-	if err := json.Unmarshal(body, &report); err != nil {
-		logger.Warn("p2p matching report: bad request", zap.String("user_id", p.UserID), zap.Error(err))
-		return
-	}
-	sender := p.UserID
-	if sender == "" { // the report comes before the user login
-		sender = report.UserID
-	}
-	saveUsedMs(&report, sender)
 }
 
 func p2pMatchingReportField(body []byte) zap.Field {
@@ -502,41 +440,6 @@ func p2pMatchingReportField(body []byte) zap.Field {
 		return zap.Reflect("report", json.RawMessage(body))
 	}
 	return zap.ByteString("report", body)
-}
-
-func saveUsedMs(report *P2PMatchingReport, sender string) {
-	rounds := report.RoundData
-	if len(rounds) == 0 || report.BattleCode == "" {
-		return
-	}
-	records, err := DefaultDB.GetBattleRecords(report.BattleCode)
-	if err != nil {
-		logger.Warn("p2p matching report: GetBattleRecords failure", zap.Error(err))
-		return
-	}
-	if !slices.ContainsFunc(records, func(r *BattleRecord) bool { return r.UserID == sender }) {
-		return
-	}
-	for _, r := range records {
-		var mask uint64
-		var list []string
-		for _, rd := range rounds {
-			ms := 0
-			if i := r.Pos - 1; 0 <= i && i < len(rd.UsedMs) {
-				ms = rd.UsedMs[i]
-			}
-			if ms < 0 || 64 <= ms {
-				ms = 0
-			}
-			list = append(list, strconv.Itoa(ms))
-			if ms > 0 {
-				mask |= 1 << ms
-			}
-		}
-		if err := DefaultDB.SetUsedMs(r.BattleCode, r.UserID, mask, strings.Join(list, ",")); err != nil {
-			logger.Warn("p2p matching report: SetUsedMs failure", zap.Error(err))
-		}
-	}
 }
 
 func battlePlatformInfo(peer *LbsPeer) map[string]string {

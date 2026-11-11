@@ -106,7 +106,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *LbsPeer, m *LbsMessage) 
 })
 
 // P2PMatchingReport is sent by emulators with lobby GGPO on the first lobby connection
-// after a battle, after the platform info: a P2PMatchingReport (JSON) on how the battle
+// after a battle, after the platform info: a JSON report on how the battle
 // ran. Custom category, no answer: logged as received for server-side stats and
 // troubleshooting, so the body is passed on undecoded.
 var _ = register(0x9952, "P2PMatchingReport", func(p *LbsPeer, m *LbsMessage) {

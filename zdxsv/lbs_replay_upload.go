@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +22,8 @@ import (
 // POST /lbs/replay_upload: an emulator posts a battle's replay as a multipart file
 // named <battle_code>.pb after the battle. It is stored as replays/<battle_code>.pb and its
 // url is recorded on the battle (served by /lbs/replay). 409 when that replay is already there.
+// The form field used_ms (JSON, per round, by position: the MS id + 1, 0: unknown, e.g.
+// [[3,7,0,12],[3,9,0,12]]) sets used_ms on the battle's records once the replay is stored.
 
 const (
 	replayUploadPrefix  = "replays/"
@@ -121,6 +125,7 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
+	usedMs, usedMsErr := parseUsedMs(r.MultipartForm.Value["used_ms"])
 
 	// the first file of the form, whatever its field name
 	var fh *multipart.FileHeader
@@ -166,6 +171,53 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to record replay", http.StatusInternalServerError)
 		return
 	}
+	if usedMsErr != nil {
+		logger.Warn("replay_upload: used_ms not saved", zap.Any("battle_code", battleCode), zap.Error(usedMsErr))
+	} else {
+		saveUsedMs(battleCode, usedMs)
+	}
 	logger.Info("replay uploaded", zap.Any("battle_code", battleCode), zap.Int64("size", fh.Size), zap.Any("url", url))
 	fmt.Fprintf(w, "File uploaded: %q (%v bytes)\n", fh.Filename, fh.Size)
+}
+
+func saveUsedMs(battleCode string, rounds [][]int) {
+	if len(rounds) == 0 {
+		return
+	}
+	records, err := DefaultDB.GetBattleRecords(battleCode)
+	if err != nil {
+		logger.Warn("replay_upload: GetBattleRecords failure", zap.Any("battle_code", battleCode), zap.Error(err))
+		return
+	}
+	for _, r := range records {
+		var mask uint64
+		var list []string
+		for _, rd := range rounds {
+			ms := 0
+			if i := r.Pos - 1; 0 <= i && i < len(rd) {
+				ms = rd[i]
+			}
+			if ms < 0 || 64 <= ms {
+				ms = 0
+			}
+			list = append(list, strconv.Itoa(ms))
+			if ms > 0 {
+				mask |= 1 << ms
+			}
+		}
+		if err := DefaultDB.SetUsedMs(r.BattleCode, r.UserID, mask, strings.Join(list, ",")); err != nil {
+			logger.Warn("replay_upload: SetUsedMs failure", zap.Any("battle_code", battleCode), zap.Error(err))
+		}
+	}
+}
+
+func parseUsedMs(values []string) ([][]int, error) {
+	if len(values) == 0 {
+		return nil, errors.New("no used_ms field")
+	}
+	var rounds [][]int
+	if err := json.Unmarshal([]byte(values[0]), &rounds); err != nil {
+		return nil, fmt.Errorf("used_ms %q: %w", values[0], err)
+	}
+	return rounds, nil
 }

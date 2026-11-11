@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
@@ -297,37 +298,45 @@ func TestPilotName(t *testing.T) {
 	}
 }
 
-// testdata/wire/matching_report.json has every field the client sends.
-func TestP2PMatchingReport(t *testing.T) {
+// testdata/wire/matching_report.json is logged as received; its round_data saves nothing.
+func TestP2PMatchingReportLogOnly(t *testing.T) {
+	UseTestDB(t)
 	body, err := os.ReadFile("../testdata/wire/matching_report.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dec := json.NewDecoder(bytes.NewReader(body))
-	dec.DisallowUnknownFields()
-	got := P2PMatchingReport{}
-	if err := dec.Decode(&got); err != nil {
-		t.Fatal(err)
+	for pos, id := range []string{"AAAAAA", "BBBBBB"} {
+		if err := DefaultDB.AddBattleRecord(&BattleRecord{BattleCode: "1696492800000", UserID: id, Players: 2, Pos: pos + 1, Side: pos + 1}); err != nil {
+			t.Fatal(err)
+		}
 	}
-	want := P2PMatchingReport{
-		BattleCode: "1696492800000", PlayerCount: 2, PeerID: 1, CloseReason: "net battle end", FrameCount: 21563,
-		RoundData:  []BattleLogRound{{WinTeam: 1, UsedMs: []int{3, 17}}, {WinTeam: -1, UsedMs: []int{3, 0}}},
-		InputDelay: 2,
-		RemotePeers: []RemotePeerReport{{PeerID: 0, PingMinMs: 201, PingMedianMs: 215, PingMaxMs: 250, Route: "direct",
-			RttMs: 12, Addr: "203.0.113.5:7001", RecvLoss: 3, SendLoss: 5}},
-		UserID: "BBBBBB", Result: "ggpo", CutReason: "sync", Sync: "0123456789abcdef", SyncDiffer: "0", Answered: 1,
-		RelayCount: 1, PingError: "timeout", PingWaitMs: 1500, MinDelay: 1, FixedDelay: true, CutSends: 4,
-		RollbackFrames: 812, Mismatches: 2, Disconnected: true, DisconnectedPeerIDs: []int{0},
-		RollbackBudget: 2.5, RollbackBudgetUsed: 1.25, TotalTimesync: 17, InputBlockCount: 42, FpsHistory: []int{60, 59, 60}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("report\n%+v\nwant\n%+v", got, want)
+	var buf bytes.Buffer
+	saved := logger
+	logger = zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&buf), zap.InfoLevel))
+	defer func() { logger = saved }()
+
+	p := &LbsPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
+	m := NewClientNotice(0x9952)
+	m.Writer().Write(body)
+	defaultHandlers.handlers[0x9952](p, m)
+
+	var line struct{ Report any }
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("%v: %s", err, buf.String())
 	}
-	again, _ := json.Marshal(got)
-	var a, b any
-	json.Unmarshal(body, &a)
-	json.Unmarshal(again, &b)
-	if !reflect.DeepEqual(a, b) {
-		t.Errorf("encoded again: %s", again)
+	var want any
+	json.Unmarshal(body, &want)
+	if !reflect.DeepEqual(line.Report, want) {
+		t.Errorf("logged %s", buf.String())
+	}
+	for _, id := range []string{"AAAAAA", "BBBBBB"} {
+		rec, err := DefaultDB.GetBattleRecordUser("1696492800000", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rec.UsedMsList != "" || rec.UsedMsMask != 0 {
+			t.Errorf("%s: used_ms %q %x", id, rec.UsedMsList, rec.UsedMsMask)
+		}
 	}
 }
 
@@ -650,44 +659,38 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 	}
 }
 
-// A battle member's report round_data sets every player's used_ms; /lbs/replay?used_ms= finds it.
-func TestReportUsedMsSearch(t *testing.T) {
+// The replay upload's used_ms sets every player's used_ms once the replay is stored;
+// /lbs/replay?used_ms= finds it. A second upload (409), a malformed or a missing field saves nothing.
+func TestReplayUploadUsedMsSearch(t *testing.T) {
 	UseTestDB(t)
 	for _, r := range []*BattleRecord{
 		{BattleCode: "B1", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
 		{BattleCode: "B1", UserID: "BBBBBB", Players: 2, Pos: 2, Side: 2},
 		{BattleCode: "B2", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
 		{BattleCode: "B2", UserID: "CCCCCC", Players: 2, Pos: 2, Side: 2},
+		{BattleCode: "B3", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
+		{BattleCode: "B4", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
 	} {
 		if err := DefaultDB.AddBattleRecord(r); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, code := range []string{"B1", "B2"} {
-		if err := DefaultDB.SetReplayURL(code, "https://example.com/"+code+".pb"); err != nil {
-			t.Fatal(err)
+
+	h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
+	upload := func(code string, wantCode int, fields ...string) {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, replayUploadRequest(t, code+".pb", []byte("replay"), fields...))
+		if w.Code != wantCode {
+			t.Errorf("upload %s %v: code %d body %s", code, fields, w.Code, w.Body.String())
 		}
 	}
+	upload("B1", 200, "used_ms", "[[1,9],[4,9],[1]]")
+	upload("B1", http.StatusConflict, "used_ms", "[[30,30]]")
+	upload("B2", 200, "used_ms", "[[2,64]]")
+	upload("B3", 200, "used_ms", `[[1,"x"]]`)
+	upload("B4", 200)
+	upload("B9", 200, "used_ms", "[[5,5]]")
 
-	report := func(sender, code string, rounds ...[]int) {
-		r := P2PMatchingReport{BattleCode: code, UserID: sender}
-		for _, ms := range rounds {
-			r.RoundData = append(r.RoundData, BattleLogRound{WinTeam: 1, UsedMs: ms})
-		}
-		body, err := json.Marshal(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		p := &LbsPeer{PlatformInfo: map[string]string{"emulator": "pcsx2"}}
-		m := NewClientNotice(0x9952)
-		m.Writer().Write(body)
-		defaultHandlers.handlers[0x9952](p, m)
-	}
-	report("BBBBBB", "B1", []int{1, 9}, []int{4, 9}, []int{1})
-	report("CCCCCC", "B1", []int{30, 30})
-	report("AAAAAA", "B2", []int{2, 64})
-
-	h := &APIHandler{}
 	search := func(query string) (codes []string, users map[string]string) {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", "/lbs/replay?"+query, nil))
@@ -708,7 +711,7 @@ func TestReportUsedMsSearch(t *testing.T) {
 	}
 
 	_, users := search("")
-	want := map[string]string{"B1/AAAAAA": "1,4,1", "B1/BBBBBB": "9,9,0", "B2/AAAAAA": "2", "B2/CCCCCC": "0"}
+	want := map[string]string{"B1/AAAAAA": "1,4,1", "B1/BBBBBB": "9,9,0", "B2/AAAAAA": "2", "B2/CCCCCC": "0", "B3/AAAAAA": "", "B4/AAAAAA": ""}
 	if !reflect.DeepEqual(want, users) {
 		t.Errorf("used_ms_list %v, want %v", users, want)
 	}
