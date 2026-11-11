@@ -1,6 +1,8 @@
 module zdxsv
 
-go 1.25.0
+go 1.27
+
+toolchain go1.27.4
 
 require (
 	cloud.google.com/go/storage v1.56.0
