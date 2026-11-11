@@ -92,7 +92,7 @@ func newLoginHandler() http.Handler {
 	return wrapHandler(router)
 }
 
-// assetsCheck fails when the embedded assets are missing (pkg/assets not generated).
+// assetsCheck fails when the embedded assets are missing.
 func assetsCheck() ([]byte, error) {
 	return assets.Asset("assets/checkfile")
 }
