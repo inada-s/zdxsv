@@ -678,7 +678,11 @@ func (a *App) OnGetBattleOpponentUser(p *AppPeer, pos byte) *model.User {
 	return p.Battle.GetUserByPos(pos)
 }
 
-// var _ = register(0x6917, "GetBattleOpponentStatus", func(p *AppPeer, m *Message) {
+// OnGetBattleOpponentClass returns the rank class shown for a user,
+// 14 (大将) down to 0 (二等兵).
+func (a *App) OnGetBattleOpponentClass(u *model.User) uint16 {
+	return min(uint16(u.WinCount/100), 14)
+}
 
 func (a *App) OnGetBattleRule(p *AppPeer) *model.Rule {
 	if p.Battle == nil {

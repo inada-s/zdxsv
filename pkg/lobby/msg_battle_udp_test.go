@@ -59,7 +59,7 @@ func testUsers(ids ...string) []*proto.P2PUser {
 
 func TestBattleInfoNotice(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
-	n := battleInfoNotice(newUDPTestPeer(emu, false), nil)
+	n := testBattleInfoNotice(newUDPTestPeer(emu, false), nil)
 	if n != nil && (n.Direction != ServerToClient || n.Category != CategoryCustom || n.Command != 0x9951) {
 		t.Errorf("header %x %x %x", n.Direction, n.Category, n.Command)
 	}
@@ -73,7 +73,7 @@ func TestBattleInfoNotice(t *testing.T) {
 	users := testUsers("AAAAAA", "BBBBBB")
 	users[0].Team = pb.Int32(2)
 	users[1].Team = pb.Int32(1)
-	wantBattleInfo(t, battleInfo(t, battleInfoNotice(p, nil)), &proto.P2PMatching{
+	wantBattleInfo(t, battleInfo(t, testBattleInfoNotice(p, nil)), &proto.P2PMatching{
 		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
 		BattleServer: pb.String("192.168.1.8:8210"), Users: users})
 
@@ -83,7 +83,7 @@ func TestBattleInfoNotice(t *testing.T) {
 		"no udp":      newUDPTestPeer(noUDP, false),
 		"test battle": newUDPTestPeer(emu, true),
 	} {
-		if battleInfoNotice(p, nil) != nil {
+		if testBattleInfoNotice(p, nil) != nil {
 			t.Errorf("%s: notice sent", name)
 		}
 	}
@@ -93,7 +93,7 @@ func TestBattleInfoNoticeAlone(t *testing.T) {
 	alone := func(info map[string]string) *proto.P2PMatching {
 		p := newUDPTestPeer(info, false)
 		p.Battle.Users = p.Battle.Users[1:]
-		return battleInfo(t, battleInfoNotice(p, func(string) map[string]string { return info }))
+		return battleInfo(t, testBattleInfoNotice(p, func(string) map[string]string { return info }))
 	}
 	m := alone(map[string]string{"emulator": "pcsx2", "udp": "1", "ggpo": "7100"})
 	if m.SessionId == nil || m.PingTestDuration != nil || len(m.Users) != 1 {
@@ -131,7 +131,7 @@ func TestBattleInfoNoticeP2P(t *testing.T) {
 	p.Battle.Users[1].Name = "Bob\n"
 	// a pilot name as login stores the game's user binary (captured, NULs at both ends trimmed)
 	p.Battle.Users[0].Bin = capturedUserBinary
-	n := battleInfoNotice(p, func(id string) map[string]string { return infos[id] })
+	n := testBattleInfoNotice(p, func(id string) map[string]string { return infos[id] })
 	users := testUsers("AAAAAA", "BBBBBB", "CCCCCC", "DDDDDD")
 	users[0].UserName, users[0].PilotName, users[0].GgpoPort, users[0].Sync = pb.String("アムロ"), pb.String("カミーユ・ビダン"), pb.Int32(7001), pb.String("fedcba9876543210")
 	users[1].UserName, users[1].Sync = pb.String("Bob"), pb.String("0123456789abcdef")
@@ -229,7 +229,7 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	// the relay token is derived from the battle's ggpo_session
 	want := &proto.RelayServer{Ip: pb.String("192.168.1.8"), Port: pb.Int32(8203), Token: pb.Uint64(r.SessionToken(1462212142)),
 		Ip6: pb.String("2001:db8::8"), Port6: pb.Int32(8204)}
-	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 1 || !pb.Equal(got[0], want) {
+	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 1 || !pb.Equal(got[0], want) {
 		t.Fatalf("relays %v, want %v", got, want)
 	}
 	if len(r.sessions) != 1 {
@@ -238,12 +238,12 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 
 	// a player without relay support: no relay for the battle
 	delete(other, "relay_server")
-	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 0 {
+	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 0 {
 		t.Fatalf("relay offered to a battle with a player without relay_server=1: %v", got)
 	}
 	other["relay_server"] = "1"
 	p.PlatformInfo = map[string]string{"emulator": "pcsx2", "udp": "1"}
-	if got := battleInfo(t, battleInfoNotice(p, info)).Relays; len(got) != 0 {
+	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 0 {
 		t.Fatalf("relay offered to a client without relay_server=1: %v", got)
 	}
 }
@@ -260,4 +260,8 @@ func TestLiveUsers(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("users %v, want %v", got, want)
 	}
+}
+
+func testBattleInfoNotice(p *AppPeer, info func(userID string) map[string]string) *Message {
+	return battleInfoNotice(p2pMatching(p, info))
 }
