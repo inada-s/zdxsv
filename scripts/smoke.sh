@@ -29,7 +29,7 @@ IP=$(sed -n 's/^ZDXSV_DNAS_PUBLIC_ADDR=//p' .env)
 
 bin=${ZDXSV_BIN:-bin/zdxsv}
 if [ -z "${ZDXSV_BIN:-}" ]; then
-	mkdir -p bin && go build -o bin/zdxsv ./src/zdxsv || exit 1
+	mkdir -p bin && go build -o bin/zdxsv ./zdxsv || exit 1
 fi
 if command -v getcap >/dev/null && ! getcap "$bin" | grep -q net_bind_service; then
 	echo "note: $bin has no cap_net_bind_service; ports 53 and 443 need it (or root)"
@@ -38,8 +38,8 @@ fi
 # the server's environment: .env, but never the real database
 set -a; . ./.env; set +a
 export ZDXSV_DB_NAME=smoke.db
-# and the TLS ports on the test keys (pkg/tlsconf/testdata), never the real one
-td=pkg/tlsconf/testdata
+# and the TLS ports on the test keys (zdxsv/testdata), never the real one
+td=zdxsv/testdata
 export ZDXSV_TLS_CERT_FILE=$td/server.crt ZDXSV_TLS_KEY_FILE=$td/server.key
 unset ZDXSV_LOBBY_TLS_ADDR
 pin() { bash scripts/tls-keys.sh pin "$1" | head -1 | cut -d" " -f1; }
