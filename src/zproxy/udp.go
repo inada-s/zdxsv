@@ -8,10 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"zdxsv/pkg/battle"
-	"zdxsv/pkg/proto"
-
-	pb "github.com/golang/protobuf/proto"
+	"zproxy/battle"
+	"zproxy/stun"
 )
 
 // UDPClient fans each datagram on one socket out to its subscribers.
@@ -32,14 +30,14 @@ func (c *UDPClient) Subscribe(key string, onRead func([]byte, *net.UDPAddr)) {
 	c.mtx.Unlock()
 }
 
-// SubscribePacket subscribes to protobuf packets (Ping/Pong).
-func (c *UDPClient) SubscribePacket(key string, onPacket func(*proto.Packet, *net.UDPAddr)) {
+// SubscribePacket subscribes to Ping/Pong.
+func (c *UDPClient) SubscribePacket(key string, onPacket func(stun.Packet, *net.UDPAddr)) {
 	c.Subscribe(key, func(b []byte, addr *net.UDPAddr) {
 		if battle.IsWirePacket(b) {
 			return
 		}
-		pkt := new(proto.Packet)
-		if err := pb.Unmarshal(b, pkt); err != nil {
+		pkt, err := stun.Unmarshal(b)
+		if err != nil {
 			log.Println("udp: bad packet:", err)
 			return
 		}
@@ -92,13 +90,8 @@ func (c *UDPClient) Send(b []byte, addr *net.UDPAddr) {
 	}
 }
 
-func (c *UDPClient) SendPacket(pkt *proto.Packet, addr *net.UDPAddr) {
-	b, err := pb.Marshal(pkt)
-	if err != nil {
-		log.Println("udp: marshal:", err)
-		return
-	}
-	c.Send(b, addr)
+func (c *UDPClient) SendPacket(pkt stun.Packet, addr *net.UDPAddr) {
+	c.Send(stun.Marshal(pkt), addr)
 }
 
 func (c *UDPClient) SendPing(userID string, addr string) {
@@ -107,15 +100,9 @@ func (c *UDPClient) SendPing(userID string, addr string) {
 		log.Println("udp:", err)
 		return
 	}
-	c.SendPacket(&proto.Packet{
-		Type:     proto.MessageType_Ping.Enum(),
-		PingData: &proto.PingMessage{Timestamp: pb.Int64(time.Now().UnixNano()), UserId: pb.String(userID)},
-	}, udpAddr)
+	c.SendPacket(stun.Packet{Type: stun.Ping, Timestamp: time.Now().UnixNano(), UserID: userID}, udpAddr)
 }
 
-func (c *UDPClient) SendPong(ping *proto.Packet, userID string, addr *net.UDPAddr) {
-	c.SendPacket(&proto.Packet{
-		Type:     proto.MessageType_Pong.Enum(),
-		PongData: &proto.PongMessage{Timestamp: pb.Int64(ping.GetPingData().GetTimestamp()), UserId: pb.String(userID)},
-	}, addr)
+func (c *UDPClient) SendPong(ping stun.Packet, userID string, addr *net.UDPAddr) {
+	c.SendPacket(stun.Packet{Type: stun.Pong, Timestamp: ping.Timestamp, UserID: userID}, addr)
 }

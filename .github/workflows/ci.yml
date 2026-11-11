@@ -22,6 +22,9 @@ jobs:
         run: go vet ./...
       - name: gofmt
         run: test -z "$(gofmt -l pkg src | tee /dev/stderr)"
+      - name: zproxy vet and test
+        working-directory: src/zproxy
+        run: go vet ./... && go test ./...
       - name: go test
         run: make cover
       - name: coverage summary

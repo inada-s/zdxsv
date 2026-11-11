@@ -23,6 +23,9 @@ jobs:
           go-version: stable
       - name: go vet and test
         run: go vet ./... && go test ./...
+      - name: zproxy vet and test
+        working-directory: src/zproxy
+        run: go vet ./... && go test ./...
       - name: does zproxy need a release?
         # sets ZDXSV_SKIP_ZPROXY and ZDXSV_ZPROXY_PREV for the goreleaser steps
         run: scripts/zproxy-release-needed.sh | tee -a "$GITHUB_ENV"

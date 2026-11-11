@@ -74,15 +74,36 @@ check "lobby on tls 8220 refuses a chain without the pin" sh -c "! \"$bin\" -pro
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
 check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu\"'"
-reg=$(curl -sf -X POST -d '{"CurrentVersion":1005,"UserID":"_AUTO_","LocalIP":"192.168.0.10","UDPAddrs":["203.0.113.1:8250"]}' http://127.0.0.1:8203/lbs/zproxy/register)
-echo "lbs/zproxy/register: $reg"
-check "zproxy register api" sh -c "echo '$reg' | grep -q '\"Result\":false,\"Message\":\"[^\"]'"
-info=$(curl -sf -X POST -d '{"SessionID":"1"}' http://127.0.0.1:8203/lbs/zproxy/battle_info)
-echo "lbs/zproxy/battle_info: $info"
-check "zproxy battle info api" sh -c "echo '$info' | grep -q '\"Result\":false,\"Message\":\"[^\"]'"
+
+# zproxy (built from src/zproxy, or $ZPROXY_BIN) against this server: STUN gives it a public
+# address, it registers, and a PS2 connection makes it ask for battle info. No user is logged
+# in, so both answers are refusals.
+zbin=${ZPROXY_BIN:-bin/zproxy}
+if [ -z "${ZPROXY_BIN:-}" ]; then
+	(cd src/zproxy && go build -o ../../bin/zproxy .) || exit 1
+fi
+zport=${ZPROXY_PORT:-8250}
+"$zbin" -updatecheck=false -upnp=false -lobbyapi=http://127.0.0.1:8203 -stunaddr=127.0.0.1:8201 \
+	-tcpport=$zport -udpport=$zport > zproxy.log 2>&1 &
+zpid=$!
+trap 'kill $pid $zpid 2>/dev/null' EXIT
+zlog() { # pattern: waits up to 15 s for it in zproxy.log
+	for i in $(seq 1 30); do
+		grep -q "$1" zproxy.log && return 0
+		kill -0 $zpid 2>/dev/null || break
+		sleep 0.5
+	done
+	grep "$1" zproxy.log
+}
+check "zproxy stun (public address)" zlog "UDPアドレス: \[127.0.0.1:$zport "
+check "zproxy register (answered: no lobby user)" zlog "サーバー: ロビーにユーザが見つかりません"
+check "zproxy accepts a PS2" bash -c "exec 3<>/dev/tcp/127.0.0.1/$zport"
+check "zproxy asks for battle info" zlog "PS2との接続に成功しました"
+check "zproxy battle info (answered: no battle)" zlog "Error on PollLobby() 対戦情報が見つかりません"
 
 if [ $fails -ne 0 ]; then
 	tail -40 smoke.log
+	cat zproxy.log
 	echo "smoke: $fails FAIL"
 	exit 1
 fi
