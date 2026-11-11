@@ -595,14 +595,14 @@ type page struct {
 var pages = map[string]page{
 	"ja": {
 		Lang:  "ja",
-		Title: "ZDXSV にログイン",
+		Title: "ZDXSV にサインイン",
 		Notice: []string{
-			"ログインが終わったらエミュレーターに戻ってください。",
+			"サインインが終わったらエミュレーターに戻ってください。",
 		},
-		Button:        "Discord でログイン",
-		Expired:       "ログインの期限が切れました。エミュレーターからやり直してください。",
-		Denied:        "ログインが取り消されました。",
-		ProviderError: "ログインに失敗しました。しばらくしてからやり直してください。",
+		Button:        "Discord でサインイン",
+		Expired:       "サインインの期限が切れました。エミュレーターからやり直してください。",
+		Denied:        "サインインが取り消されました。",
+		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
 	},
 	"en": {
 		Lang:  "en",
