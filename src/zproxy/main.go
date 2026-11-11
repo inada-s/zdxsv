@@ -21,7 +21,7 @@ import (
 	pb "github.com/golang/protobuf/proto"
 )
 
-const protocolVersion = 1006
+const protocolVersion = 1007
 
 func isSameAddr(a, b *net.UDPAddr) bool {
 	return a.Port == b.Port && a.IP.Equal(b.IP)
