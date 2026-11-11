@@ -211,10 +211,20 @@ func TestServeTestBattle(t *testing.T) {
 		t.Fatalf("greeting = % x", got)
 	}
 	p.ps2.Write(ps2Join("0123505679"))
-	time.Sleep(50 * time.Millisecond) // the join is a read of its own
-	p.ps2.Write(append(frame("anything"), finData...))
-	if err := p.wait(t); err != nil {
-		t.Errorf("ServeBattle = %v", err)
+	// The rest of the read that ends the join is dropped: send until a fin is seen.
+	deadline := time.After(5 * time.Second)
+	for sent := false; !sent; {
+		p.ps2.Write(append(frame("anything"), finData...))
+		select {
+		case err := <-p.done:
+			if err != nil {
+				t.Errorf("ServeBattle = %v", err)
+			}
+			sent = true
+		case <-time.After(20 * time.Millisecond):
+		case <-deadline:
+			t.Fatal("ServeBattle did not return")
+		}
 	}
 	// The proxy closed the PS2 connection.
 	p.ps2.SetReadDeadline(time.Now().Add(2 * time.Second))

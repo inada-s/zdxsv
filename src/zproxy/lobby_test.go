@@ -10,6 +10,7 @@ import (
 	"zdxsv/pkg/lobby/lobbyrpc"
 	"zdxsv/pkg/proto"
 
+	pb "github.com/golang/protobuf/proto"
 	"github.com/valyala/gorpc"
 )
 
@@ -233,26 +234,52 @@ func TestPollLobbyAnswersPing(t *testing.T) {
 	z, ps2Addr := lobbyProxy(t)
 	pollLobby(t, z, ps2Addr)
 	waitRegister(t, l, 2*time.Second)
-	// the user id is set once the register call returns
-	time.Sleep(100 * time.Millisecond)
 
 	u2, _ := newUDPPeer(t)
-	pongs := make(chan string, 10)
+	pongs := make(chan *proto.PongMessage, 100)
 	u2.SubscribePacket("t", func(pkt *proto.Packet, _ *net.UDPAddr) {
 		if pkt.GetType() == proto.MessageType_Pong {
-			pongs <- pkt.GetPongData().GetUserId()
+			pongs <- pkt.GetPongData()
 		}
 	})
 	zAddr, _ := net.ResolveUDPAddr("udp4", z.selfUDPAddrs[0])
-	u2.SendPingTo("U1", zAddr)
-	select {
-	case id := <-pongs:
-		t.Fatalf("answered its own user id with %q", id)
-	case <-time.After(300 * time.Millisecond):
+	ping := func(userID string, ts int64) {
+		pkt := proto.GetPacket()
+		pkt.Type = proto.MessageType_Ping.Enum()
+		pkt.PingData = &proto.PingMessage{Timestamp: pb.Int64(ts), UserId: pb.String(userID)}
+		u2.SendPacketTo(pkt, zAddr)
+		proto.PutPacket(pkt)
 	}
-	u2.SendPingTo("U2", zAddr)
-	if id := waitFor(t, pongs, 2*time.Second, "pong").(string); id != "U1" {
-		t.Fatalf("pong from %q, want U1", id)
+
+	// Answers carry the user id once the register call has returned.
+	deadline := time.After(2 * time.Second)
+	for ts := int64(1); ; ts++ {
+		ping("U2", ts)
+		select {
+		case p := <-pongs:
+			if p.GetUserId() == "U1" {
+				goto registered
+			}
+		case <-time.After(20 * time.Millisecond):
+		case <-deadline:
+			t.Fatal("no pong from U1")
+		}
+	}
+registered:
+	// Pings are answered in order: an answer to the own ping comes before the next one's.
+	ping("U1", -1)
+	ping("U2", -2)
+	for {
+		p := waitFor(t, pongs, 2*time.Second, "pong").(*proto.PongMessage)
+		switch p.GetTimestamp() {
+		case -1:
+			t.Fatalf("answered its own user id with %q", p.GetUserId())
+		case -2:
+			if p.GetUserId() != "U1" {
+				t.Fatalf("pong from %q, want U1", p.GetUserId())
+			}
+			return
+		}
 	}
 }
 
