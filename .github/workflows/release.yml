@@ -24,7 +24,7 @@ jobs:
       - name: go vet and test
         run: go vet ./... && go test ./...
       - name: zproxy vet and test
-        working-directory: src/zproxy
+        working-directory: zproxy
         run: go vet ./... && go test ./...
       - name: does zproxy need a release?
         # sets ZDXSV_SKIP_ZPROXY and ZDXSV_ZPROXY_PREV for the goreleaser steps

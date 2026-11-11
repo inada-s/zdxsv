@@ -2,7 +2,7 @@
 #
 # Two things ship from one tag:
 # - zproxy (the PS2 UDP proxy players download) as zdxsv_<ver>_<os>_<arch>.zip for every
-#   platform. zproxy's self-update (go-github-selfupdate, src/zproxy/update.go) finds its
+#   platform. zproxy's self-update (go-github-selfupdate, zproxy/update.go) finds its
 #   update by that default archive name (suffix <os>_<arch>.zip) and the `zproxy` binary
 #   inside, so the zproxy build and archive keep goreleaser's defaults. It is only built
 #   when its code changed since the last release that shipped it (ZDXSV_SKIP_ZPROXY, set by
@@ -11,14 +11,14 @@
 # - the server, zdxsv-server_<ver>_linux-x86_64.tar.gz, linux/amd64 only (cgo for sqlite,
 #   static so it runs on an older glibc). Its name MUST NOT end in <os>_<arch> or
 #   <os>-<arch> (plus .zip/.tar.gz/...), or every zproxy out there (old versions filter
-#   nothing) would download it as its update. src/zproxy/release_test.go checks this.
+#   nothing) would download it as its update. zproxy/release_test.go checks this.
 version: 2
 project_name: zdxsv
 
 builds:
   - id: zproxy
     skip: '{{ envOrDefault "ZDXSV_SKIP_ZPROXY" "false" }}'
-    dir: src/zproxy
+    dir: zproxy
     main: .
     binary: zproxy
     env:
