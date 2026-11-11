@@ -8,9 +8,12 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 - Linux x86_64 with a public IPv4 address
 - The binary: `zdxsv` in a release's `zdxsv-server_<ver>_linux-x86_64.tar.gz`, or `make build`
 - `CAP_NET_BIND_SERVICE` (or root) for ports 53 and 443
-- The DNAS data: a [DNASrep](https://github.com/FogNo23/DNASrep) checkout, which holds the certificates the
-  PS2 accepts and the canned DNAS answers. This repository does not carry them. `scripts/dnasrep.sh <dir>`
-  fetches the commit zdxsv is tested against; point `ZDXSV_DNAS_DATA_DIR` at it.
+- The DNAS data: a [DNASrep](https://github.com/FogNo23/DNASrep) checkout (certificates and DNAS answers)
+  at the commit zdxsv is tested against, in `ZDXSV_DNAS_DATA_DIR`:
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/inada-s/zdxsv/master/scripts/dnasrep.sh | sudo bash -s /opt/zdxsv/dnasrep
+  ```
 - Open ports:
 
 | port | proto | use | public / internal | used by |
