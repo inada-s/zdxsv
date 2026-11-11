@@ -1,0 +1,32 @@
+{
+  "RegisterProxyRequest": {
+    "current_version": 3,
+    "user_id": "AAAAAA",
+    "local_ip": "192.168.0.10",
+    "port": 9000,
+    "udp_addrs": ["192.168.0.10:9000", "203.0.113.5:9000"],
+    "p2p_connected": {"BBBBBB": {}}
+  },
+  "RegisterProxyResponse": {
+    "result": true,
+    "message": "ok",
+    "session_id": "12345678",
+    "user_id": "AAAAAA",
+    "lobby_users": [
+      {"user_id": "BBBBBB", "name": "b", "team": "t", "udp": true, "udp_addrs": ["203.0.113.6:9000"], "platform": "emu"}
+    ]
+  },
+  "BattleInfoRequest": {
+    "session_id": "12345678"
+  },
+  "BattleInfoResponse": {
+    "result": true,
+    "message": "ok",
+    "users": [
+      {"user_id": "AAAAAA", "name": "a", "team": "t", "udp": false, "udp_addrs": ["203.0.113.5:9000"], "platform": "console"}
+    ],
+    "battle_ip": "203.0.113.1",
+    "port": 9001,
+    "is_test": true
+  }
+}

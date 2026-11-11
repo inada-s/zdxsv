@@ -50,9 +50,9 @@ func TestAPIStatus(t *testing.T) {
 		return w
 	}
 	var body struct {
-		NowDate    string
-		LobbyUsers []StatusUser
-		Platforms  map[string]PlatformCount
+		NowDate    string                   `json:"now_date"`
+		LobbyUsers []StatusUser             `json:"lobby_users"`
+		Platforms  map[string]PlatformCount `json:"platforms"`
 	}
 	w := get()
 	if w.Code != 200 || w.Header().Get("Content-Type") != "application/json" {

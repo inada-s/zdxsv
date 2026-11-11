@@ -249,30 +249,30 @@ const statusTimeFormat = "2006年 01月02日 15:04"
 
 // StatusUser is a player on the status page.
 type StatusUser struct {
-	UserID   string
-	Name     string
-	Team     string
-	UDP      string
-	Platform string
+	UserID   string `json:"user_id"`
+	Name     string `json:"name"`
+	Team     string `json:"team"`
+	UDP      string `json:"udp"`
+	Platform string `json:"platform"`
 }
 
 // PlatformCount counts the users of one platform.
 type PlatformCount struct {
-	LobbyUserCount  int
-	BattleUserCount int
+	LobbyUserCount  int `json:"lobby_user_count"`
+	BattleUserCount int `json:"battle_user_count"`
 }
 
 // Status is the /lbs/status body: who is in the lobby and who is in a battle.
 type Status struct {
-	NowDate        string
-	LobbyUserCount int
-	LobbyUsers     []StatusUser
+	NowDate        string       `json:"now_date"`
+	LobbyUserCount int          `json:"lobby_user_count"`
+	LobbyUsers     []StatusUser `json:"lobby_users"`
 
-	BattleUserCount int
-	BattleUsers     []StatusUser
+	BattleUserCount int          `json:"battle_user_count"`
+	BattleUsers     []StatusUser `json:"battle_users"`
 
 	// Platforms counts users per platform; console and emulator players never meet.
-	Platforms map[string]*PlatformCount
+	Platforms map[string]*PlatformCount `json:"platforms"`
 }
 
 func newStatusUser(u lobbyapi.User) StatusUser {
