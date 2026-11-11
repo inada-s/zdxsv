@@ -8,7 +8,6 @@ import (
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/message"
-	"zdxsv/pkg/proto"
 )
 
 type BasePeer struct {
@@ -60,7 +59,7 @@ type Peer interface {
 	SetRoomID(int)
 	RoomID() int
 	AddSendData([]byte)
-	AddSendMessage(*proto.BattleMessage)
+	AddSendMessage(Message)
 	Address() string
 	Close() error
 }

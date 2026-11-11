@@ -14,13 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/proto"
 
 	pb "github.com/golang/protobuf/proto"
 )
 
-const protocolVersion = 1006
+const protocolVersion = 1007
 
 func isSameAddr(a, b *net.UDPAddr) bool {
 	return a.Port == b.Port && a.IP.Equal(b.IP)
@@ -90,7 +91,7 @@ type pingResult struct {
 type Zproxy struct {
 	ps2sv *PS2Server
 	ps2cl *PS2Conn
-	udpcl *proto.UDPClient
+	udpcl *UDPClient
 
 	selfUDPAddrs []string
 	selfLocalIP  net.IP
@@ -168,7 +169,7 @@ func (z *Zproxy) Setup() bool {
 	var publicAddr string
 	stunok.Store(false)
 
-	z.udpcl = proto.NewUDPClient(udpConn)
+	z.udpcl = NewUDPClient(udpConn)
 	go z.udpcl.ReadLoop(context.Background())
 
 	defer z.udpcl.Unsubscribe("stun")
@@ -195,11 +196,10 @@ func (z *Zproxy) Setup() bool {
 		if stunok.Load().(bool) {
 			break
 		}
-		pkt := proto.GetPacket()
-		pkt.Type = proto.MessageType_Ping.Enum()
-		pkt.PingData = &proto.PingMessage{Timestamp: pb.Int64(time.Now().UnixNano())}
-		z.udpcl.SendPacketTo(pkt, svAddr)
-		proto.PutPacket(pkt)
+		z.udpcl.SendPacket(&proto.Packet{
+			Type:     proto.MessageType_Ping.Enum(),
+			PingData: &proto.PingMessage{Timestamp: pb.Int64(time.Now().UnixNano())},
+		}, svAddr)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -237,7 +237,7 @@ func (z *Zproxy) PollLobby() error {
 				continue
 			}
 			for _, addr := range user.UDPAddrs {
-				z.udpcl.SendPingToAddr(z.userID, addr)
+				z.udpcl.SendPing(z.userID, addr)
 			}
 		}
 	}
@@ -257,7 +257,7 @@ func (z *Zproxy) PollLobby() error {
 			mtx.Unlock()
 
 			if userID != myUserID {
-				z.udpcl.SendPongTo(pkt, myUserID, addr)
+				z.udpcl.SendPong(pkt, myUserID, addr)
 			}
 		case proto.MessageType_Pong:
 			rttNano := time.Now().UnixNano() - pkt.GetPongData().GetTimestamp()
@@ -402,44 +402,42 @@ func (z *Zproxy) PollLobby() error {
 }
 
 func (z *Zproxy) GreetBattleServer() bool {
-	var result atomic.Value
-	result.Store(false)
-
+	answer := make(chan *net.UDPAddr, 1)
 	defer z.udpcl.Unsubscribe("greet")
-	z.udpcl.SubscribePacket("greet", func(pkt *proto.Packet, from *net.UDPAddr) {
-		if pkt.GetType() == proto.MessageType_HelloServer {
-			z.svAddr = from
-			serverHello := pkt.GetHelloServerData()
-			if serverHello != nil && serverHello.GetOk() {
-				result.Store(true)
-			} else {
-				log.Println("Received ServerHello but not ok")
-			}
+	z.udpcl.SubscribeBattle("greet", func(pkt battle.Packet, from *net.UDPAddr) {
+		if pkt.Kind != battle.KindHelloAnswer {
+			return
+		}
+		if !pkt.OK {
+			log.Println("Received ServerHello but not ok")
+			return
+		}
+		select {
+		case answer <- from:
+		default:
 		}
 	})
 
-	pkt := proto.GetPacket()
-	pkt.Type = proto.MessageType_HelloServer.Enum()
-	pkt.HelloServerData = &proto.HelloServerMessage{SessionId: pb.String(z.sessionID)}
-	svAddr := z.svAddr
+	hello := battle.AppendHello(nil, z.sessionID)
 	for i := 0; i < 10; i++ {
-		if !result.Load().(bool) {
-			z.udpcl.SendPacketTo(pkt, svAddr)
-			time.Sleep(100 * time.Millisecond)
+		z.udpcl.Send(hello, z.svAddr)
+		select {
+		case from := <-answer:
+			z.svAddr = from
+			return true
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	proto.PutPacket(pkt)
-	return result.Load().(bool)
+	return false
+}
+
+type battlePeer struct {
+	addr *net.UDPAddr
+	buf  *battle.BattleBuffer
 }
 
 func (z *Zproxy) ServeBattle() error {
 	firstData, _ := hex.DecodeString("280110310000000100ffffff")
-	msgFilter := proto.NewMessageFilter(z.otherIDs)
-	svRudp := proto.NewBattleBuffer("server")
-	p2pRudp := map[string]*proto.BattleBuffer{}
-	for id, addr := range z.p2pAddr {
-		p2pRudp[addr.String()] = proto.NewBattleBuffer(id)
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -447,7 +445,7 @@ func (z *Zproxy) ServeBattle() error {
 	if z.testBattle {
 		log.Println("テスト対戦を開始します")
 		z.ps2cl.Write(firstData)
-		var fin proto.FinScanner
+		var fin FinScanner
 		z.ps2cl.Serve(ctx, func(data []byte) {
 			if fin.Scan(data) {
 				log.Println("対戦の終了を検出しました")
@@ -463,21 +461,37 @@ func (z *Zproxy) ServeBattle() error {
 		return fmt.Errorf("Failed to greet battle server")
 	}
 
+	msgFilter := battle.NewMessageFilter(z.otherIDs)
+	server := battlePeer{z.svAddr, battle.NewBattleBuffer("server")}
+	var p2p []battlePeer
+	for id, addr := range z.p2pAddr {
+		p2p = append(p2p, battlePeer{addr, battle.NewBattleBuffer(id)})
+	}
 	chFlush := make(chan struct{}, 1)
+	flush := func() {
+		select {
+		case chFlush <- struct{}{}:
+		default:
+		}
+	}
 
 	defer z.udpcl.Unsubscribe("battle")
-	z.udpcl.SubscribePacket("battle", func(pkt *proto.Packet, addr *net.UDPAddr) {
-		switch pkt.GetType() {
-		case proto.MessageType_Battle:
-			if isSameAddr(addr, z.svAddr) {
-				svRudp.ApplySeqAck(pkt.GetSeq(), pkt.GetAck())
-			} else if rudpBuf, ok := p2pRudp[addr.String()]; ok {
-				rudpBuf.ApplySeqAck(pkt.GetSeq(), pkt.GetAck())
-			}
-			for _, msg := range pkt.GetBattleData() {
-				if msgFilter.Filter(msg) {
-					z.ps2cl.Write(msg.GetBody())
+	z.udpcl.SubscribeBattle("battle", func(pkt battle.Packet, addr *net.UDPAddr) {
+		if pkt.Kind != battle.KindBattle {
+			return
+		}
+		if isSameAddr(addr, server.addr) {
+			server.buf.ApplySeqAck(pkt.Seq, pkt.Ack)
+		} else {
+			for _, p := range p2p {
+				if isSameAddr(addr, p.addr) {
+					p.buf.ApplySeqAck(pkt.Seq, pkt.Ack)
 				}
+			}
+		}
+		for _, msg := range pkt.Messages {
+			if msgFilter.Filter(msg) {
+				z.ps2cl.Write(msg.Body)
 			}
 		}
 	})
@@ -485,19 +499,16 @@ func (z *Zproxy) ServeBattle() error {
 	z.ps2cl.Write(firstData)
 
 	go func() {
-		var fin proto.FinScanner
+		var fin FinScanner
 		z.ps2cl.Serve(ctx, func(data []byte) {
 			msg := msgFilter.GenerateMessage(z.userID, data)
-			svRudp.PushBattleMessage(msg)
+			server.buf.Push(msg)
 			if !isPS2FirstData(data) {
-				for _, rudpBuf := range p2pRudp {
-					rudpBuf.PushBattleMessage(msg)
+				for _, p := range p2p {
+					p.buf.Push(msg)
 				}
 			}
-			select {
-			case chFlush <- struct{}{}:
-			default:
-			}
+			flush()
 			if fin.Scan(data) {
 				log.Println("対戦の終了を検出しました")
 				z.ps2cl.Close()
@@ -509,42 +520,22 @@ func (z *Zproxy) ServeBattle() error {
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
 	lastSend := time.Now()
+	var pkt []byte
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if time.Since(lastSend).Seconds() >= 0.030 {
-				select {
-				case chFlush <- struct{}{}:
-				default:
-				}
+			if time.Since(lastSend) >= 30*time.Millisecond {
+				flush()
 			}
 		case <-chFlush:
 			lastSend = time.Now()
-			pkt := proto.GetPacket()
-			{
-				data, seq, ack := svRudp.GetSendData()
-				pkt.Type = proto.MessageType_Battle.Enum()
-				pkt.BattleData = data
-				pkt.Seq = pb.Uint32(seq)
-				pkt.Ack = pb.Uint32(ack)
-				z.udpcl.SendPacketTo(pkt, z.svAddr)
+			for _, p := range append([]battlePeer{server}, p2p...) {
+				pkt = p.buf.AppendPacket(pkt[:0])
+				z.udpcl.Send(pkt, p.addr)
 			}
-			for _, rudpBuf := range p2pRudp {
-				data, seq, ack := rudpBuf.GetSendData()
-				pkt.Type = proto.MessageType_Battle.Enum()
-				pkt.BattleData = data
-				pkt.Seq = pb.Uint32(seq)
-				pkt.Ack = pb.Uint32(ack)
-				addr, ok := z.p2pAddr[rudpBuf.GetID()]
-				if !ok {
-					log.Fatalln("p2pAddr remote not found")
-				}
-				z.udpcl.SendPacketTo(pkt, addr)
-			}
-			proto.PutPacket(pkt)
 		}
 	}
 }

@@ -5,10 +5,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	pb "github.com/golang/protobuf/proto"
-
-	"zdxsv/pkg/proto"
 )
 
 // startUDPServer serves on a local port with U1 (12345678) and U2 (87654321) waiting for battle.
@@ -62,7 +58,7 @@ type udpClient struct {
 	conn   *net.UDPConn
 	server *net.UDPAddr
 	userID string
-	sent   []*proto.BattleMessage
+	sent   []Message
 	recv   map[string]uint32
 }
 
@@ -76,18 +72,14 @@ func newUDPClient(t *testing.T, server *net.UDPAddr, userID string) *udpClient {
 	return &udpClient{t: t, conn: conn, server: server, userID: userID, recv: map[string]uint32{}}
 }
 
-func (c *udpClient) write(pkt *proto.Packet) {
+func (c *udpClient) write(data []byte) {
 	c.t.Helper()
-	data, err := pb.Marshal(pkt)
-	if err != nil {
-		c.t.Fatal(err)
-	}
 	if _, err := c.conn.WriteToUDP(data, c.server); err != nil {
 		c.t.Fatal(err)
 	}
 }
 
-func (c *udpClient) read(timeout time.Duration) *proto.Packet {
+func (c *udpClient) read(timeout time.Duration) *Packet {
 	c.t.Helper()
 	buf := make([]byte, 4096)
 	c.conn.SetReadDeadline(time.Now().Add(timeout))
@@ -95,40 +87,29 @@ func (c *udpClient) read(timeout time.Duration) *proto.Packet {
 	if err != nil {
 		return nil
 	}
-	pkt := &proto.Packet{}
-	if err := pb.Unmarshal(buf[:n], pkt); err != nil {
+	pkt, err := ParsePacket(buf[:n])
+	if err != nil {
 		c.t.Fatal(err)
 	}
-	return pkt
+	return &pkt
 }
 
 func (c *udpClient) hello(sessionID string) bool {
 	c.t.Helper()
-	c.write(&proto.Packet{
-		Type:            proto.MessageType_HelloServer.Enum(),
-		HelloServerData: &proto.HelloServerMessage{SessionId: pb.String(sessionID)},
-	})
+	c.write(AppendHello(nil, sessionID))
 	pkt := c.read(2 * time.Second)
-	if pkt.GetType() != proto.MessageType_HelloServer || pkt.GetHelloServerData().GetSessionId() != sessionID {
+	if pkt == nil || pkt.Kind != KindHelloAnswer || pkt.SessionID != sessionID {
 		c.t.Fatalf("hello reply = %v", pkt)
 	}
-	return pkt.GetHelloServerData().GetOk()
+	return pkt.OK
 }
 
 func (c *udpClient) send(bodies ...[]byte) {
 	c.t.Helper()
 	for _, b := range bodies {
-		c.sent = append(c.sent, &proto.BattleMessage{
-			UserId: pb.String(c.userID),
-			Seq:    pb.Uint32(uint32(len(c.sent) + 1)),
-			Body:   b,
-		})
+		c.sent = append(c.sent, Message{UserID: c.userID, Seq: uint32(len(c.sent) + 1), Body: b})
 	}
-	c.write(&proto.Packet{
-		Type:       proto.MessageType_Battle.Enum(),
-		Seq:        pb.Uint32(uint32(len(c.sent))),
-		BattleData: c.sent,
-	})
+	c.write(AppendBattle(nil, uint32(len(c.sent)), 0, c.sent))
 }
 
 // receive collects relayed message bodies not seen before, until it has n or times out.
@@ -141,10 +122,10 @@ func (c *udpClient) receive(n int, timeout time.Duration) [][]byte {
 		if pkt == nil {
 			break
 		}
-		for _, m := range pkt.GetBattleData() {
-			if m.GetSeq() > c.recv[m.GetUserId()] {
-				c.recv[m.GetUserId()] = m.GetSeq()
-				got = append(got, append([]byte(m.GetUserId()+":"), m.GetBody()...))
+		for _, m := range pkt.Messages {
+			if m.Seq > c.recv[m.UserID] {
+				c.recv[m.UserID] = m.Seq
+				got = append(got, append([]byte(m.UserID+":"), m.Body...))
 			}
 		}
 	}

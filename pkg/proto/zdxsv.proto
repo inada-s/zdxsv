@@ -3,17 +3,11 @@ package proto;
 
 option go_package = "zdxsv/pkg/proto";
 
+// Ping/Pong between zproxy, the STUN server and emulators. Battle data is not protobuf.
 enum MessageType {
-  HelloServer = 1;
+  reserved 1, 4;
   Ping = 2;
   Pong = 3;
-  Battle = 4;
-}
-
-message BattleMessage {
-  required string user_id = 1;
-  required uint32 seq = 2;
-  required bytes body = 3;
 }
 
 message PingMessage {
@@ -27,20 +21,11 @@ message PongMessage {
   optional string public_addr = 3;
 }
 
-message HelloServerMessage {
-  required string session_id = 1;
-  optional bool ok = 2;
-}
-
 message Packet {
+  reserved 2, 3, 10, 13;
   required MessageType type = 1;
-  optional uint32 seq = 2;
-  optional uint32 ack = 3;
-
-  optional HelloServerMessage hello_server_data = 10;
   optional PingMessage ping_data = 11;
   optional PongMessage pong_data = 12;
-  repeated BattleMessage battle_data = 13;
 }
 
 // Lobby -> emulator, custom notice 0x9951 (pkg/lobby/msg_battle.go battleInfoNotice).

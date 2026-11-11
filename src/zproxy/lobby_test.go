@@ -83,7 +83,7 @@ func lobbyProxy(t *testing.T) (*Zproxy, string) {
 	return z, ps2Addr.String()
 }
 
-func newUDPPeer(t *testing.T) (*proto.UDPClient, []string) {
+func newUDPPeer(t *testing.T) (*UDPClient, []string) {
 	t.Helper()
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
@@ -94,7 +94,7 @@ func newUDPPeer(t *testing.T) (*proto.UDPClient, []string) {
 		cancel()
 		c.Close()
 	})
-	cl := proto.NewUDPClient(c)
+	cl := NewUDPClient(c)
 	go cl.ReadLoop(ctx)
 	return cl, []string{c.LocalAddr().String()}
 }
@@ -177,7 +177,7 @@ func TestPollLobbyBattle(t *testing.T) {
 		switch pkt.GetType() {
 		case proto.MessageType_Ping:
 			pings <- pkt.GetPingData().GetUserId()
-			u2.SendPongTo(pkt, "U2", addr)
+			u2.SendPong(pkt, "U2", addr)
 		}
 	})
 	// U3 is in the lobby but never answers
@@ -251,11 +251,10 @@ func TestPollLobbyAnswersPing(t *testing.T) {
 	})
 	zAddr, _ := net.ResolveUDPAddr("udp4", z.selfUDPAddrs[0])
 	ping := func(userID string, ts int64) {
-		pkt := proto.GetPacket()
-		pkt.Type = proto.MessageType_Ping.Enum()
-		pkt.PingData = &proto.PingMessage{Timestamp: pb.Int64(ts), UserId: pb.String(userID)}
-		u2.SendPacketTo(pkt, zAddr)
-		proto.PutPacket(pkt)
+		u2.SendPacket(&proto.Packet{
+			Type:     proto.MessageType_Ping.Enum(),
+			PingData: &proto.PingMessage{Timestamp: pb.Int64(ts), UserId: pb.String(userID)},
+		}, zAddr)
 	}
 
 	// Answers carry the user id once the register call has returned.

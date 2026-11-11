@@ -1,4 +1,4 @@
-package proto
+package main
 
 import "testing"
 
@@ -30,7 +30,7 @@ func TestFinScanner(t *testing.T) {
 		{"no fin", [][]byte{other, cat(other, other)}, []bool{false, false}},
 		{"zero size: exact fin read still found", [][]byte{{0, 1}, wrapped, fin}, []bool{false, false, true}},
 	}
-	join := append([]byte{130}, make([]byte, PS2JoinSize-1)...)
+	join := append([]byte{130}, make([]byte, ps2JoinSize-1)...)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var s FinScanner
@@ -48,7 +48,7 @@ func TestFinScanner(t *testing.T) {
 
 func TestFinScannerJoin(t *testing.T) {
 	fin := []byte{4, 0xF0, 0, 0}
-	join := append([]byte{130}, make([]byte, PS2JoinSize-1)...)
+	join := append([]byte{130}, make([]byte, ps2JoinSize-1)...)
 	tests := []struct {
 		name  string
 		reads [][]byte
