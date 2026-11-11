@@ -1,10 +1,16 @@
 package lobby
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/binary"
+	"encoding/json"
 	"net"
 	"net/netip"
+	"os/exec"
+	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -321,4 +327,489 @@ func (r *Relay) handleGgpo(p []byte, from netip.AddrPort) (netip.AddrPort, []byt
 	p[7] = orgType
 	p[8], p[9], p[10], p[11] = 0, 0, 0, 0
 	return dst, p
+}
+
+// maxRelaysPerBattle is the number of relay_<k> lines a client accepts.
+const maxRelaysPerBattle = 4
+
+// relayUnreachableMs is the relayed RTT of a player pair when either has no latency for the relay's region.
+const relayUnreachableMs = 999
+
+// RelaySessions issues the token of a battle's relay session; the same id gives the same token.
+type RelaySessions interface {
+	SessionToken(id uint32) uint64
+}
+
+// RegionalRelay is a relay in a cloud region, registered with the lobby. Region is a
+// "<region>=<ms>" platform info key.
+type RegionalRelay struct {
+	Region      string
+	PublicAddr  string
+	PublicAddr6 string
+	Sessions    RelaySessions
+
+	// set by the relay control connection, under regionalRelays
+	activeSessions int
+	shutdown       func()
+}
+
+var regionalRelays = struct {
+	sync.Mutex
+	byAddr map[string]*RegionalRelay
+}{byAddr: map[string]*RegionalRelay{}}
+
+// RegisterRelay offers r to battles until UnregisterRelay(r.PublicAddr); a relay with the same
+// PublicAddr is replaced.
+func RegisterRelay(r *RegionalRelay) {
+	regionalRelays.Lock()
+	defer regionalRelays.Unlock()
+	regionalRelays.byAddr[r.PublicAddr] = r
+}
+
+func UnregisterRelay(publicAddr string) {
+	regionalRelays.Lock()
+	defer regionalRelays.Unlock()
+	delete(regionalRelays.byAddr, publicAddr)
+}
+
+// battleRelays lists the relays offered to a battle of users, best first: regional relays by
+// the worst relayed RTT of a player pair (the sum of both players' latencies to the relay's
+// region), then the lobby's own relay, at most maxRelaysPerBattle. Clients settle on the
+// earlier relay when they disagree, so the order depends only on the battle, never on the
+// player asking.
+func battleRelays(users []string, info func(userID string) map[string]string) []*RegionalRelay {
+	latency := func(id, region string) int {
+		ms, err := strconv.Atoi(info(id)[region])
+		if err != nil || ms <= 0 {
+			return 0
+		}
+		return ms
+	}
+	type scored struct {
+		r     *RegionalRelay
+		worst int
+	}
+	var list []scored
+	regionalRelays.Lock()
+	for _, r := range regionalRelays.byAddr {
+		worst := 0
+		for i := range users {
+			for j := i + 1; j < len(users); j++ {
+				a, b := latency(users[i], r.Region), latency(users[j], r.Region)
+				via := relayUnreachableMs
+				if a > 0 && b > 0 {
+					via = a + b
+				}
+				worst = max(worst, via)
+			}
+		}
+		list = append(list, scored{r, worst})
+	}
+	regionalRelays.Unlock()
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].worst != list[j].worst {
+			return list[i].worst < list[j].worst
+		}
+		return list[i].r.PublicAddr < list[j].r.PublicAddr
+	})
+	var relays []*RegionalRelay
+	for _, s := range list {
+		relays = append(relays, s.r)
+	}
+	if LobbyRelay != nil && RelayPublicAddr != "" {
+		relays = append(relays, &RegionalRelay{PublicAddr: RelayPublicAddr, PublicAddr6: RelayPublicAddr6, Sessions: LobbyRelay})
+	}
+	if len(relays) > maxRelaysPerBattle {
+		relays = relays[:maxRelaysPerBattle]
+	}
+	return relays
+}
+
+// A regional relay (`zdxsv relay`) keeps a TCP connection to the lobby's relay control
+// address: it sends a RelayStatus every relayStatusInterval, the lobby pushes it a
+// RelayControl with each battle session's token as the battle is offered the relay. The
+// relay is offered while the connection lives.
+const (
+	relayStatusInterval  = 10 * time.Second
+	relayStatusTimeout   = 3 * relayStatusInterval
+	relayReconnectDelay  = 5 * time.Second
+	relayControlQueueLen = 256
+)
+
+// RelayStatus is a relay's line to the lobby. Secret is ZDXSV_RELAY_SECRET: anyone can
+// reach the lobby, and the lobby hands its relays to players.
+type RelayStatus struct {
+	Region      string `json:"region,omitempty"`
+	PublicAddr  string `json:"public_addr,omitempty"`
+	PublicAddr6 string `json:"public_addr6,omitempty"`
+	Sessions    int    `json:"sessions"`
+	Secret      string `json:"secret,omitempty"`
+}
+
+type RelayControl struct {
+	Sessions []RelayControlSession `json:"sessions,omitempty"`
+	Shutdown bool                  `json:"shutdown,omitempty"`
+}
+
+type RelayControlSession struct {
+	SessionID uint32 `json:"session_id"`
+	Token     uint64 `json:"token"`
+}
+
+// remoteRelaySessions makes the tokens of a connected relay's sessions and queues them to it.
+type remoteRelaySessions struct {
+	mtx    sync.Mutex
+	tokens map[uint32]remoteRelayToken
+	out    chan RelayControl
+	now    func() time.Time
+}
+
+type remoteRelayToken struct {
+	token   uint64
+	created time.Time
+}
+
+func newRemoteRelaySessions() *remoteRelaySessions {
+	return &remoteRelaySessions{
+		tokens: map[uint32]remoteRelayToken{},
+		out:    make(chan RelayControl, relayControlQueueLen),
+		now:    time.Now,
+	}
+}
+
+func (s *remoteRelaySessions) SessionToken(id uint32) uint64 {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if t, ok := s.tokens[id]; ok {
+		return t.token
+	}
+	now := s.now()
+	for k, t := range s.tokens {
+		if relayMaxLifetime < now.Sub(t.created) {
+			delete(s.tokens, k)
+		}
+	}
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	token := binary.LittleEndian.Uint64(b[:])
+	s.tokens[id] = remoteRelayToken{token, now}
+	select {
+	case s.out <- RelayControl{Sessions: []RelayControlSession{{SessionID: id, Token: token}}}:
+	default:
+		zlog.Error("relay control queue full, session dropped", zap.Any("session_id", id))
+	}
+	return token
+}
+
+// ServeRelayControl accepts regional relays on l until it is closed; relays must send secret.
+func ServeRelayControl(l net.Listener, secret string) error {
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			return err
+		}
+		go serveRelayControlConn(conn, secret)
+	}
+}
+
+func serveRelayControlConn(conn net.Conn, secret string) {
+	defer conn.Close()
+	sessions := newRemoteRelaySessions()
+	var registered *RegionalRelay
+	defer func() {
+		if registered != nil {
+			unregisterRelayIf(registered)
+			zlog.Info("relay unregistered", zap.String("region", registered.Region), zap.String("public", registered.PublicAddr))
+		}
+	}()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		enc := json.NewEncoder(conn)
+		for {
+			select {
+			case ctl := <-sessions.out:
+				conn.SetWriteDeadline(time.Now().Add(relayStatusInterval))
+				if err := enc.Encode(ctl); err != nil {
+					conn.Close()
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+	dec := json.NewDecoder(conn)
+	for {
+		conn.SetReadDeadline(time.Now().Add(relayStatusTimeout))
+		var st RelayStatus
+		if err := dec.Decode(&st); err != nil {
+			return
+		}
+		if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
+			zlog.Warn("relay status with a wrong secret", zap.Stringer("addr", conn.RemoteAddr()), zap.String("public", st.PublicAddr))
+			return
+		}
+		if registered == nil {
+			if st.PublicAddr == "" {
+				return
+			}
+			registered = &RegionalRelay{Region: st.Region, PublicAddr: st.PublicAddr, PublicAddr6: st.PublicAddr6, Sessions: sessions}
+			registered.shutdown = func() {
+				select {
+				case sessions.out <- RelayControl{Shutdown: true}:
+				default:
+					zlog.Error("relay control queue full, shutdown dropped", zap.String("public", st.PublicAddr))
+				}
+			}
+			RegisterRelay(registered)
+			zlog.Info("relay registered", zap.String("region", st.Region), zap.String("public", st.PublicAddr), zap.String("public6", st.PublicAddr6), zap.Stringer("addr", conn.RemoteAddr()))
+		}
+		regionalRelays.Lock()
+		registered.activeSessions = st.Sessions
+		regionalRelays.Unlock()
+	}
+}
+
+// unregisterRelayIf removes r unless another relay with its address replaced it.
+func unregisterRelayIf(r *RegionalRelay) {
+	regionalRelays.Lock()
+	defer regionalRelays.Unlock()
+	if regionalRelays.byAddr[r.PublicAddr] == r {
+		delete(regionalRelays.byAddr, r.PublicAddr)
+	}
+}
+
+func (r *Relay) SetSessionToken(id uint32, token uint64) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	if s, ok := r.sessions[id]; ok {
+		if s.token == token {
+			return
+		}
+		r.removeSessionLocked(s)
+	}
+	now := r.now()
+	r.sessions[id] = &relaySession{id: id, token: token, created: now, lastActive: now}
+	zlog.Info("relay session registered", zap.Any("session_id", id))
+}
+
+func (r *Relay) sessionCount() int {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	return len(r.sessions)
+}
+
+// RunRegionalRelay relays on conn and keeps it registered with the lobby's relay control
+// address, reconnecting until ctx ends or the lobby asks it to shut down.
+func RunRegionalRelay(ctx context.Context, conn *net.UDPConn, lobbyAddr string, status RelayStatus) error {
+	r := NewRelay()
+	go r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
+	zlog.Info("start regional relay", zap.Stringer("addr", conn.LocalAddr()), zap.String("region", status.Region), zap.String("public", status.PublicAddr), zap.String("public6", status.PublicAddr6), zap.Any("lobby", lobbyAddr))
+	for {
+		shutdown, err := r.controlSession(ctx, lobbyAddr, status)
+		if shutdown {
+			zlog.Info("relay shutdown by the lobby")
+			return nil
+		}
+		zlog.Warn("relay control failure", zap.Error(err))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(relayReconnectDelay):
+		}
+	}
+}
+
+func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status RelayStatus) (bool, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "tcp", lobbyAddr)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	sendErr := make(chan error, 1)
+	go func() {
+		enc := json.NewEncoder(conn)
+		for {
+			status.Sessions = r.sessionCount()
+			conn.SetWriteDeadline(time.Now().Add(relayStatusInterval))
+			if err := enc.Encode(status); err != nil {
+				sendErr <- err
+				conn.Close()
+				return
+			}
+			select {
+			case <-time.After(relayStatusInterval):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	dec := json.NewDecoder(conn)
+	for {
+		var ctl RelayControl
+		if err := dec.Decode(&ctl); err != nil {
+			select {
+			case e := <-sendErr:
+				return false, e
+			default:
+				return false, err
+			}
+		}
+		for _, s := range ctl.Sessions {
+			r.SetSessionToken(s.SessionID, s.Token)
+		}
+		if ctl.Shutdown {
+			return true, nil
+		}
+	}
+}
+
+const (
+	relayMinUsers     = 4
+	relayIdleShutdown = 30 * time.Minute
+	// relayStartRetry is how long a started region may take to register before it is started again.
+	relayStartRetry   = 10 * time.Minute
+	relayStartTimeout = 5 * time.Minute
+)
+
+// relayRegionGroup is the area of each "<region>=<ms>" key players report; players whose best
+// regions are in different groups may play across a long route.
+var relayRegionGroup = map[string]string{
+	"asia-east1":              "asia-east",
+	"asia-east2":              "asia-east",
+	"asia-northeast1":         "asia-northeast",
+	"asia-northeast2":         "asia-northeast",
+	"asia-northeast3":         "asia-northeast",
+	"asia-southeast1":         "asia-southeast",
+	"australia-southeast1":    "australia-southeast",
+	"europe-west2":            "europe-west",
+	"northamerica-northeast1": "northamerica-northeast",
+	"southamerica-east1":      "southamerica-east",
+	"us-central1":             "us-central",
+	"us-east4":                "us-east",
+	"us-west2":                "us-west",
+}
+
+// RelayProvisioner starts a regional relay (a VM, a container) in a region; the relay then
+// registers through the relay control address. StartRelay must not block the lobby.
+type RelayProvisioner interface {
+	StartRelay(region string)
+}
+
+// CommandProvisioner runs Command with the region as its only argument.
+type CommandProvisioner struct {
+	Command string
+}
+
+func (c CommandProvisioner) StartRelay(region string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), relayStartTimeout)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, c.Command, region).CombinedOutput()
+		if err != nil {
+			zlog.Error("relay start failed", zap.Any("region", region), zap.Error(err), zap.String("output", string(out)))
+			return
+		}
+		zlog.Info("relay start", zap.Any("region", region), zap.String("output", string(out)))
+	}()
+}
+
+type relayProvisioning struct {
+	regions    []string
+	prov       RelayProvisioner
+	lastNeeded map[string]time.Time
+	lastStart  map[string]time.Time
+}
+
+// SetRelayProvisioning makes the lobby start a relay in each of regions while relays may be
+// needed, and shut down a relay of these regions once unneeded for relayIdleShutdown with no
+// sessions. Call before Serve.
+func (a *App) SetRelayProvisioning(regions []string, prov RelayProvisioner) {
+	a.relayProv = &relayProvisioning{
+		regions:    regions,
+		prov:       prov,
+		lastNeeded: map[string]time.Time{},
+		lastStart:  map[string]time.Time{},
+	}
+}
+
+// relayNeeded reports whether a battle's worth of relay-capable players is online from at
+// least two region groups.
+func (a *App) relayNeeded() bool {
+	users := 0
+	first, mixed := "", false
+	for _, p := range a.users {
+		if p.PlatformInfo["relay_server"] != "1" {
+			continue
+		}
+		users++
+		g := relayRegionGroup[bestRelayRegion(p.PlatformInfo)]
+		if g == "" {
+			continue
+		}
+		if first == "" {
+			first = g
+		} else if g != first {
+			mixed = true
+		}
+	}
+	return users >= relayMinUsers && mixed
+}
+
+func bestRelayRegion(info map[string]string) string {
+	best, bestMs := "", 0
+	for region := range relayRegionGroup {
+		ms, err := strconv.Atoi(info[region])
+		if err != nil || ms <= 0 {
+			continue
+		}
+		if best == "" || ms < bestMs || ms == bestMs && region < best {
+			best, bestMs = region, ms
+		}
+	}
+	return best
+}
+
+func (a *App) updateRelays(now time.Time) {
+	rp := a.relayProv
+	if rp == nil {
+		return
+	}
+	regionalRelays.Lock()
+	running := map[string]bool{}
+	for _, r := range regionalRelays.byAddr {
+		running[r.Region] = true
+	}
+	regionalRelays.Unlock()
+
+	needed := a.relayNeeded()
+	for _, region := range rp.regions {
+		if needed {
+			rp.lastNeeded[region] = now
+		} else if _, ok := rp.lastNeeded[region]; !ok && running[region] {
+			// a relay already running when the lobby started gets the full grace period
+			rp.lastNeeded[region] = now
+		}
+		if needed && !running[region] && now.Sub(rp.lastStart[region]) >= relayStartRetry {
+			rp.lastStart[region] = now
+			zlog.Info("relay needed, starting one", zap.Any("region", region))
+			rp.prov.StartRelay(region)
+		}
+	}
+
+	regionalRelays.Lock()
+	defer regionalRelays.Unlock()
+	for _, r := range regionalRelays.byAddr {
+		last, ok := rp.lastNeeded[r.Region]
+		if !ok || now.Sub(last) < relayIdleShutdown || r.activeSessions != 0 || r.shutdown == nil {
+			continue
+		}
+		zlog.Info("relay no longer needed, shutting it down", zap.String("region", r.Region), zap.String("public", r.PublicAddr))
+		r.shutdown()
+		r.shutdown = nil
+	}
 }
