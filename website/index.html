@@ -234,27 +234,36 @@ for (var i = 0, len = iframes.length; i < len; i++){
   loadVideo(iframes[i]);
 }
 
+// Servers before snake_case keys send UserID, Name, UDP, Platform.
+function statusUser(u) {
+  return {
+    user_id: u.user_id || u.UserID || "",
+    name: u.name || u.Name || "",
+    udp: u.udp || u.UDP || "",
+    platform: u.platform || u.Platform || ""
+  }
+}
 function updateOnlineUser(t, u) {
   while(0 < t.rows.length) t.deleteRow(-1)
   if (!u) return
   u.sort(function(a, b) {
-    if (a.UserID < b.UserID) return -1;
-    if (a.UserID > b.UserID) return 1;
+    if (a.user_id < b.user_id) return -1;
+    if (a.user_id > b.user_id) return 1;
     return 0;
   })
   for (var i = 0; i < u.length; i++) {
     var r = t.insertRow(-1);
     var uid = r.insertCell(0)
-    uid.innerHTML = "【" + u[i].UserID+ "】"
+    uid.innerHTML = "【" + u[i].user_id + "】"
     uid.className = "z-user-id"
     var uname = r.insertCell(1)
-    uname.innerHTML = u[i].Name
+    uname.innerHTML = u[i].name
     uname.className = "z-user-name"
-    r.insertCell(2).innerHTML = u[i].UDP ? '<span class="label label-primary">UDP</span>' : ""
+    r.insertCell(2).innerHTML = u[i].udp ? '<span class="label label-primary">UDP</span>' : ""
   }
 }
 function isConsole(u) {
-  return !u.Platform || u.Platform == "console"
+  return !u.platform || u.platform == "console"
 }
 function updatePlatform(prefix, lobbyUsers, battleUsers) {
   document.getElementById(prefix + "-lobby-user-count").innerHTML = "ロビー " + lobbyUsers.length + " 人"
@@ -264,9 +273,9 @@ function updatePlatform(prefix, lobbyUsers, battleUsers) {
 }
 function pollStat(){
   $.ajax({url: 'https://lbs.zdxsv.net:8443/lbs/status', type: 'GET', dataType: 'json'}).done(function(res) {
-    document.getElementById("stat-updated").innerHTML = res.NowDate + "現在"
-    var lobbyUsers = res.LobbyUsers || []
-    var battleUsers = res.BattleUsers || []
+    document.getElementById("stat-updated").innerHTML = (res.now_date || res.NowDate) + "現在"
+    var lobbyUsers = (res.lobby_users || res.LobbyUsers || []).map(statusUser)
+    var battleUsers = (res.battle_users || res.BattleUsers || []).map(statusUser)
     updatePlatform("ps2", lobbyUsers.filter(isConsole), battleUsers.filter(isConsole))
     updatePlatform("emu", lobbyUsers.filter(function(u) { return !isConsole(u) }), battleUsers.filter(function(u) { return !isConsole(u) }))
   });

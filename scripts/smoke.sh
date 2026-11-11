@@ -73,7 +73,7 @@ check "lobby on tls 8220 refuses a chain without the pin" sh -c "! \"$bin\" -pro
 
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
-check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu\"'"
+check "lobby status api" sh -c "echo '$stat' | grep -q '\"platforms\":{.*\"console\".*\"emu\"'"
 
 # zproxy (built from src/zproxy, or $ZPROXY_BIN) against this server: STUN gives it a public
 # address, it registers, and a PS2 connection makes it ask for battle info. No user is logged
