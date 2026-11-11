@@ -104,12 +104,6 @@ func RequestFirstData(p *AppPeer) {
 }
 
 var _ = register(0x6103, "FirstData", func(p *AppPeer, _ *Message) {
-	// r := m.Reader()
-	// TODO:レスポンスの詳細を調査する
-	if p.LoginKey == "" {
-		zlog.Error("loginKey not set")
-		return
-	}
 	p.app.OnFirstData(p)
 })
 
