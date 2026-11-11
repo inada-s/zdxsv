@@ -344,6 +344,7 @@ func NoticeRoomUserCount(p *LbsPeer, roomID, count uint16) {
 	w := n.Writer()
 	w.Write16(roomID)
 	w.Write16(count)
+	w.Write16(0)
 	p.SendMessage(n)
 }
 
