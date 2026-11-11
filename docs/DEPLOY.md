@@ -15,8 +15,8 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 | 53 | udp | DNS | public | PS2 |
 | 443 | tcp | DNAS, login pages | public | PS2 |
 | 8200 | tcp | lobby | public | PS2 |
-| 8201 | tcp, udp | lobby RPC, STUN | public | zproxy |
-| 8203 | tcp | HTTP API, live spectating (behind the reverse proxy) | internal | — |
+| 8201 | udp | STUN | public | zproxy |
+| 8203 | tcp | HTTP API, live spectating, zproxy API (behind the reverse proxy) | internal | — |
 | 8210 | tcp, udp | battle | public | PS2, zproxy |
 | 8220 | tcp | TLS lobby ([TLS.md](TLS.md)) | public | emulator |
 | 8221 | udp | STUN | public | emulator |
@@ -24,6 +24,10 @@ The whole server (DNS, DNAS with the login pages, lobby, battle) is one binary a
 | 8223 | udp | GGPO relay | public | emulator |
 
 Internal ports listen on `127.0.0.1` only (`ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203`); open only the public ones.
+The reverse proxy (`infra/caddy/zdxsv.caddy`) serves `/lbs/*` at `https://lbs.zdxsv.net:8443`, zproxy's
+default `-lobbyapi`, and must set `X-Forwarded-For` to the client's IP (Caddy's default): the lobby finds
+a zproxy's user by it. zproxy's STUN server is `ZDXSV_LOBBY_ZPROXY_STUN_ADDR` (default `:8201`),
+its `-stunaddr`.
 If systemd-resolved holds port 53, set `DNSStubListener=no` in `/etc/systemd/resolved.conf`.
 
 ## Configuration
@@ -34,7 +38,6 @@ If systemd-resolved holds port 53, set `DNSStubListener=no` in `/etc/systemd/res
 ZDXSV_DNAS_PUBLIC_ADDR=203.0.113.10
 ZDXSV_LOGIN_PUBLIC_ADDR=203.0.113.10
 ZDXSV_LOBBY_ADDR=:8200
-ZDXSV_LOBBY_RPC_ADDR=:8201
 ZDXSV_LOBBY_PUBLIC_ADDR=203.0.113.10:8200
 ZDXSV_BATTLE_ADDR=:8210
 ZDXSV_BATTLE_PUBLIC_ADDR=203.0.113.10:8210
@@ -98,9 +101,8 @@ Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
 
 ## Check
 
-`make smoke` runs the server on a throwaway database and checks every port, DNAS, the lobby RPC and the API.
-On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere,
-`zdxsv lobbyrpccheck <host>:8201` the lobby RPC.
+`make smoke` runs the server on a throwaway database and checks every port, DNAS and the API (incl. zproxy's).
+On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere.
 
 ## Releases
 

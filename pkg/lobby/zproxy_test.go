@@ -1,82 +1,68 @@
 package lobby
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
-	"sync"
 	"testing"
-	"time"
 
-	"github.com/valyala/gorpc"
 	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/message"
 )
 
-// pipeListener hands the lobby RPC server the server ends of in-memory connections.
-type pipeListener struct {
-	conns chan net.Conn
-	done  chan struct{}
-	once  sync.Once
+// zproxyAPI is the lobby API as zproxy reaches it: through the reverse proxy on the lobby
+// host, from ip.
+type zproxyAPI struct {
+	h  *APIHandler
+	ip string
 }
 
-func (l *pipeListener) Init(string) error { return nil }
-
-func (l *pipeListener) Accept() (io.ReadWriteCloser, string, error) {
-	select {
-	case c := <-l.conns:
-		return c, c.RemoteAddr().String(), nil
-	case <-l.done:
-		return nil, "", net.ErrClosed
-	}
+func newZproxyAPI(app *App) *zproxyAPI {
+	return &zproxyAPI{h: &APIHandler{RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}, ip: "127.0.0.1"}
 }
 
-func (l *pipeListener) Close() error {
-	l.once.Do(func() { close(l.done) })
-	return nil
-}
-
-func (l *pipeListener) ListenAddr() net.Addr { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)} }
-
-// startLobbyRPC runs the lobby RPC server zproxy talks to and returns a client of it.
-func startLobbyRPC(t *testing.T, app *App) *gorpc.Client {
+func (z *zproxyAPI) call(t *testing.T, path string, req, res any) {
 	t.Helper()
-	l := &pipeListener{conns: make(chan net.Conn), done: make(chan struct{})}
-	s := newLobbyRPCServer(app, "")
-	s.Listener = l
-	if err := s.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(s.Stop)
-	c := &gorpc.Client{Dial: func(string) (io.ReadWriteCloser, error) {
-		sv, cl := newPipe(t)
-		select {
-		case l.conns <- sv:
-			return cl, nil
-		case <-l.done:
-			return nil, net.ErrClosed
-		}
-	}}
-	c.Start()
-	t.Cleanup(c.Stop)
-	return c
-}
-
-func call(t *testing.T, c *gorpc.Client, req interface{}) interface{} {
-	t.Helper()
-	res, err := c.CallTimeout(req, 5*time.Second)
+	body, err := json.Marshal(req)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	r.RemoteAddr = "127.0.0.1:50000"
+	r.Header.Set("X-Forwarded-For", z.ip)
+	w := httptest.NewRecorder()
+	z.h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), res); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (z *zproxyAPI) register(t *testing.T, req *lobbyapi.RegisterProxyRequest) *lobbyapi.RegisterProxyResponse {
+	t.Helper()
+	res := new(lobbyapi.RegisterProxyResponse)
+	z.call(t, lobbyapi.RegisterProxyPath, req, res)
 	return res
 }
 
-func findUser(users []lobbyrpc.User, userID string) *lobbyrpc.User {
+func (z *zproxyAPI) battleInfo(t *testing.T, sessionID string) *lobbyapi.BattleInfoResponse {
+	t.Helper()
+	res := new(lobbyapi.BattleInfoResponse)
+	z.call(t, lobbyapi.BattleInfoPath, &lobbyapi.BattleInfoRequest{SessionID: sessionID}, res)
+	return res
+}
+
+func findUser(users []lobbyapi.User, userID string) *lobbyapi.User {
 	for i := range users {
 		if users[i].UserID == userID {
 			return &users[i]
@@ -85,15 +71,15 @@ func findUser(users []lobbyrpc.User, userID string) *lobbyrpc.User {
 	return nil
 }
 
-// TestLobbyRPCProxyFlow is what zproxy does: register while its user is in a
+// TestZproxyAPIFlow is what zproxy does: register while its user is in a
 // lobby, then ask for the battle once the user went to the battle server.
-func TestLobbyRPCProxyFlow(t *testing.T) {
+func TestZproxyAPIFlow(t *testing.T) {
 	conn := dbtest.Use(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
 	addr, app := startLobbyApp(t, battle.NewLogic())
-	rpcc := startLobbyRPC(t, app)
+	api := newZproxyAPI(app)
 
 	type player struct {
 		c      *testClient
@@ -112,7 +98,7 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	}
 	p0, p1 := players[0], players[1]
 
-	good := lobbyrpc.RegisterProxyRequest{
+	good := lobbyapi.RegisterProxyRequest{
 		CurrentVersion: requiredVersion,
 		UserID:         p0.userID,
 		LocalIP:        net.IPv4(192, 168, 0, 10),
@@ -121,25 +107,25 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	}
 	rejected := []struct {
 		name string
-		edit func(*lobbyrpc.RegisterProxyRequest)
+		edit func(*lobbyapi.RegisterProxyRequest)
 		msg  string
 	}{
-		{"old version", func(r *lobbyrpc.RegisterProxyRequest) { r.CurrentVersion = requiredVersion - 1 }, "プロキシソフトのバージョンが古いです"},
-		{"no UDP address", func(r *lobbyrpc.RegisterProxyRequest) { r.UDPAddrs = nil }, "UDPアドレスが取得できていません"},
-		{"no local IP", func(r *lobbyrpc.RegisterProxyRequest) { r.LocalIP = nil }, "無効なローカルIPアドレスです"},
-		{"IPv6 local IP", func(r *lobbyrpc.RegisterProxyRequest) { r.LocalIP = net.ParseIP("fe80::1") }, "無効なローカルIPアドレスです"},
-		{"user not in lobby", func(r *lobbyrpc.RegisterProxyRequest) { r.UserID = "NOUSER" }, "ロビーにユーザが見つかりません"},
+		{"old version", func(r *lobbyapi.RegisterProxyRequest) { r.CurrentVersion = requiredVersion - 1 }, "プロキシソフトのバージョンが古いです"},
+		{"no UDP address", func(r *lobbyapi.RegisterProxyRequest) { r.UDPAddrs = nil }, "UDPアドレスが取得できていません"},
+		{"no local IP", func(r *lobbyapi.RegisterProxyRequest) { r.LocalIP = nil }, "無効なローカルIPアドレスです"},
+		{"IPv6 local IP", func(r *lobbyapi.RegisterProxyRequest) { r.LocalIP = net.ParseIP("fe80::1") }, "無効なローカルIPアドレスです"},
+		{"user not in lobby", func(r *lobbyapi.RegisterProxyRequest) { r.UserID = "NOUSER" }, "ロビーにユーザが見つかりません"},
 	}
 	for _, c := range rejected {
 		req := good
 		c.edit(&req)
-		res := call(t, rpcc, &req).(*lobbyrpc.RegisterProxyResponse)
+		res := api.register(t, &req)
 		if res.Result || res.Message != c.msg || res.SessionID != "" {
 			t.Errorf("%s: %+v", c.name, res)
 		}
 	}
 
-	res := call(t, rpcc, &good).(*lobbyrpc.RegisterProxyResponse)
+	res := api.register(t, &good)
 	if !res.Result || res.UserID != p0.userID || res.SessionID != p0.ac.SessionID || len(res.LobbyUsers) != 2 {
 		t.Fatalf("register: %+v", res)
 	}
@@ -152,15 +138,28 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	// From the lobby host, _AUTO_ takes any user with the same IP.
 	auto := good
 	auto.UserID = "_AUTO_"
-	if res := call(t, rpcc, &auto).(*lobbyrpc.RegisterProxyResponse); !res.Result || (res.UserID != p0.userID && res.UserID != p1.userID) {
+	if res := api.register(t, &auto); !res.Result || (res.UserID != p0.userID && res.UserID != p1.userID) {
 		t.Errorf("register _AUTO_: %+v", res)
 	}
+	far := newZproxyAPI(app)
+	for _, c := range []struct{ ip, userID, msg string }{
+		{"203.0.113.9", "_AUTO_", "ロビーにユーザが見つかりません"},
+		{"203.0.113.9", p0.userID, "ロビーにユーザが見つかりません"},
+		{"2001:db8::1", "_AUTO_", "無効なグローバルIPアドレスです"},
+	} {
+		far.ip = c.ip
+		req := good
+		req.UserID = c.userID
+		if res := far.register(t, &req); res.Result || res.Message != c.msg {
+			t.Errorf("register %s from %s: %+v", c.userID, c.ip, res)
+		}
+	}
 
-	st := call(t, rpcc, &lobbyrpc.StatusRequest{}).(*lobbyrpc.StatusResponse)
+	st := app.Status()
 	if len(st.LobbyUsers) != 2 || len(st.Battles) != 0 {
 		t.Errorf("status in lobby: %+v", st)
 	}
-	if res := call(t, rpcc, &lobbyrpc.BattleInfoRequest{SessionID: p0.ac.SessionID}).(*lobbyrpc.BattleInfoResponse); res.Result {
+	if res := api.battleInfo(t, p0.ac.SessionID); res.Result {
 		t.Errorf("battle info before the battle: %+v", res)
 	}
 
@@ -175,7 +174,7 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	}
 
 	for _, p := range players {
-		res := call(t, rpcc, &lobbyrpc.BattleInfoRequest{SessionID: p.ac.SessionID}).(*lobbyrpc.BattleInfoResponse)
+		res := api.battleInfo(t, p.ac.SessionID)
 		if !res.Result || !res.BattleIP.Equal(net.IPv4(127, 0, 0, 2)) || res.Port != 8210 || res.IsTest || len(res.Users) != 2 {
 			t.Fatalf("battle info: %+v", res)
 		}
@@ -184,12 +183,12 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 		}
 	}
 	for _, sid := range []string{"", "999999999"} {
-		if res := call(t, rpcc, &lobbyrpc.BattleInfoRequest{SessionID: sid}).(*lobbyrpc.BattleInfoResponse); res.Result {
+		if res := api.battleInfo(t, sid); res.Result {
 			t.Errorf("battle info for session %q: %+v", sid, res)
 		}
 	}
 
-	st = call(t, rpcc, &lobbyrpc.StatusRequest{}).(*lobbyrpc.StatusResponse)
+	st = app.Status()
 	if len(st.LobbyUsers) != 0 || len(st.Battles) != 1 {
 		t.Fatalf("status in battle: %+v", st)
 	}
@@ -198,7 +197,7 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	}
 
 	// The user left the lobby for the battle.
-	if res := call(t, rpcc, &good).(*lobbyrpc.RegisterProxyResponse); res.Result {
+	if res := api.register(t, &good); res.Result {
 		t.Errorf("register after GotoBattle: %+v", res)
 	}
 }

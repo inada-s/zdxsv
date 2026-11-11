@@ -64,7 +64,6 @@ func startLobbyApp(t *testing.T, b *battle.Logic) (*testLobby, *App) {
 func startLobbyAppWith(t *testing.T, b *battle.Logic, setup func(*App)) (*testLobby, *App) {
 	t.Helper()
 	config.Conf.Battle.PublicAddr = "127.0.0.2:8210"
-	config.Conf.Lobby.RPCAddr = "127.0.0.1:0"
 
 	app := NewApp()
 	app.SetBattleServer(b)

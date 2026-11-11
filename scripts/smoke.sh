@@ -17,7 +17,7 @@ if [ ! -f .env ]; then
 ZDXSV_DNAS_PUBLIC_ADDR=$IP
 ZDXSV_LOGIN_PUBLIC_ADDR=$IP
 ZDXSV_LOBBY_ADDR=:8200
-ZDXSV_LOBBY_RPC_ADDR=:8201
+ZDXSV_LOBBY_ZPROXY_STUN_ADDR=:8201
 ZDXSV_LOBBY_PUBLIC_ADDR=$IP:8200
 ZDXSV_BATTLE_ADDR=:8210
 ZDXSV_BATTLE_PUBLIC_ADDR=$IP:8210
@@ -62,11 +62,10 @@ check "running" kill -0 $pid
 for h in gate1.jp.dnas.playstation.org www01.kddi-mmbb.jp ca1202.mmcp6 ca1203.mmcp6; do
 	check "dns :$dns_port $h -> $IP" sh -c "[ \"\$(dig +short +time=2 +tries=3 -p $dns_port @127.0.0.1 $h)\" = $IP ]"
 done
-for p in 443 8200 8201 8203 8210; do
+for p in 443 8200 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
 check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.0.0.1:443
-check "lobby rpc on 8201 (status)" "$bin" -profile=0 lobbyrpccheck 127.0.0.1:8201
 check "lobby on tls 8220 (CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$ca_pin"
 check "lobby on tls 8220 (server key pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$server_pin"
 check "lobby on tls 8220 (backup CA pin, CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$backup_pin" "$ca_pin"
@@ -75,6 +74,12 @@ check "lobby on tls 8220 refuses a chain without the pin" sh -c "! \"$bin\" -pro
 stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
 check "lobby status api" sh -c "echo '$stat' | grep -q '\"Platforms\":{.*\"console\".*\"emu\"'"
+reg=$(curl -sf -X POST -d '{"CurrentVersion":1005,"UserID":"_AUTO_","LocalIP":"192.168.0.10","UDPAddrs":["203.0.113.1:8250"]}' http://127.0.0.1:8203/lbs/zproxy/register)
+echo "lbs/zproxy/register: $reg"
+check "zproxy register api" sh -c "echo '$reg' | grep -q '\"Result\":false,\"Message\":\"[^\"]'"
+info=$(curl -sf -X POST -d '{"SessionID":"1"}' http://127.0.0.1:8203/lbs/zproxy/battle_info)
+echo "lbs/zproxy/battle_info: $info"
+check "zproxy battle info api" sh -c "echo '$info' | grep -q '\"Result\":false,\"Message\":\"[^\"]'"
 
 if [ $fails -ne 0 ]; then
 	tail -40 smoke.log

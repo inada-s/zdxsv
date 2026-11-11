@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/db"
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/login"
 	"zdxsv/pkg/zlog"
@@ -39,6 +40,8 @@ const (
 //	POST /discord/interactions: Discord slash commands (Discord).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
 //	  play_count counts these. 200 even when the count fails, 400 without battle_code.
+//	POST /lbs/zproxy/register, /lbs/zproxy/battle_info: zproxy's calls, JSON in and out
+//	  (lobbyapi).
 type APIHandler struct {
 	// FindReplay searches (db.DefaultDB.FindReplay when nil).
 	FindReplay func(q *db.FindReplayQuery) ([]*db.FoundReplay, error)
@@ -47,7 +50,7 @@ type APIHandler struct {
 	// LiveList lists the live battles (Live.List when nil).
 	LiveList func() []*LiveBattle
 	// Status reports the lobby's users and battles (an empty lobby when nil).
-	Status func() *lobbyrpc.StatusResponse
+	Status func() *lobbyapi.StatusResponse
 	// ReplayStore keeps /lbs/replay_upload's replays (upload off when nil); a DirReplayStore's
 	// files are served at /lbs/replays/.
 	ReplayStore ReplayStore
@@ -59,6 +62,10 @@ type APIHandler struct {
 	Auth http.Handler
 	// Discord serves POST /discord/interactions (chatops.Discord), off when nil.
 	Discord http.Handler
+	// RegisterProxy and BattleInfo answer zproxy (App's methods), off when nil. RegisterProxy
+	// gets the client's IP.
+	RegisterProxy func(ip string, req *lobbyapi.RegisterProxyRequest) *lobbyapi.RegisterProxyResponse
+	BattleInfo    func(req *lobbyapi.BattleInfoRequest) *lobbyapi.BattleInfoResponse
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -76,6 +83,14 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/lbs/live_stream" {
 		h.serveLiveStream(w, r)
+		return
+	}
+	if h.RegisterProxy != nil && r.URL.Path == lobbyapi.RegisterProxyPath {
+		serveJSON(w, r, func(req *lobbyapi.RegisterProxyRequest) any { return h.RegisterProxy(requestIP(r), req) })
+		return
+	}
+	if h.BattleInfo != nil && r.URL.Path == lobbyapi.BattleInfoPath {
+		serveJSON(w, r, func(req *lobbyapi.BattleInfoRequest) any { return h.BattleInfo(req) })
 		return
 	}
 	if r.URL.Path == "/lbs/live" {
@@ -197,7 +212,7 @@ func (h *APIHandler) serveStatus(w http.ResponseWriter) {
 	defer h.statusMu.Unlock()
 	now := time.Now()
 	if h.statusBody == nil || now.Sub(h.statusAt) >= statusMaxAge {
-		res := &lobbyrpc.StatusResponse{}
+		res := &lobbyapi.StatusResponse{}
 		if h.Status != nil {
 			res = h.Status()
 		}
@@ -260,7 +275,7 @@ type Status struct {
 	Platforms map[string]*PlatformCount
 }
 
-func newStatusUser(u lobbyrpc.User) StatusUser {
+func newStatusUser(u lobbyapi.User) StatusUser {
 	user := StatusUser{
 		UserID:   u.UserID,
 		Name:     u.Name,
@@ -277,7 +292,7 @@ func newStatusUser(u lobbyrpc.User) StatusUser {
 }
 
 // MakeStatus turns a lobby status into the /lbs/status body; a user counts once.
-func MakeStatus(res *lobbyrpc.StatusResponse, now time.Time) Status {
+func MakeStatus(res *lobbyapi.StatusResponse, now time.Time) Status {
 	s := Status{
 		NowDate:     now.In(jst).Format(statusTimeFormat),
 		LobbyUsers:  []StatusUser{},
@@ -319,4 +334,42 @@ func MakeStatus(res *lobbyrpc.StatusResponse, now time.Time) Status {
 	s.LobbyUserCount = len(s.LobbyUsers)
 	s.BattleUserCount = len(s.BattleUsers)
 	return s
+}
+
+const maxZproxyRequestBytes = 64 << 10
+
+func serveJSON[T any](w http.ResponseWriter, r *http.Request, answer func(req *T) any) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+	req := new(T)
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxZproxyRequestBytes)).Decode(req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(answer(req)); err != nil {
+		zlog.Warn("JSON encode failure", zap.String("path", r.URL.Path), zap.Error(err))
+	}
+}
+
+// requestIP is the client's IP. The API listens behind a reverse proxy on this host:
+// a request from loopback with X-Forwarded-For comes from its last hop, the one the
+// proxy appended.
+func requestIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+		return host
+	}
+	fwd := r.Header.Values("X-Forwarded-For")
+	if len(fwd) == 0 {
+		return host
+	}
+	hops := strings.Split(fwd[len(fwd)-1], ",")
+	return strings.TrimSpace(hops[len(hops)-1])
 }

@@ -14,7 +14,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/tommy351/zap-stackdriver v0.1.4
-	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774
 	go.uber.org/zap v1.27.1
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
