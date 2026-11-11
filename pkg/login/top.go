@@ -9,10 +9,8 @@ import (
 	"strconv"
 	"text/template"
 
-	"zdxsv/pkg/assets"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
-	"zdxsv/pkg/session"
 
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"
@@ -29,7 +27,7 @@ func Prepare() {
 	var err error
 	var bin []byte
 
-	bin, err = assets.Asset("assets/top.tpl")
+	bin, err = Asset("assets/top.tpl")
 	if err != nil {
 		zlog.Fatal("login template", zap.Error(err))
 	}
@@ -39,7 +37,7 @@ func Prepare() {
 		zlog.Fatal("login template", zap.Error(err))
 	}
 
-	bin, err = assets.Asset("assets/login.tpl")
+	bin, err = Asset("assets/login.tpl")
 	if err != nil {
 		zlog.Fatal("login template", zap.Error(err))
 	}
@@ -49,7 +47,7 @@ func Prepare() {
 		zlog.Fatal("login template", zap.Error(err))
 	}
 
-	bin, err = assets.Asset("assets/message.tpl")
+	bin, err = Asset("assets/message.tpl")
 	if err != nil {
 		zlog.Fatal("login template", zap.Error(err))
 	}
@@ -112,7 +110,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	p.ServerVersion = "1.0"
 	p.LoginKey = a.LoginKey
-	p.SessionID, _ = session.Default.Start(a.LoginKey, false)
+	p.SessionID, _ = Sessions.Start(a.LoginKey, false)
 	p.ServerAddr = config.Conf.Lobby.PublicAddr
 
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -210,7 +208,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The emulator gets a key of its session, never the account's own.
-	sessionID, gameKey := session.Default.Start(a.LoginKey, true)
+	sessionID, gameKey := Sessions.Start(a.LoginKey, true)
 	w.Header().Set("Content-Type", "application/json")
 	res := APILoginResponse{
 		LoginKey:  gameKey,

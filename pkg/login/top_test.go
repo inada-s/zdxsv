@@ -12,7 +12,6 @@ import (
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/session"
 
 	"golang.org/x/text/encoding/japanese"
 )
@@ -103,7 +102,7 @@ func TestRegisterThenLogin(t *testing.T) {
 		if m == nil {
 			t.Fatalf("login page has no session id: %q", body)
 		}
-		if _, ok := session.Default.Use(m[1], key); !ok {
+		if _, ok := Sessions.Use(m[1], key); !ok {
 			t.Fatalf("session %s not stored", m[1])
 		}
 		return m[1]
@@ -118,7 +117,7 @@ func TestRegisterThenLogin(t *testing.T) {
 	if second := sessionOf(postLogin(t, ts, key)); second == first {
 		t.Errorf("second login reused session id %s", first)
 	}
-	if _, ok := session.Default.Use(first, key); !ok {
+	if _, ok := Sessions.Use(first, key); !ok {
 		t.Error("second login ended the first session")
 	}
 }
