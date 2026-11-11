@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/blang/semver"
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
-	"zdxsv/pkg/zlog"
-
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/session"
+	"zdxsv/pkg/zlog"
 )
 
 // ===========================
@@ -1203,4 +1205,136 @@ func rankingPage(r []*db.RankingRecord, page int, size int) ([]*db.RankingRecord
 		maxPage = int(math.Ceil(n/float64(size))) - 1
 	}
 	return r[lb:ub], maxPage
+}
+
+// minPcsx2VersionKey: m_server_setting key of the lowest pcsx2 release (zdxsv-X.Y.Z) that may log in.
+// Set, it also refuses emulators that send no release version (builds from source, dev builds).
+// Read at each login, so a change in the db applies at once.
+const minPcsx2VersionKey = "min_pcsx2_version"
+
+// pcsx2AllowKey: m_server_setting key of login keys and machine ids, separated by spaces or commas,
+// that skip the version check (development builds on a gated server).
+const pcsx2AllowKey = "pcsx2_allow"
+
+func parsePcsx2Version(v string) (semver.Version, error) {
+	return semver.Parse(strings.TrimPrefix(v, "zdxsv-"))
+}
+
+func pcsx2Allowed(loginKey, machineID string) bool {
+	list, err := db.DefaultDB.GetServerSetting(pcsx2AllowKey)
+	if err != nil {
+		zlog.Warn("GetServerSetting failure", zap.Any("key", pcsx2AllowKey), zap.Error(err))
+		return false
+	}
+	for _, v := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
+		if v == loginKey || (machineID != "" && v == machineID) {
+			return true
+		}
+	}
+	return false
+}
+
+// pcsx2NeedsUpdate: with a minimum set, an emulator must send a release version (platform info "pcsx2",
+// zdxsv-X.Y.Z without a pre-release part) not below it. Consoles and an unset minimum: false.
+func pcsx2NeedsUpdate(info map[string]string, loginKey, machineID string) bool {
+	if info["emulator"] == "" {
+		return false
+	}
+	minVersion, err := db.DefaultDB.GetServerSetting(minPcsx2VersionKey)
+	if err != nil {
+		zlog.Warn("GetServerSetting failure", zap.Any("key", minPcsx2VersionKey), zap.Error(err))
+		return false
+	}
+	if minVersion == "" {
+		return false
+	}
+	min, err := parsePcsx2Version(minVersion)
+	if err != nil {
+		zlog.Warn("invalid server setting", zap.Any("key", minPcsx2VersionKey), zap.Any("value", minVersion), zap.Error(err))
+		return false
+	}
+	v, err := parsePcsx2Version(info["pcsx2"])
+	if err == nil && len(v.Pre) == 0 && v.GE(min) {
+		return false
+	}
+	return !pcsx2Allowed(loginKey, machineID)
+}
+
+func lobbySetting(platform string, lobbyID uint16) *db.LobbySetting {
+	s, err := db.DefaultDB.GetLobbySetting(platform, int(lobbyID))
+	if err != nil {
+		zlog.Warn("GetLobbySetting failure", zap.Any("platform", platform), zap.Any("lobby_id", lobbyID), zap.Error(err))
+	}
+	if s == nil {
+		return &db.LobbySetting{Platform: platform, No: int(lobbyID)}
+	}
+	return s
+}
+
+// lobbyBattleRule is the m_rule of a battle started in a lobby; nil for the default rule.
+func lobbyBattleRule(s *db.LobbySetting) *model.Rule {
+	if s.RuleID == "" {
+		return nil
+	}
+	r, err := db.DefaultDB.GetRule(s.RuleID)
+	if err != nil || r == nil {
+		zlog.Warn("m_lobby_setting rule_id", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("rule_id", s.RuleID), zap.Any("rule", r), zap.Error(err))
+		return nil
+	}
+	rule := model.NewRule()
+	for k, v := range r.Values() {
+		if !rule.SetByKey(k, *v) {
+			zlog.Warn("m_rule value out of range", zap.Any("rule_id", r.ID), zap.Any("key", k), zap.Any("value", *v))
+		}
+	}
+	return rule
+}
+
+func lobbyCanStart(l *model.Lobby, s *db.LobbySetting) bool {
+	l.Start = s.Start
+	return l.CanBattleStart()
+}
+
+func lobbyHasHack(s *db.LobbySetting, hack string) bool {
+	return slices.Contains(strings.Split(s.Hack, ","), hack)
+}
+
+func platformHasWideScreen(platform string) bool {
+	for i := 0; i < model.LobbyCount; i++ {
+		if lobbyHasHack(lobbySetting(platform, uint16(i)), model.HackWideScreen) {
+			return true
+		}
+	}
+	return false
+}
+
+const carryCommand = "ｄｃ"
+
+// SetCarryCodeIssuer turns the carry-over chat command on (chat_command lobbies): issue returns a code that
+// links the account to a Discord sign-in in the emulator.
+func (a *App) SetCarryCodeIssuer(issue func(loginKey string) string) {
+	a.carryCode = issue
+}
+
+func lobbyChatCarry(p *AppPeer, str string) bool {
+	if str != carryCommand || p.app.carryCode == nil || p.LoginKey == "" {
+		return false
+	}
+	ban, err := db.DefaultDB.FindBan(p.LoginKey)
+	if err != nil || ban != nil {
+		zlog.Info("carry code refused", zap.String("login_key", p.LoginKey), zap.Error(err))
+		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードを発行できません")
+		return true
+	}
+	if n, err := db.DefaultDB.AccountBattleCount(p.LoginKey); err != nil || n < db.CarryMinBattles {
+		zlog.Info("carry code refused: battles", zap.String("login_key", p.LoginKey), zap.Any("battles", n), zap.Error(err))
+		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードは１００戦以上で発行できます")
+		return true
+	}
+	code := p.app.carryCode(p.LoginKey)
+	zlog.Info("carry code issued", zap.String("login_key", p.LoginKey))
+	NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコード "+code)
+	NoticeChatMessage(p, "SERVER", "＞", "３分以内に一度だけ使えます")
+	NoticeChatMessage(p, "SERVER", "＞", "他人に教えないでください")
+	return true
 }
