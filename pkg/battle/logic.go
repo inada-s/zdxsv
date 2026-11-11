@@ -2,8 +2,6 @@ package battle
 
 import (
 	"fmt"
-	"net/http"
-	"net/rpc"
 	"sync"
 
 	"go.uber.org/zap"
@@ -80,15 +78,6 @@ func NewLogic() *Logic {
 	l.BattleRpc = battlerpc.NewBattleRpc()
 	l.rooms = make([]*Room, battlerpc.MaxRoom)
 	return l
-}
-
-func (m *Logic) ServeRpc(addr string) {
-	rpc.RegisterName("Logic", m.BattleRpc)
-	rpc.HandleHTTP()
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
-		zlog.Error("battle info failure", zap.Error(err))
-	}
 }
 
 func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {

@@ -4,10 +4,6 @@ import "testing"
 
 func TestBattleRpc(t *testing.T) {
 	m := NewBattleRpc()
-	var pong string
-	if m.PingPong(nil, &pong); pong != "Pong" {
-		t.Errorf("PingPong = %q", pong)
-	}
 	users := []User{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
 	var reply int
 	for i := 0; i < MaxRoom+1; i++ {

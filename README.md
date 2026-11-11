@@ -28,7 +28,6 @@ To run a server for others, see [docs/DEPLOY.md](docs/DEPLOY.md).
 - `./bin/zdxsv initdb` initializes database file.
 - `./bin/zdxsv` (no command, or `all`) serves the server in one process (what the systemd service runs): dns, the DNAS front end on 443 (the SSLv2/TLS 1.0 the PS2 speaks) with the login webpage behind it, lobby and battle. The login webpage and the lobby share the login sessions in memory, so they cannot run as separate processes.
 - `./bin/zdxsv dns` serves only the dns server, which is used to direct the game console to your server.
-- `./bin/zdxsv battle` serves battle.
 
 
 ## Run on this machine
