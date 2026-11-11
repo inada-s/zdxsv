@@ -7,8 +7,8 @@
 # zproxy ships in a release only when its code changed since the last release that carried
 # a zproxy archive. Otherwise every player's zproxy would self-update to an identical build
 # (zproxy's self-update takes the newest release that has a zdxsv_<ver>_<os>_<arch>.zip and
-# ignores the others). Compared: the in-repo packages zproxy depends on (go list -deps,
-# tests excluded), go.mod, go.sum and .goreleaser.yml. With no previous zproxy release, or
+# ignores the others). Compared: src/zproxy (its own Go module, tests excluded) and
+# .goreleaser.yml. With no previous zproxy release, or
 # when the release list cannot be read, zproxy is built: that is always safe.
 #
 # Usage: scripts/zproxy-release-needed.sh [prev-tag]   # prev-tag skips the GitHub lookup
@@ -41,16 +41,12 @@ if [ -z "$prev" ]; then
 fi
 git rev-parse -q --verify "$prev^{commit}" > /dev/null || build "$prev is not in this checkout (shallow clone?)"
 
-# zproxy's own package and the in-repo packages it imports, as paths (module zdxsv -> repo root)
-pkgs=$(go list -deps -f '{{if .Module}}{{if eq .Module.Path "zdxsv"}}{{.ImportPath}}{{end}}{{end}}' ./src/zproxy | sed 's#^zdxsv/##')
-[ -n "$pkgs" ] || build "go list found no packages"
-# shellcheck disable=SC2086
-changed=$(git diff --name-only "$prev" HEAD -- $pkgs go.mod go.sum .goreleaser.yml | grep -v '_test\.go$')
+changed=$(git diff --name-only "$prev" HEAD -- src/zproxy .goreleaser.yml | grep -v '_test\.go$')
 if [ -n "$changed" ]; then
 	echo "zproxy: changed since $prev:" >&2
 	echo "$changed" | sed 's/^/  /' >&2
 	build "code changed"
 fi
-echo "zproxy: unchanged since $prev in $(echo $pkgs) go.mod go.sum .goreleaser.yml: not building it" >&2
+echo "zproxy: unchanged since $prev in src/zproxy and .goreleaser.yml: not building it" >&2
 echo "ZDXSV_SKIP_ZPROXY=true"
 echo "ZDXSV_ZPROXY_PREV=$prev"

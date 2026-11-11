@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/battle"
-	"zdxsv/pkg/proto"
+	"zproxy/battle"
+	"zproxy/stun"
 )
 
 func listenUDP(t *testing.T) *net.UDPConn {
@@ -36,7 +36,7 @@ func TestUDPClient(t *testing.T) {
 	}
 	got := make(chan recv, 16)
 	for _, c := range []*UDPClient{a, b} {
-		c.SubscribePacket("pb", func(p *proto.Packet, addr *net.UDPAddr) { got <- recv{p, addr} })
+		c.SubscribePacket("pb", func(p stun.Packet, addr *net.UDPAddr) { got <- recv{p, addr} })
 		c.SubscribeBattle("battle", func(p battle.Packet, addr *net.UDPAddr) { got <- recv{p, addr} })
 	}
 	next := func() recv {
@@ -52,8 +52,8 @@ func TestUDPClient(t *testing.T) {
 
 	a.SendPing("A", bAddr.String())
 	r := next()
-	ping, ok := r.pkt.(*proto.Packet)
-	if !ok || ping.GetType() != proto.MessageType_Ping || ping.GetPingData().GetUserId() != "A" || ping.GetPingData().GetTimestamp() == 0 {
+	ping, ok := r.pkt.(stun.Packet)
+	if !ok || ping.Type != stun.Ping || ping.UserID != "A" || ping.Timestamp == 0 {
 		t.Fatalf("ping = %v", r.pkt)
 	}
 	if !isSameAddr(r.addr, aAddr) {
@@ -62,9 +62,8 @@ func TestUDPClient(t *testing.T) {
 
 	b.SendPong(ping, "B", r.addr)
 	r = next()
-	pong, ok := r.pkt.(*proto.Packet)
-	if !ok || pong.GetType() != proto.MessageType_Pong || pong.GetPongData().GetUserId() != "B" ||
-		pong.GetPongData().GetTimestamp() != ping.GetPingData().GetTimestamp() {
+	pong, ok := r.pkt.(stun.Packet)
+	if !ok || pong.Type != stun.Pong || pong.UserID != "B" || pong.Timestamp != ping.Timestamp {
 		t.Fatalf("pong = %v", r.pkt)
 	}
 

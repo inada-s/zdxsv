@@ -7,9 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"zdxsv/pkg/proto"
-
-	pb "github.com/golang/protobuf/proto"
+	"zproxy/stun"
 )
 
 // fakeStun is the UDP server Setup pings for its public address. It answers
@@ -34,23 +32,15 @@ func startFakeStun(t *testing.T, publicAddr string, silent bool) *fakeStun {
 			if err != nil {
 				return
 			}
-			var req proto.Packet
-			if pb.Unmarshal(buf[:n], &req) != nil || req.GetType() != proto.MessageType_Ping {
+			req, err := stun.Unmarshal(buf[:n])
+			if err != nil || req.Type != stun.Ping {
 				continue
 			}
 			s.pings.Add(1)
 			if silent {
 				continue
 			}
-			data, _ := pb.Marshal(&proto.Packet{
-				Type: proto.MessageType_Pong.Enum(),
-				PongData: &proto.PongMessage{
-					PublicAddr: pb.String(publicAddr),
-					UserId:     pb.String("SERVER"),
-					Timestamp:  pb.Int64(req.GetPingData().GetTimestamp()),
-				},
-			})
-			c.WriteToUDP(data, from)
+			c.WriteToUDP(stun.Marshal(stun.Packet{Type: stun.Pong, PublicAddr: publicAddr, UserID: "SERVER", Timestamp: req.Timestamp}), from)
 		}
 	}()
 	return s
@@ -125,4 +115,15 @@ func listenProbe(t *testing.T) string {
 	}
 	t.Cleanup(func() { ln.Close() })
 	return ln.Addr().String()
+}
+
+// freePort returns a loopback TCP address nothing listens on.
+func freePort(t *testing.T) *net.TCPAddr {
+	t.Helper()
+	ln, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr)
 }

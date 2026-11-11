@@ -14,11 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"zdxsv/pkg/battle"
-	"zdxsv/pkg/lobby/lobbyapi"
-	"zdxsv/pkg/proto"
-
-	pb "github.com/golang/protobuf/proto"
+	"zproxy/battle"
+	"zproxy/stun"
 )
 
 const protocolVersion = 1007
@@ -173,13 +170,12 @@ func (z *Zproxy) Setup() bool {
 	go z.udpcl.ReadLoop(context.Background())
 
 	defer z.udpcl.Unsubscribe("stun")
-	z.udpcl.SubscribePacket("stun", func(pkt *proto.Packet, addr *net.UDPAddr) {
-		switch pkt.GetType() {
-		case proto.MessageType_Pong:
-			pong := pkt.GetPongData()
-			if pong.GetUserId() == "SERVER" {
-				nanoRtt := time.Now().UnixNano() - pong.GetTimestamp()
-				publicAddr = pong.GetPublicAddr()
+	z.udpcl.SubscribePacket("stun", func(pkt stun.Packet, addr *net.UDPAddr) {
+		switch pkt.Type {
+		case stun.Pong:
+			if pkt.UserID == "SERVER" {
+				nanoRtt := time.Now().UnixNano() - pkt.Timestamp
+				publicAddr = pkt.PublicAddr
 				log.Println("Server RTT:", nanoRtt/(1000*1000))
 				stunok.Store(true)
 			}
@@ -196,10 +192,7 @@ func (z *Zproxy) Setup() bool {
 		if stunok.Load().(bool) {
 			break
 		}
-		z.udpcl.SendPacket(&proto.Packet{
-			Type:     proto.MessageType_Ping.Enum(),
-			PingData: &proto.PingMessage{Timestamp: pb.Int64(time.Now().UnixNano())},
-		}, svAddr)
+		z.udpcl.SendPacket(stun.Packet{Type: stun.Ping, Timestamp: time.Now().UnixNano()}, svAddr)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -225,7 +218,7 @@ func (z *Zproxy) PollLobby() error {
 		prevMessage string
 
 		mtx          sync.Mutex
-		lobbyUsers   []lobbyapi.User
+		lobbyUsers   []LobbyUser
 		pongReceived = make(map[string]pingResult)
 	)
 
@@ -243,10 +236,10 @@ func (z *Zproxy) PollLobby() error {
 	}
 
 	defer z.udpcl.Unsubscribe("poll_lobby")
-	z.udpcl.SubscribePacket("poll_lobby", func(pkt *proto.Packet, addr *net.UDPAddr) {
-		switch pkt.GetType() {
-		case proto.MessageType_Ping:
-			userID := pkt.GetPingData().GetUserId()
+	z.udpcl.SubscribePacket("poll_lobby", func(pkt stun.Packet, addr *net.UDPAddr) {
+		switch pkt.Type {
+		case stun.Ping:
+			userID := pkt.UserID
 			log.Println("Ping received from", userID)
 			if conf.Verbose {
 				log.Println(addr)
@@ -259,9 +252,9 @@ func (z *Zproxy) PollLobby() error {
 			if userID != myUserID {
 				z.udpcl.SendPong(pkt, myUserID, addr)
 			}
-		case proto.MessageType_Pong:
-			rttNano := time.Now().UnixNano() - pkt.GetPongData().GetTimestamp()
-			userID := pkt.GetPongData().GetUserId()
+		case stun.Pong:
+			rttNano := time.Now().UnixNano() - pkt.Timestamp
+			userID := pkt.UserID
 			log.Println("Pong received from", userID, "RTT:", rttNano/(1000*1000), "[ms]")
 			if conf.Verbose {
 				log.Println(addr)
@@ -294,7 +287,7 @@ func (z *Zproxy) PollLobby() error {
 		}
 		mtx.Unlock()
 
-		resp, err := registerProxy(&lobbyapi.RegisterProxyRequest{
+		resp, err := registerProxy(&RegisterProxyRequest{
 			CurrentVersion: protocolVersion,
 			UserID:         conf.RegisterUserID,
 			Port:           conf.TCPListenPort,
@@ -333,7 +326,7 @@ func (z *Zproxy) PollLobby() error {
 	}
 
 	prepareBattle := func() error {
-		resp, err := getBattleInfo(&lobbyapi.BattleInfoRequest{SessionID: z.sessionID})
+		resp, err := getBattleInfo(&BattleInfoRequest{SessionID: z.sessionID})
 		if err != nil {
 			return err
 		}

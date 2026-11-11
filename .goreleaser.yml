@@ -18,7 +18,8 @@ project_name: zdxsv
 builds:
   - id: zproxy
     skip: '{{ envOrDefault "ZDXSV_SKIP_ZPROXY" "false" }}'
-    main: ./src/zproxy
+    dir: src/zproxy
+    main: .
     binary: zproxy
     env:
       - CGO_ENABLED=0

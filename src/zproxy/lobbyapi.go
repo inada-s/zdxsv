@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"zdxsv/pkg/lobby/lobbyapi"
 )
 
 const lobbyAPITimeout = time.Second
@@ -47,12 +46,56 @@ func callLobbyAPI(path string, req, res any) error {
 	return json.NewDecoder(resp.Body).Decode(res)
 }
 
-func registerProxy(req *lobbyapi.RegisterProxyRequest) (*lobbyapi.RegisterProxyResponse, error) {
-	res := new(lobbyapi.RegisterProxyResponse)
-	return res, callLobbyAPI(lobbyapi.RegisterProxyPath, req, res)
+func registerProxy(req *RegisterProxyRequest) (*RegisterProxyResponse, error) {
+	res := new(RegisterProxyResponse)
+	return res, callLobbyAPI(RegisterProxyPath, req, res)
 }
 
-func getBattleInfo(req *lobbyapi.BattleInfoRequest) (*lobbyapi.BattleInfoResponse, error) {
-	res := new(lobbyapi.BattleInfoResponse)
-	return res, callLobbyAPI(lobbyapi.BattleInfoPath, req, res)
+func getBattleInfo(req *BattleInfoRequest) (*BattleInfoResponse, error) {
+	res := new(BattleInfoResponse)
+	return res, callLobbyAPI(BattleInfoPath, req, res)
+}
+
+const (
+	RegisterProxyPath = "/lbs/zproxy/register"
+	BattleInfoPath    = "/lbs/zproxy/battle_info"
+)
+
+type RegisterProxyRequest struct {
+	CurrentVersion int
+	UserID         string
+	LocalIP        net.IP
+	Port           uint16
+	UDPAddrs       []string
+	P2PConnected   map[string]struct{}
+}
+
+type RegisterProxyResponse struct {
+	Result     bool
+	Message    string
+	SessionID  string
+	UserID     string
+	LobbyUsers []LobbyUser
+}
+
+type BattleInfoRequest struct {
+	SessionID string
+}
+
+type BattleInfoResponse struct {
+	Result   bool
+	Message  string
+	Users    []LobbyUser
+	BattleIP net.IP
+	Port     uint16
+	IsTest   bool
+}
+
+type LobbyUser struct {
+	UserID   string
+	Name     string
+	Team     string
+	UDP      bool
+	UDPAddrs []string
+	Platform string
 }
