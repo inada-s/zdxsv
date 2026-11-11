@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -296,19 +297,21 @@ func TestLobbyBattleRoundTrip(t *testing.T) {
 		sides   []byte
 		counted bool // the result adds to the user's totals (4 player battles only)
 		shared  int  // the first players are users of one account, each from its own client
+		emu     bool // the clients are emulators running their own UDP bridge
 	}{
-		{"1vs1 lobby", 2, []byte{a, ti}, false, 0},
-		{"2vs2 lobby", 4, []byte{a, ti, a, ti}, true, 0},
-		{"2vs2 of three users of one account", 4, []byte{a, ti, a, ti}, true, 3},
+		{"1vs1 lobby", 2, []byte{a, ti}, false, 0, false},
+		{"2vs2 lobby", 4, []byte{a, ti, a, ti}, true, 0, false},
+		{"2vs2 of three users of one account", 4, []byte{a, ti, a, ti}, true, 3, false},
+		{"2vs2 lobby of emulators", 4, []byte{a, ti, a, ti}, true, 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			battleRoundTrip(t, c.lobbyID, c.sides, c.counted, c.shared)
+			battleRoundTrip(t, c.lobbyID, c.sides, c.counted, c.shared, c.emu)
 		})
 	}
 }
 
-func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, shared int) {
+func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, shared int, emu bool) {
 	conn := dbtest.Use(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
@@ -335,11 +338,21 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 			p.ac = registerAccount(t)
 		}
 		p.c = dialLobby(t, addr)
+		if emu {
+			info := NewClientNotice(0x9950)
+			info.Category = CategoryCustom
+			info.Body = []byte(fmt.Sprintf("emulator=pcsx2\nsync=0123456789abcdef\nudp=1\nudp_addr=203.0.113.%d:40000\nggpo=%d\n", i+1, 7000+i))
+			p.c.send(info)
+		}
 		var listed []string
 		p.userID, listed, _ = p.c.login(p.ac, "******", fmt.Sprintf("pilot%d", i))
 		if len(listed) != want {
 			t.Fatalf("player %d: account lists %v", i, listed)
 		}
+		bin := NewClientQuestion(0x6143)
+		bin.Writer().Write(encryptString(bin.Seq, fmt.Sprintf("Pilot%d", i)+strings.Repeat("\x00", 20)))
+		p.c.send(bin)
+		p.c.expect(0x6143, CategoryAnswer)
 	}
 
 	for _, p := range players {
@@ -371,6 +384,24 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		sv := p.c.ask(0x6916, nil).Body
 		if want := []byte{0, 4, 127, 0, 0, 2, 0, 2, 0x20, 0x12}; !bytes.Equal(sv, want) {
 			t.Errorf("battle server address % x want % x", sv, want)
+		}
+	}
+	for i, p := range players {
+		if !emu {
+			break
+		}
+		m := battleInfo(t, p.c.expect(0x9951, CategoryCustom))
+		if len(m.Users) != len(players) {
+			t.Fatalf("player %d: battle info users %v", i, m.Users)
+		}
+		for j, q := range players {
+			u, ggpo := m.Users[q.pos-1], int32(7000+j)
+			if j == i {
+				ggpo = 0
+			}
+			if u.GetUserId() != q.userID || u.GetPilotName() != fmt.Sprintf("Pilot%d", j) || u.GetTeam() != int32(q.side) || u.GetGgpoPort() != ggpo {
+				t.Errorf("player %d: battle info user %d: %v", i, j, u)
+			}
 		}
 	}
 
