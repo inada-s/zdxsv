@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"zdxsv/pkg/battle"
-	"zdxsv/pkg/proto"
 )
 
 // startBattleServer runs the real battle UDP server with U1 (12345678) and U2 (87654321) waiting.
@@ -48,7 +47,7 @@ func newBattleProxy(t *testing.T, sv *net.UDPAddr, userID, sessionID, otherID st
 		cancel()
 		udp.Close()
 	})
-	udpcl := proto.NewUDPClient(udp)
+	udpcl := NewUDPClient(udp)
 	go udpcl.ReadLoop(ctx)
 
 	ln, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
