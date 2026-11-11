@@ -18,7 +18,6 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/login"
-	"zdxsv/pkg/session"
 )
 
 type fakeProvider struct {
@@ -211,7 +210,7 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	if mustAccount(t, first) != key || mustAccount(t, second) != key {
 		t.Fatal("a login ended the other session of the account")
 	}
-	if _, ok := session.Default.Use(second.SessionID, first.LoginKey); ok {
+	if _, ok := login.Sessions.Use(second.SessionID, first.LoginKey); ok {
 		t.Fatal("temp key logs in to another session")
 	}
 
@@ -285,7 +284,7 @@ func mustAccount(t *testing.T, res login.APILoginResponse) string {
 
 // sessionAccount is the login key of the session a login answered, "" when none.
 func sessionAccount(res login.APILoginResponse) string {
-	a, _ := session.Default.Use(res.SessionID, res.LoginKey)
+	a, _ := login.Sessions.Use(res.SessionID, res.LoginKey)
 	return a
 }
 

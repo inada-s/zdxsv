@@ -7,7 +7,6 @@ import (
 	"path"
 	"time"
 
-	"zdxsv/pkg/assets"
 	"zdxsv/pkg/login"
 
 	"go.uber.org/zap"
@@ -28,7 +27,7 @@ func handleAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bin, err := assets.Asset(r.URL.Path[1:])
+	bin, err := login.Asset(r.URL.Path[1:])
 	if err != nil {
 		zlog.Error("login server failure", zap.Error(err))
 		w.WriteHeader(404)
@@ -94,5 +93,5 @@ func newLoginHandler() http.Handler {
 
 // assetsCheck fails when the embedded assets are missing.
 func assetsCheck() ([]byte, error) {
-	return assets.Asset("assets/checkfile")
+	return login.Asset("assets/checkfile")
 }

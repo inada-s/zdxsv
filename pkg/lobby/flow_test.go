@@ -17,9 +17,9 @@ import (
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/login"
 	. "zdxsv/pkg/message"
 	"zdxsv/pkg/proto"
-	"zdxsv/pkg/session"
 )
 
 // pipeConn is one end of an in-memory connection that reports addr as its peer's address.
@@ -277,7 +277,7 @@ func registerAccount(t *testing.T) *testLogin {
 
 // loginAgain starts another session of the account, as a login from another client does.
 func loginAgain(loginKey string) *testLogin {
-	id, _ := session.Default.Start(loginKey, false)
+	id, _ := login.Sessions.Start(loginKey, false)
 	return &testLogin{LoginKey: loginKey, SessionID: id}
 }
 

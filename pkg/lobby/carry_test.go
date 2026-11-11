@@ -8,7 +8,7 @@ import (
 	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/session"
+	"zdxsv/pkg/login"
 )
 
 func TestCarryCodeCommand(t *testing.T) {
@@ -76,7 +76,7 @@ func TestTempKeyLobbyLogin(t *testing.T) {
 	dbtest.Use(t)
 	addr := startLobby(t, battle.NewLogic())
 	ac := registerAccount(t)
-	id, temp := session.Default.Start(ac.LoginKey, true)
+	id, temp := login.Sessions.Start(ac.LoginKey, true)
 	c := dialLobby(t, addr)
 	c.login(&testLogin{LoginKey: temp, SessionID: id}, "******", "pilot")
 	users, err := db.DefaultDB.GetUserList(ac.LoginKey)

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/assets"
+	"zdxsv/pkg/login"
 )
 
 func TestLoginHandlerAssetsAndHealth(t *testing.T) {
@@ -45,7 +45,7 @@ func TestLoginHandlerAssetsAndHealth(t *testing.T) {
 		{"assets/login.png", "image/png"},
 		{"assets/checkfile", ""},
 	} {
-		want, err := assets.Asset(c.name)
+		want, err := login.Asset(c.name)
 		if err != nil {
 			t.Fatal(err)
 		}
