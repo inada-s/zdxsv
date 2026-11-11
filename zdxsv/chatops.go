@@ -1,18 +1,158 @@
+// Chatops updates the master data in the db from a Google Spreadsheet on a Discord
+// slash command.
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/blang/semver"
+	"go.uber.org/zap"
 )
+
+// SheetReader returns the cells of every sheet of a spreadsheet as text, rows of cells.
+type SheetReader interface {
+	ReadAll(ctx context.Context) ([][][]string, error)
+}
+
+// Spreadsheet reads a Google Spreadsheet through the Sheets API v4.
+type Spreadsheet struct {
+	ID string
+	// Client authorizes the requests (scope spreadsheets.readonly).
+	Client *http.Client
+	// BaseURL replaces https://sheets.googleapis.com, for tests.
+	BaseURL string
+}
+
+const sheetRange = "A1:Z1000"
+
+func (s *Spreadsheet) ReadAll(ctx context.Context) ([][][]string, error) {
+	base := s.BaseURL
+	if base == "" {
+		base = "https://sheets.googleapis.com"
+	}
+	base += "/v4/spreadsheets/" + url.PathEscape(s.ID)
+
+	var meta struct {
+		Sheets []struct {
+			Properties struct {
+				Title string `json:"title"`
+			} `json:"properties"`
+		} `json:"sheets"`
+	}
+	if err := s.get(ctx, base+"?fields=sheets.properties.title", &meta); err != nil {
+		return nil, err
+	}
+	if len(meta.Sheets) == 0 {
+		return nil, nil
+	}
+
+	q := url.Values{}
+	for _, sh := range meta.Sheets {
+		q.Add("ranges", "'"+strings.ReplaceAll(sh.Properties.Title, "'", "''")+"'!"+sheetRange)
+	}
+	var values struct {
+		ValueRanges []struct {
+			Values [][]string `json:"values"`
+		} `json:"valueRanges"`
+	}
+	if err := s.get(ctx, base+"/values:batchGet?"+q.Encode(), &values); err != nil {
+		return nil, err
+	}
+	ret := make([][][]string, 0, len(values.ValueRanges))
+	for _, vr := range values.ValueRanges {
+		ret = append(ret, vr.Values)
+	}
+	return ret, nil
+}
+
+func (s *Spreadsheet) get(ctx context.Context, u string, v interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	client := s.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(res.Body, 16<<20))
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("sheets api: %s: %.200s", res.Status, body)
+	}
+	return json.Unmarshal(body, v)
+}
+
+// ParseTables finds the tables in the sheets. A table starts at a cell "@<name>" (name starting
+// with "m_"), its header row is the row below from that column up to the first empty cell, and
+// its data rows follow up to the first row empty in those columns. The header row is the first
+// row of each table; short rows are padded with "".
+func ParseTables(sheets [][][]string) (map[string][][]string, error) {
+	tables := map[string][][]string{}
+	for _, rows := range sheets {
+		for i := 0; i < len(rows); i++ {
+			left := -1
+			for j, c := range rows[i] {
+				if strings.HasPrefix(c, "@m_") {
+					left = j
+				}
+			}
+			if left < 0 || i+1 >= len(rows) {
+				continue
+			}
+			name := strings.TrimSpace(rows[i][left][1:])
+			if _, ok := tables[name]; ok {
+				return nil, fmt.Errorf("table %s appears twice", name)
+			}
+			right := left
+			for right < len(rows[i+1]) && rows[i+1][right] != "" {
+				right++
+			}
+			if right == left {
+				return nil, fmt.Errorf("table %s has no header", name)
+			}
+			var table [][]string
+			for i = i + 1; i < len(rows); i++ {
+				r := make([]string, right-left)
+				empty := true
+				for j := left; j < right && j < len(rows[i]); j++ {
+					r[j-left] = strings.TrimSpace(rows[i][j])
+					if r[j-left] != "" {
+						empty = false
+					}
+				}
+				if empty {
+					break
+				}
+				table = append(table, r)
+			}
+			tables[name] = table
+		}
+	}
+	return tables, nil
+}
 
 // BanTable is the spreadsheet table that becomes m_ban.
 const BanTable = "m_ban"
@@ -402,4 +542,199 @@ func cellFunc(col map[string]int, row []string) func(string) string {
 		}
 		return strings.TrimSpace(row[i])
 	}
+}
+
+const (
+	interactionPing               = 1
+	interactionApplicationCommand = 2
+	optionSubCommand              = 1
+
+	responsePong                    = 1
+	responseChannelMessage          = 4
+	responseDeferredChannelMessage  = 5
+	messageFlagEphemeral            = 64
+	discordMessageMax               = 2000
+	updateTimeout                   = 2 * time.Minute
+	interactionBodyMax              = 1 << 20
+	defaultDiscordAPIURL            = "https://discord.com/api/v10"
+	discordSignatureHeader          = "X-Signature-Ed25519"
+	discordSignatureTimestampHeader = "X-Signature-Timestamp"
+)
+
+// Discord serves a Discord application's interactions endpoint (POST). Each Commands entry is a
+// slash command, "op master-up" for the subcommand master-up of /op: it answers at once with a deferred message, runs, and edits that message
+// to the result. One command runs at a time.
+type Discord struct {
+	PublicKey ed25519.PublicKey
+	// Allow holds the user and role ids that may run the commands; nobody when empty.
+	Allow    map[string]bool
+	Commands map[string]func(ctx context.Context) (string, error)
+	// APIURL replaces https://discord.com/api/v10, for tests.
+	APIURL string
+	Client *http.Client
+
+	running sync.Mutex
+	wg      sync.WaitGroup
+}
+
+type interaction struct {
+	Type          int    `json:"type"`
+	ApplicationID string `json:"application_id"`
+	Token         string `json:"token"`
+	Data          struct {
+		Name    string `json:"name"`
+		Options []struct {
+			Name string `json:"name"`
+			Type int    `json:"type"`
+		} `json:"options"`
+	} `json:"data"`
+	Member *struct {
+		User  struct{ ID string } `json:"user"`
+		Roles []string            `json:"roles"`
+	} `json:"member"`
+	User *struct{ ID string } `json:"user"`
+}
+
+func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, interactionBodyMax))
+	if err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	sig, err := hex.DecodeString(r.Header.Get(discordSignatureHeader))
+	ts := r.Header.Get(discordSignatureTimestampHeader)
+	if err != nil || len(d.PublicKey) != ed25519.PublicKeySize || !ed25519.Verify(d.PublicKey, append([]byte(ts), body...), sig) {
+		http.Error(w, "invalid request signature", http.StatusUnauthorized)
+		return
+	}
+	var in interaction
+	if err := json.Unmarshal(body, &in); err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	switch in.Type {
+	case interactionPing:
+		writeJSON(w, map[string]int{"type": responsePong})
+		return
+	case interactionApplicationCommand:
+	default:
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	name := in.commandName()
+	run, ok := d.Commands[name]
+	if !ok {
+		reply(w, "unknown command "+name)
+		return
+	}
+	if !d.allowed(&in) {
+		reply(w, "not allowed")
+		return
+	}
+	if !d.running.TryLock() {
+		reply(w, "another command is running")
+		return
+	}
+	logger.Info("discord command", zap.Any("name", name), zap.Any("user_id", in.userID()))
+	answered := make(chan struct{})
+	defer close(answered)
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		defer d.running.Unlock()
+		// Discord rejects the edit of a message whose deferred answer it has not got yet.
+		<-answered
+		ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
+		defer cancel()
+		msg, err := run(ctx)
+		if err != nil {
+			logger.Error("discord command failed", zap.Any("name", name), zap.Error(err))
+			msg = name + " failed, nothing changed:\n" + err.Error()
+		}
+		d.editOriginal(ctx, &in, msg)
+	}()
+	writeJSON(w, map[string]int{"type": responseDeferredChannelMessage})
+}
+
+// Wait returns when the commands started so far have finished.
+func (d *Discord) Wait() { d.wg.Wait() }
+
+// commandName is the command's name, followed by " " and the subcommand's for a subcommand.
+func (in *interaction) commandName() string {
+	if len(in.Data.Options) == 1 && in.Data.Options[0].Type == optionSubCommand {
+		return in.Data.Name + " " + in.Data.Options[0].Name
+	}
+	return in.Data.Name
+}
+
+func (in *interaction) userID() string {
+	if in.Member != nil {
+		return in.Member.User.ID
+	}
+	if in.User != nil {
+		return in.User.ID
+	}
+	return ""
+}
+
+func (d *Discord) allowed(in *interaction) bool {
+	if id := in.userID(); id != "" && d.Allow[id] {
+		return true
+	}
+	if in.Member != nil {
+		for _, r := range in.Member.Roles {
+			if d.Allow[r] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (d *Discord) editOriginal(ctx context.Context, in *interaction, msg string) {
+	if r := []rune(msg); len(r) > discordMessageMax {
+		msg = string(r[:discordMessageMax-1]) + "…"
+	}
+	body, _ := json.Marshal(map[string]string{"content": msg})
+	api := d.APIURL
+	if api == "" {
+		api = defaultDiscordAPIURL
+	}
+	u := api + "/webhooks/" + url.PathEscape(in.ApplicationID) + "/" + url.PathEscape(in.Token) + "/messages/@original"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
+	if err != nil {
+		logger.Error("discord edit message failed", zap.Error(err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := d.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		logger.Error("discord edit message failed", zap.Error(err))
+		return
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		logger.Error("discord edit message failed", zap.String("status", res.Status))
+	}
+}
+
+func reply(w http.ResponseWriter, msg string) {
+	writeJSON(w, map[string]interface{}{
+		"type": responseChannelMessage,
+		"data": map[string]interface{}{"content": msg, "flags": messageFlagEphemeral},
+	})
+}
+
+func writeJSON(w http.ResponseWriter, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
 }

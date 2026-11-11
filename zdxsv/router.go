@@ -1,4 +1,4 @@
-// Package router splits the TLS connections on one port (443) between the DNAS
+// Router splits the TLS connections on one port (443) between the DNAS
 // front end and an https server. It does not route by SNI: the PS2 sends an
 // SSLv2-format hello, so a game console is told from the first 5 bytes.
 //

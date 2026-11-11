@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go.uber.org/zap"
 
 	"github.com/miekg/dns"
+	"go.uber.org/zap"
 )
 
 var (

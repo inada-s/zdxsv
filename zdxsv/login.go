@@ -1,17 +1,106 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"mime"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
+	"sync"
 	"text/template"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"
 )
+
+var (
+	since = time.Now()
+)
+
+// assets
+func handleAssets(w http.ResponseWriter, r *http.Request) {
+	if _, err := time.Parse(http.TimeFormat, r.Header.Get("If-Modified-Since")); err == nil {
+		h := w.Header()
+		delete(h, "Content-Type")
+		delete(h, "Content-Length")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	bin, err := Asset(r.URL.Path[1:])
+	if err != nil {
+		logger.Error("login server failure", zap.Error(err))
+		w.WriteHeader(404)
+		return
+	}
+
+	if m := mime.TypeByExtension(path.Ext(r.URL.Path)); m != "" {
+		w.Header().Set("Content-Type", m)
+	}
+
+	w.Header().Set("Cache-Control", "max-age=60, public")
+	w.Header().Set("Expires", time.Now().Add(60*time.Second).Format(http.TimeFormat))
+	w.Header().Set("Last-Modified", since.UTC().Format(http.TimeFormat))
+
+	w.WriteHeader(200)
+	w.Write(bin)
+}
+
+// health
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf8")
+	w.WriteHeader(200)
+	fmt.Fprintf(w, "works\n")
+}
+
+type wrapper struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *wrapper) Write(p []byte) (int, error) {
+	return r.ResponseWriter.Write(p)
+}
+
+func (r *wrapper) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func wrapHandler(f http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		m := &wrapper{ResponseWriter: w}
+		f.ServeHTTP(m, r)
+
+		if r.Method == "POST" {
+			r.ParseForm()
+		}
+		logger.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.String("query", r.URL.RawQuery), zap.Any("form", r.Form), zap.String("ua", r.UserAgent()))
+
+	}
+}
+
+func newLoginHandler() http.Handler {
+	PrepareLoginPages()
+	router := http.NewServeMux()
+	router.HandleFunc("/health", handleHealth)
+	router.HandleFunc("/assets/", handleAssets)
+	router.HandleFunc("/CRS-top.jsp", HandleTopPage)
+	router.HandleFunc("/login", HandleLoginPage)
+	router.HandleFunc("/register", HandleRegisterPage)
+	return wrapHandler(router)
+}
+
+// assetsCheck fails when the embedded assets are missing.
+func assetsCheck() ([]byte, error) {
+	return Asset("assets/checkfile")
+}
 
 var (
 	tplTop          *template.Template
@@ -241,4 +330,99 @@ func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 	p.Message = message
 	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplLoginMessage.Execute(sw, p)
+}
+
+const (
+	// SessionTTL is how long a session lasts after its last use.
+	SessionTTL = 24 * time.Hour
+	// MaxSessionsPerAccount bounds the sessions of an account; the least recently used goes first.
+	MaxSessionsPerAccount = 16
+)
+
+// Sessions is the store the login pages and the lobby share.
+var Sessions = NewSessionStore()
+
+type loginSession struct {
+	loginKey string
+	tempKey  string
+	used     time.Time
+}
+
+// SessionStore keeps the login sessions in memory. The login pages start one at each
+// login of an account, before a user is chosen; the lobby checks it at every connection
+// of that client, the one after a battle included. An account holds a session per client,
+// so its users can play at once.
+type SessionStore struct {
+	mu       sync.Mutex
+	sessions map[string]*loginSession
+	now      func() time.Time
+}
+
+func NewSessionStore() *SessionStore {
+	return &SessionStore{sessions: map[string]*loginSession{}, now: time.Now}
+}
+
+// Start begins a session of the account and returns its id. With temp it also returns a
+// key of the session's own that the client logs in with in place of the account's key.
+func (s *SessionStore) Start(loginKey string, temp bool) (id, tempKey string) {
+	if temp {
+		tempKey = GenLoginKey()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	var own []string
+	for sid, ss := range s.sessions {
+		if now.Sub(ss.used) >= SessionTTL {
+			delete(s.sessions, sid)
+		} else if ss.loginKey == loginKey {
+			own = append(own, sid)
+		}
+	}
+	for ; len(own) >= MaxSessionsPerAccount; own = own[:len(own)-1] {
+		oldest := 0
+		for i, sid := range own {
+			if s.sessions[sid].used.Before(s.sessions[own[oldest]].used) {
+				oldest = i
+			}
+		}
+		delete(s.sessions, own[oldest])
+		own[oldest] = own[len(own)-1]
+	}
+	for id == "" || s.sessions[id] != nil {
+		id = GenSessionID()
+	}
+	s.sessions[id] = &loginSession{loginKey: loginKey, tempKey: tempKey, used: now}
+	return id, tempKey
+}
+
+// Use returns the account of session id when key is the account's login key or the
+// session's temporary key, and keeps the session for another SessionTTL.
+func (s *SessionStore) Use(id, key string) (loginKey string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.sessions[id]
+	now := s.now()
+	if ss == nil || now.Sub(ss.used) >= SessionTTL || key == "" || (key != ss.loginKey && key != ss.tempKey) {
+		return "", false
+	}
+	ss.used = now
+	return ss.loginKey, true
+}
+
+// Touch keeps session id for another SessionTTL.
+func (s *SessionStore) Touch(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ss := s.sessions[id]; ss != nil && s.now().Sub(ss.used) < SessionTTL {
+		ss.used = s.now()
+	}
+}
+
+//go:embed assets
+var assetFiles embed.FS
+
+// Asset returns the login pages' file at name ("assets/login.png"), served under /assets/.
+func Asset(name string) ([]byte, error) {
+	return fs.ReadFile(assetFiles, name)
 }

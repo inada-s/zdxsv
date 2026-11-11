@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -236,4 +239,68 @@ func (a *Lbs) checkAlive(now time.Time) {
 		}
 	}
 
+}
+
+const (
+	EntryNone   = 0
+	EntryAeug   = 1
+	EntryTitans = 2
+)
+
+type LbsUser struct {
+	DBUser
+	Entry byte
+	Bin   string
+	// Sync is the emulator's sync fingerprint: lobby battles start only among equal ones.
+	Sync string
+
+	Room   *LbsRoom
+	Lobby  *LbsLobby
+	Battle *LbsBattle
+}
+
+// DecodeSessionID turns the game's value (up to 10 digits) into the 8 digit session id:
+// value - 100001, zero padded to 10 digits, without digits 0 and 5.
+func DecodeSessionID(value string) (string, error) {
+	if len(value) == 0 || len(value) > 10 {
+		return "", fmt.Errorf("session id value %q: want 1 to 10 digits", value)
+	}
+	v, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("session id value %q: %w", value, err)
+	}
+	if v < 100001 {
+		return "", fmt.Errorf("session id value %q: below 100001", value)
+	}
+	s := fmt.Sprintf("%010d", v-100001)
+	return s[1:5] + s[6:], nil
+}
+
+// Platform keeps emulator and real PS2 players apart:
+// lobbies, rooms and battles are per platform.
+// Every peer is a console until it sends a platform info message.
+const (
+	PlatformConsole = "console"
+	// every emulator, whatever its cpu: ARM64 and x86_64 builds stay in sync.
+	// The value is the status API key.
+	PlatformEmu = "emu"
+)
+
+// ParsePlatformInfo parses "key=value" lines.
+func ParsePlatformInfo(body string) map[string]string {
+	info := map[string]string{}
+	for _, line := range strings.Split(body, "\n") {
+		kv := strings.SplitN(strings.TrimSpace(line), "=", 2)
+		if len(kv) == 2 && kv[0] != "" {
+			info[kv[0]] = kv[1]
+		}
+	}
+	return info
+}
+
+func PlatformFromInfo(info map[string]string) string {
+	if info["emulator"] == "" {
+		return PlatformConsole
+	}
+	return PlatformEmu
 }

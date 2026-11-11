@@ -1,4 +1,4 @@
-// Package auth signs emulators in through an OAuth provider (Discord).
+// The auth server signs emulators in through an OAuth provider (Discord).
 //
 //	GET  /auth/start?redirect_port=P&state=S&code_challenge=C[&lang=ja|en|zh-TW]:
 //	     a notice page with the provider button. C is the PKCE S256 challenge.
@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -513,3 +514,150 @@ func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token 
 	logger.Info("auth: carried account", zap.String("login_key", c.loginKey))
 	return c.loginKey
 }
+
+// DevProvider signs in without an outside provider: /auth/dev/authorize asks the browser for a user
+// ID and passes it back as the code. For local development only; its identities are stored under the
+// provider name "dev", so they never stand for Discord users.
+func DevProvider() Provider {
+	return Provider{Name: "dev", AuthURL: "/auth/dev/authorize", dev: true}
+}
+
+func validDevUserID(id string) bool {
+	if id == "" || len(id) > 32 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+var tplDevAuthorize = template.Must(template.New("dev").Parse(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>zdxsv dev sign-in</title>
+<style>body{font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em;line-height:1.6}</style>
+</head><body><h1>zdxsv dev sign-in</h1>
+<p>Local development provider. A user ID stands for one provider user; the first sign-in of an ID creates its account.</p>
+<form method="get" action="{{.Callback}}"><input type="hidden" name="state" value="{{.State}}">
+<p><label>User ID <input name="code" value="1" pattern="[0-9A-Za-z_\-]{1,32}" required autofocus></label>
+<button type="submit">Sign in</button></p></form>
+<p><a href="{{.Deny}}">Deny</a></p></body></html>`))
+
+func (s *AuthServer) serveDevAuthorize(w http.ResponseWriter, r *http.Request) {
+	state := r.URL.Query().Get("state")
+	if state == "" || len(state) > 128 {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	tplDevAuthorize.Execute(w, struct{ Callback, State, Deny string }{
+		Callback: s.redirectURI(),
+		State:    state,
+		Deny:     s.redirectURI() + "?" + url.Values{"error": {"access_denied"}, "state": {state}}.Encode(),
+	})
+}
+
+// serveDevCarry (POST) stands in for the lobby chat ｄｃ of a PS2: it makes a new account, as a PS2
+// registration does, and answers {"code": C, "login_key": K} with a carry-over code for it.
+func (s *AuthServer) serveDevCarry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a, err := s.Store.RegisterAccount(clientIP(r))
+	if err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"code": s.IssueCarryCode(a.LoginKey), "login_key": a.LoginKey})
+}
+
+type page struct {
+	Lang          string
+	Title         string
+	Notice        []string
+	Button        string
+	ProviderURL   string
+	Message       string
+	Expired       string
+	Denied        string
+	ProviderError string
+}
+
+var pages = map[string]page{
+	"ja": {
+		Lang:  "ja",
+		Title: "ZDXSV サインイン",
+		Notice: []string{
+			"Discord アカウントでサインインします。ZDXSV が保存するのは Discord のユーザー ID だけです。",
+			"サインインが終わったらエミュレーターに戻ってください。",
+		},
+		Button:        "Discord でサインイン",
+		Expired:       "サインインの期限が切れました。エミュレーターからやり直してください。",
+		Denied:        "サインインが取り消されました。",
+		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
+	},
+	"en": {
+		Lang:  "en",
+		Title: "ZDXSV sign in",
+		Notice: []string{
+			"Sign in with your Discord account. ZDXSV stores only your Discord user ID.",
+			"When the sign-in is done, go back to the emulator.",
+		},
+		Button:        "Sign in with Discord",
+		Expired:       "The sign-in expired. Start again from the emulator.",
+		Denied:        "The sign-in was cancelled.",
+		ProviderError: "The sign-in failed. Try again later.",
+	},
+	"zh-TW": {
+		Lang:  "zh-TW",
+		Title: "ZDXSV 登入",
+		Notice: []string{
+			"使用 Discord 帳號登入。ZDXSV 只會儲存您的 Discord 使用者 ID。",
+			"登入完成後，請回到模擬器。",
+		},
+		Button:        "使用 Discord 登入",
+		Expired:       "登入已逾時，請從模擬器重新開始。",
+		Denied:        "登入已取消。",
+		ProviderError: "登入失敗，請稍後再試。",
+	},
+}
+
+func pickLang(r *http.Request) string {
+	if l := r.URL.Query().Get("lang"); l != "" {
+		if _, ok := pages[l]; ok {
+			return l
+		}
+	}
+	for _, part := range strings.Split(r.Header.Get("Accept-Language"), ",") {
+		tag := strings.ToLower(strings.TrimSpace(strings.SplitN(part, ";", 2)[0]))
+		switch {
+		case strings.HasPrefix(tag, "ja"):
+			return "ja"
+		case strings.HasPrefix(tag, "zh"):
+			return "zh-TW"
+		case strings.HasPrefix(tag, "en"):
+			return "en"
+		}
+	}
+	return "ja"
+}
+
+func pageText(lang string) page {
+	return pages[lang]
+}
+
+const head = `<!DOCTYPE html><html lang="{{.Lang}}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Title}}</title>
+<style>body{font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em;line-height:1.6}
+a.b{display:inline-block;background:#5865f2;color:#fff;padding:.7em 1.4em;border-radius:6px;text-decoration:none}</style>
+</head><body><h1>{{.Title}}</h1>`
+
+var tplStart = template.Must(template.New("start").Parse(head +
+	`{{range .Notice}}<p>{{.}}</p>{{end}}
+<p><a class="b" href="{{.ProviderURL}}">{{.Button}}</a></p></body></html>`))
+
+var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></body></html>`))

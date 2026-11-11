@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"zdxsv/zdxsv/proto"
+
 	pb "github.com/golang/protobuf/proto"
 	"golang.org/x/text/encoding/japanese"
 	"google.golang.org/protobuf/encoding/prototext"
-
-	"zdxsv/zdxsv/proto"
 )
 
 func Test_ParseBattleResult(t *testing.T) {
@@ -679,5 +679,19 @@ func TestReportUsedMsSearch(t *testing.T) {
 		if codes, _ := search(c.query); !reflect.DeepEqual(c.want, codes) {
 			t.Errorf("%s: %v, want %v", c.query, codes, c.want)
 		}
+	}
+}
+
+func TestBattleGetUserByPosOutOfRange(t *testing.T) {
+	b := NewBattle("ps2", 2)
+	b.Add(&LbsUser{DBUser: DBUser{UserID: "a"}})
+	b.Add(&LbsUser{DBUser: DBUser{UserID: "b"}})
+	for _, pos := range []byte{0, 3, 255} {
+		if u := b.GetUserByPos(pos); u != nil {
+			t.Errorf("GetUserByPos(%d) = %v, want nil", pos, u.UserID)
+		}
+	}
+	if u := b.GetUserByPos(2); u == nil || u.UserID != "b" {
+		t.Errorf("GetUserByPos(2) = %v", u)
 	}
 }
