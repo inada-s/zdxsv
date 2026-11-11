@@ -158,12 +158,10 @@ func main() {
 		DefaultDB.Init()
 	case "migratedb":
 		prepareDB()
-		err := DefaultDB.Migrate()
-		if err != nil {
-			logger.Error("migration failed", zap.Error(err))
-		} else {
-			logger.Info("migration done")
+		if err := DefaultDB.Migrate(); err != nil {
+			logger.Fatal("migration failed", zap.Error(err))
 		}
+		logger.Info("migration done")
 	default:
 		printUsage()
 		os.Exit(1)

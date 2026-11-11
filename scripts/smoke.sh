@@ -46,8 +46,11 @@ pin() { bash scripts/tls-keys.sh pin "$1" | head -1 | cut -d" " -f1; }
 ca_pin=$(pin $td/ca.crt) backup_pin=$(pin $td/backup-ca.crt) server_pin=$(pin $td/server.crt)
 dns_addr=${ZDXSV_DNS_ADDR:-:53}
 dns_port=${dns_addr##*:}
+printf 'x%.0s' $(seq 1 4096) > smoke.db
+check "migratedb fails on a broken database" sh -c "! \"$bin\" -profile=0 migratedb"
 rm -f smoke.db
 "$bin" initdb > /dev/null 2>&1 || exit 1
+check "migratedb" "$bin" -profile=0 migratedb
 "$bin" > smoke.log 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null' EXIT

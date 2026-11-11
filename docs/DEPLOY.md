@@ -78,7 +78,7 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
 ```sh
 zdxsv initdb      # first deploy only: wipes the tables
 zdxsv             # the server
-zdxsv migratedb   # server stopped, when a release changes the schema; prints "Migration done"
+zdxsv migratedb   # server stopped, when a release changes the schema; exits non-zero on failure
 ```
 
 ## Logging
@@ -97,6 +97,7 @@ Each line is a fixed `message` plus fields (`addr`, `user_id`, `battle_code`, `e
 ## Update
 
 Replace the binary, run `zdxsv migratedb` if the release changes the schema, restart.
+Releases before v1.4.0 refuse `-prodlog`: drop it before going back to one.
 Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
 
 A release that changes a wire message (`testdata/wire/`) ships with the pcsx2 release that speaks
