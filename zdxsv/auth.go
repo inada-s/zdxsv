@@ -590,6 +590,7 @@ type page struct {
 	Expired       string
 	Denied        string
 	ProviderError string
+	Privacy       string
 }
 
 var pages = map[string]page{
@@ -603,6 +604,7 @@ var pages = map[string]page{
 		Expired:       "サインインの期限が切れました。エミュレーターからやり直してください。",
 		Denied:        "サインインが取り消されました。",
 		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
+		Privacy:       "プライバシーポリシー",
 	},
 	"en": {
 		Lang:  "en",
@@ -614,6 +616,7 @@ var pages = map[string]page{
 		Expired:       "The sign-in expired. Start again from the emulator.",
 		Denied:        "The sign-in was cancelled.",
 		ProviderError: "The sign-in failed. Try again later.",
+		Privacy:       "Privacy Policy",
 	},
 	"zh-TW": {
 		Lang:  "zh-TW",
@@ -625,6 +628,7 @@ var pages = map[string]page{
 		Expired:       "登入已逾時，請從模擬器重新開始。",
 		Denied:        "登入已取消。",
 		ProviderError: "登入失敗，請稍後再試。",
+		Privacy:       "隱私權政策",
 	},
 }
 
@@ -674,12 +678,14 @@ p{margin:0 0 .9rem;color:var(--sub);font-size:.95rem}
 a.b{display:flex;align-items:center;justify-content:center;gap:.6em;background:#5865f2;color:#fff;font-weight:600;padding:.85em 1em;
 border-radius:10px;text-decoration:none;transition:background .15s,transform .15s}
 a.b svg{width:1.4em;height:1.1em;flex:none}
+.pp{margin:1rem 0 0;font-size:.8rem}.pp a{color:var(--sub)}
 a.b:hover{background:#4752c4}a.b:active{transform:translateY(1px)}
 </style>
 </head><body><main><img class="logo" src="/auth/icon.png" alt=""><h1>{{.Title}}</h1>`
 
 var tplStart = template.Must(template.New("start").Parse(head +
 	`{{range .Notice}}<p>{{.}}</p>{{end}}
-<p class="act"><a class="b" href="{{.ProviderURL}}"><svg viewBox="0 0 127.14 96.36" aria-hidden="true"><path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.44-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>{{.Button}}</a></p></main></body></html>`))
+<p class="act"><a class="b" href="{{.ProviderURL}}"><svg viewBox="0 0 127.14 96.36" aria-hidden="true"><path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.44-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>{{.Button}}</a></p>
+<p class="pp"><a href="https://www.zdxsv.net/privacy.html">{{.Privacy}}</a></p></main></body></html>`))
 
 var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></main></body></html>`))

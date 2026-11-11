@@ -161,3 +161,10 @@ aside { padding-top: 28px; }
 .badge { background: #2f6fb0; color: #fff; font-size: 11px; padding: 0 5px; border-radius: 3px; }
 
 iframe.discord { width: 100%; height: 500px; border: 0; }
+
+.doc { max-width: 760px; padding-top: 16px; padding-bottom: 48px; }
+.doc h1 { color: var(--head); font-size: 28px; margin: 16px 0 4px; }
+.doc code { font-family: Consolas, monospace; color: #ffd27a; }
+
+.aside-links { font-size: 12px; margin-top: 8px; }
+.aside-links a { color: var(--muted); }
