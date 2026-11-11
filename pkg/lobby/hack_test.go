@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/message"
 
 	"golang.org/x/text/encoding/japanese"
 )
@@ -70,7 +70,7 @@ func le32(b []byte, off int) uint32 { return binary.LittleEndian.Uint32(b[off:])
 
 func TestLobbyExplainHacks(t *testing.T) {
 	conn := dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES
 		('console', 1, '', '', '', 'zproxy_test,chat_command'),
 		('console', 3, '', '', '', 'pad_delay'),

@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/valyala/gorpc"
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	"zdxsv/pkg/lobby/lobbyrpc"
-	"zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/message"
 )
 
 // pipeListener hands the lobby RPC server the server ends of in-memory connections.
@@ -92,7 +92,7 @@ func TestLobbyRPCProxyFlow(t *testing.T) {
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	addr, app := startLobbyApp(t, battle.NewLogic())
 	rpcc := startLobbyRPC(t, app)
 
 	type player struct {

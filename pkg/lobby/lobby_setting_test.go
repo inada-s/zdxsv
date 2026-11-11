@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"testing"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 )
 
 func TestLobbySetting(t *testing.T) {
 	conn := dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	if _, err := conn.Exec(`INSERT INTO m_rule (id, battle_count, visible_team, battle_time, battle_gauge, reload_type, damage_level, awake_type, awake_inc_ratio, awake_dec_ratio)
 		VALUES ('tai', 0, 0, 90, 1, 0, 3, 0, 100, 100)`); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestLobbySetting(t *testing.T) {
 
 func TestLobbyHackNoticeOff(t *testing.T) {
 	conn := dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES
 		('console', 1, '', '', '', 'zproxy_test,chat_command'),
 		('emu', 1, '', '', '', 'zproxy_test,chat_command'),

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"zdxsv/pkg/battle"
-	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
 )
 
@@ -18,10 +17,9 @@ import (
 func startBattleServer(t *testing.T) (*net.UDPAddr, *battle.Logic) {
 	t.Helper()
 	logic := battle.NewLogic()
-	var reply int
-	logic.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{
+	logic.AddBattle([]battle.User{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
-	}}, &reply)
+	})
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)

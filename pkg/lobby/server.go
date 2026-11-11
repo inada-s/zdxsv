@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 	"time"
-	"zdxsv/pkg/lobby/message"
+	"zdxsv/pkg/message"
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"

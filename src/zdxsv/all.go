@@ -43,7 +43,7 @@ func mainAll() {
 	serve("battle tcp", func() error { return battle.NewTCPServer(logic).ListenAndServe(battleAddr) })
 
 	app := lobby.NewApp()
-	app.SetBattleServer(logic.BattleRpc)
+	app.SetBattleServer(logic)
 	serveLobby(app)
 }
 

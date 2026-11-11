@@ -7,9 +7,8 @@ import (
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
 
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/message"
 	"zdxsv/pkg/proto"
-	"zdxsv/pkg/sessionid"
 )
 
 type BasePeer struct {
@@ -66,27 +65,63 @@ type Peer interface {
 	Close() error
 }
 
-type Logic struct {
-	*battlerpc.BattleRpc
+const MaxRoom = 128
 
-	roomsMtx sync.Mutex
-	rooms    []*Room
+type User struct {
+	UserID    string
+	SessionID string
+	Name      string
+	Team      string
+	Entry     byte
+	P2PMap    map[string]struct{}
+}
+
+type BattleInfo struct {
+	Users  []User
+	RoomID int
+}
+
+type Logic struct {
+	mtx        sync.Mutex
+	nextRoomID int
+	waiting    map[string]*BattleInfo
+	rooms      []*Room
 }
 
 func NewLogic() *Logic {
-	l := &Logic{}
-	l.BattleRpc = battlerpc.NewBattleRpc()
-	l.rooms = make([]*Room, battlerpc.MaxRoom)
-	return l
+	return &Logic{
+		waiting: make(map[string]*BattleInfo),
+		rooms:   make([]*Room, MaxRoom),
+	}
 }
 
-func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {
-	info := m.GetBattleInfo(sessionID)
+// AddBattle takes the users of a battle the lobby started. Each joins by its session id.
+func (m *Logic) AddBattle(users []User) {
+	m.mtx.Lock()
+	info := &BattleInfo{Users: users, RoomID: m.nextRoomID}
+	m.nextRoomID = (m.nextRoomID + 1) % MaxRoom
+	for _, u := range users {
+		m.waiting[u.SessionID] = info
+	}
+	m.mtx.Unlock()
+	zlog.Info("battle users", zap.Any("info", *info))
+}
+
+func (m *Logic) GetBattleInfo(sessionID string) *BattleInfo {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	return m.waiting[sessionID]
+}
+
+func (m *Logic) FindWaitingUser(sessionID string) (*User, bool) {
+	return findUser(m.GetBattleInfo(sessionID), sessionID)
+}
+
+func findUser(info *BattleInfo, sessionID string) (*User, bool) {
 	if info == nil {
 		zlog.Error("BattleInfo not found", zap.Any("session_id", sessionID))
 		return nil, false
 	}
-
 	for _, u := range info.Users {
 		if sessionID == u.SessionID {
 			return &u, true
@@ -97,24 +132,23 @@ func (m *Logic) FindWaitingUser(sessionID string) (*battlerpc.User, bool) {
 }
 
 func (m *Logic) Join(p Peer, sessionID string) *Room {
-	user, ok := m.FindWaitingUser(sessionID)
+	m.mtx.Lock()
+	info := m.waiting[sessionID]
+	user, ok := findUser(info, sessionID)
 	if !ok {
+		m.mtx.Unlock()
 		return nil
 	}
-
-	p.SetUserID(user.UserID)
-	p.SetSessionID(sessionID)
-	info := m.GetBattleInfo(sessionID)
-	m.ClearBattleInfo(sessionID)
-
-	m.roomsMtx.Lock()
+	delete(m.waiting, sessionID)
 	room := m.rooms[info.RoomID]
 	if room == nil {
 		room = newRoom(info.RoomID)
 		m.rooms[info.RoomID] = room
 	}
-	m.roomsMtx.Unlock()
+	m.mtx.Unlock()
 
+	p.SetUserID(user.UserID)
+	p.SetSessionID(sessionID)
 	room.Join(p)
 	return room
 }
@@ -124,7 +158,7 @@ func ParseSessionID(value string) (string, error) {
 	if len(value) != 10 {
 		return "", fmt.Errorf("Invalid value length")
 	}
-	return sessionid.Decode(value)
+	return message.DecodeSessionID(value)
 }
 
 func IsFinData(buf []byte) bool {

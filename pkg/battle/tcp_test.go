@@ -6,8 +6,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"zdxsv/pkg/battle/battlerpc"
 )
 
 // tcpPair starts a TCPPeer for one accepted connection and returns the client side.
@@ -43,10 +41,9 @@ func hello(encoded string) []byte {
 
 func TestTCPRelay(t *testing.T) {
 	logic := NewLogic()
-	var reply int
-	logic.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{
+	logic.AddBattle([]User{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
-	}}, &reply)
+	})
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)

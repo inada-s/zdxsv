@@ -8,7 +8,6 @@ import (
 
 	pb "github.com/golang/protobuf/proto"
 
-	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
 )
 
@@ -16,10 +15,9 @@ import (
 func startUDPServer(t *testing.T) (*UDPServer, *net.UDPAddr) {
 	t.Helper()
 	logic := NewLogic()
-	var reply int
-	logic.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{
+	logic.AddBattle([]User{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
-	}}, &reply)
+	})
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)

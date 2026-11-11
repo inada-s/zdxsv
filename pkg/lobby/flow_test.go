@@ -12,12 +12,12 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
-	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/battle"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	. "zdxsv/pkg/message"
 	"zdxsv/pkg/proto"
 	"zdxsv/pkg/session"
 )
@@ -48,20 +48,20 @@ type testLobby struct {
 }
 
 // startLobby runs a lobby App with the battle logic b in process.
-func startLobby(t *testing.T, b *battlerpc.BattleRpc) *testLobby {
+func startLobby(t *testing.T, b *battle.Logic) *testLobby {
 	t.Helper()
 	l, _ := startLobbyApp(t, b)
 	return l
 }
 
 // startLobbyApp is startLobby that also returns the App.
-func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (*testLobby, *App) {
+func startLobbyApp(t *testing.T, b *battle.Logic) (*testLobby, *App) {
 	t.Helper()
 	return startLobbyAppWith(t, b, func(*App) {})
 }
 
 // startLobbyAppWith is startLobbyApp with setup run on the App before it serves.
-func startLobbyAppWith(t *testing.T, b *battlerpc.BattleRpc, setup func(*App)) (*testLobby, *App) {
+func startLobbyAppWith(t *testing.T, b *battle.Logic, setup func(*App)) (*testLobby, *App) {
 	t.Helper()
 	config.Conf.Battle.PublicAddr = "127.0.0.2:8210"
 	config.Conf.Lobby.RPCAddr = "127.0.0.1:0"
@@ -288,7 +288,7 @@ func u16(v uint16) []byte { return []byte{byte(v >> 8), byte(v)} }
 // and sees the user who entered a lobby.
 func TestLobbyList(t *testing.T) {
 	dbtest.Use(t)
-	addr := startLobby(t, battlerpc.NewBattleRpc())
+	addr := startLobby(t, battle.NewLogic())
 	in, look := dialLobby(t, addr), dialLobby(t, addr)
 	in.login(registerAccount(t), "******", "inside")
 	look.login(registerAccount(t), "******", "looker")
@@ -366,7 +366,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
 	}
-	brpc := battlerpc.NewBattleRpc()
+	brpc := battle.NewLogic()
 	addr := startLobby(t, brpc)
 
 	type player struct {
@@ -584,7 +584,7 @@ func roomStatus(c *testClient, roomID uint16) byte {
 // owner starts: the battle carries the room's rule.
 func TestLobbyRoomBattle(t *testing.T) {
 	dbtest.Use(t)
-	brpc := battlerpc.NewBattleRpc()
+	brpc := battle.NewLogic()
 	addr := startLobby(t, brpc)
 
 	const lobbyID, roomID = 4, 1

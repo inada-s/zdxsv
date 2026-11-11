@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
-	. "zdxsv/pkg/lobby/message"
+	. "zdxsv/pkg/message"
 
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding/japanese"

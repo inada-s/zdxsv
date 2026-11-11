@@ -5,16 +5,13 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"zdxsv/pkg/battle/battlerpc"
 )
 
 // joinedTCPClient returns a client connection whose server-side TCPPeer has joined a room.
 func joinedTCPClient(t *testing.T) net.Conn {
 	t.Helper()
 	logic := NewLogic()
-	var reply int
-	logic.NotifyBattleUsers(&battlerpc.BattleInfoArgs{Users: []battlerpc.User{{UserID: "U1", SessionID: "12345678"}}}, &reply)
+	logic.AddBattle([]User{{UserID: "U1", SessionID: "12345678"}})
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)

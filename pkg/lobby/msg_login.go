@@ -3,9 +3,9 @@ package lobby
 import (
 	"fmt"
 	"zdxsv/pkg/db"
-	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
-	"zdxsv/pkg/sessionid"
+	"zdxsv/pkg/message"
+	. "zdxsv/pkg/message"
 
 	"go.uber.org/zap"
 	"zdxsv/pkg/zlog"
@@ -90,7 +90,7 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *AppPeer, m *Message) {
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
 	zlog.Info("login key", zap.Any("key1", key1))
-	sessionID, err := sessionid.Decode(key1)
+	sessionID, err := message.DecodeSessionID(key1)
 	if err != nil {
 		zlog.Error("login failed", zap.Error(err))
 		return
