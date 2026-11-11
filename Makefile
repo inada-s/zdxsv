@@ -29,12 +29,3 @@ cover:
 	go tool cover -html=cover.out -o cover.html
 	cat cover-pkg.txt
 	tail -1 cover.txt
-
-# all build for ci environment.
-.PHONY: ci
-ci:
-	mkdir -p bin
-	go build -o ./bin/zdxsv ./src/zdxsv
-	go build -o ./bin/zproxy ./src/zproxy
-	go test -v zdxsv/...
-
