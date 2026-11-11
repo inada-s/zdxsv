@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
-	"zdxsv/pkg/db"
 	. "zdxsv/pkg/lobby/message"
 
 	"go.uber.org/zap"
@@ -20,25 +18,6 @@ import (
 )
 
 var reTwoNumber = regexp.MustCompile(`\d{2}`)
-
-func rankingPage(r []*db.RankingRecord, page int, size int) ([]*db.RankingRecord, int) {
-	lb := page * size
-	if lb > len(r) {
-		lb = len(r)
-	}
-
-	ub := lb + size
-	if ub > len(r) {
-		ub = len(r)
-	}
-
-	maxPage := 0
-	if 0 < len(r) {
-		n := float64(len(r))
-		maxPage = int(math.Ceil(n/float64(size))) - 1
-	}
-	return r[lb:ub], maxPage
-}
 
 var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 	path := m.Reader().ReadEncryptedString()
@@ -87,11 +66,7 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 
 	switch {
 	case strings.Contains(path, "V_RANK"): //通信対戦ランキング
-		ranking, err := db.DefaultDB.GetWinCountRanking(side)
-		users, maxPage := rankingPage(ranking, page, 10)
-		if err != nil {
-			zlog.Error("info message failed", zap.Error(err))
-		}
+		users, maxPage := p.app.OnGetRanking(false, side, page)
 		rp := rankingParams{
 			HasPrev: 0 < page,
 			HasNext: page < maxPage,
@@ -143,16 +118,12 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 				})
 			}
 		}
-		err = tplRanking.Execute(tw, rp)
+		err := tplRanking.Execute(tw, rp)
 		if err != nil {
 			zlog.Error("info message failed", zap.Error(err))
 		}
 	case strings.Contains(path, "P_RANK"): //撃墜数ランキング
-		ranking, err := db.DefaultDB.GetKillCountRanking(side)
-		if err != nil {
-			zlog.Error("info message failed", zap.Error(err))
-		}
-		users, maxPage := rankingPage(ranking, page, 10)
+		users, maxPage := p.app.OnGetRanking(true, side, page)
 		rp := rankingParams{
 			HasPrev: 0 < page,
 			HasNext: page < maxPage,
@@ -180,7 +151,7 @@ var _ = register(0x6801, "GetRegurationData", func(p *AppPeer, m *Message) {
 				Score:  fmt.Sprintf("撃墜数：%d 機", u.KillCount),
 			})
 		}
-		err = tplRanking.Execute(tw, rp)
+		err := tplRanking.Execute(tw, rp)
 		if err != nil {
 			zlog.Error("info page failed", zap.Error(err))
 		}
