@@ -74,8 +74,3 @@ func (m *BattleRpc) NotifyBattleUsers(args *BattleInfoArgs, reply *int) error {
 	*reply = 1
 	return nil
 }
-
-func (m *BattleRpc) PingPong(_ *string, reply *string) error {
-	*reply = "Pong"
-	return nil
-}

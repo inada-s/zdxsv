@@ -14,8 +14,8 @@ import (
 // mainAll (`zdxsv all`, or `zdxsv` with no command) runs every server in this process:
 // dns, dnas (the 443 router with the login pages behind /00000020/), lobby and battle.
 // The login pages and the lobby share the login sessions in memory, so they run only
-// here. It does not listen on ZDXSV_BATTLE_RPC_ADDR (the lobby drives the battle logic
-// directly), and a listener that cannot bind ends the process.
+// here; the lobby drives the battle logic directly. A listener that cannot bind ends
+// the process.
 // With ZDXSV_TLS_CERT_FILE set, dnas, lobby and battle also serve their TLS ports.
 func mainAll() {
 	prepareDB()

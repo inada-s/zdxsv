@@ -54,8 +54,6 @@ var profile = flag.Int("profile", 1, "0: no profile, 1: enable http pprof on 127
 
 func pprofPort(mode string) int {
 	switch mode {
-	case "battle":
-		return 16062
 	case "dns":
 		return 16063
 	default:
@@ -72,7 +70,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, battle, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
 }
 
 func prepareDB() {
@@ -130,8 +128,6 @@ func main() {
 		mainAll()
 	case "dns":
 		mainDNS()
-	case "battle":
-		mainBattle()
 	case "relay":
 		if len(args) == 1 {
 			mainRelay()

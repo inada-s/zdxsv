@@ -114,10 +114,8 @@ type LobbyConfig struct {
 	MasterSpreadsheetID string `env:"ZDXSV_MASTER_SPREADSHEET_ID"`
 }
 
-// BattleConfig: `zdxsv battle` serves the lobby on RPCAddr, binding its host part (127.0.0.1 stays on loopback).
 type BattleConfig struct {
 	Addr       string `env:"ZDXSV_BATTLE_ADDR"`
-	RPCAddr    string `env:"ZDXSV_BATTLE_RPC_ADDR"`
 	PublicAddr string `env:"ZDXSV_BATTLE_PUBLIC_ADDR"`
 }
 

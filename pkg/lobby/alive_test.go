@@ -3,14 +3,10 @@ package lobby
 import (
 	"errors"
 	"io"
-	"net"
-	"net/http"
-	"net/rpc"
 	"testing"
 	"time"
 
 	"zdxsv/pkg/battle/battlerpc"
-	"zdxsv/pkg/config"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 )
@@ -90,41 +86,6 @@ func TestAliveCheckBattleTimeout(t *testing.T) {
 		}
 		if _, ok := a.battles["new"]; !ok {
 			t.Error("younger battle dropped")
-		}
-	})
-}
-
-func TestAliveCheckBattleServerReconnect(t *testing.T) {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { l.Close() })
-	rs := rpc.NewServer()
-	if err := rs.RegisterName("Logic", battlerpc.NewBattleRpc()); err != nil {
-		t.Fatal(err)
-	}
-	go http.Serve(l, rs)
-	config.Conf.Battle.RPCAddr = l.Addr().String()
-	_, app := startLobbyAppWith(t, nil, func(a *App) { a.battleServer = nil })
-	ping := func(a *App) error {
-		ping, reply := "Ping", ""
-		return a.battleServer.PingPong(&ping, &reply)
-	}
-	app.Locked(func(a *App) {
-		if a.battleServer == nil {
-			t.Fatal("no battle server connection at start")
-		}
-		a.battleServer.Close()
-		a.checkAlive(time.Now())
-		if a.battleServer == nil || ping(a) != nil {
-			t.Error("broken battle server connection not replaced")
-		}
-
-		a.battleServer = nil
-		a.checkAlive(time.Now())
-		if a.battleServer == nil || ping(a) != nil {
-			t.Error("missing battle server connection not made")
 		}
 	})
 }
