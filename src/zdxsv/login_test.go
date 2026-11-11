@@ -42,7 +42,6 @@ func TestLoginHandlerAssetsAndHealth(t *testing.T) {
 	}
 
 	for _, c := range []struct{ name, contentType string }{
-		{"assets/css/bootstrap.min.css", "text/css; charset=utf-8"},
 		{"assets/login.png", "image/png"},
 		{"assets/checkfile", ""},
 	} {

@@ -30,11 +30,6 @@ cover:
 	cat cover-pkg.txt
 	tail -1 cover.txt
 
-# run go-bindata to pack all assets into a go package.
-.PHONY: assets
-assets:
-	go-bindata -pkg=assets -o=pkg/assets/assets.go ./assets/...
-
 # all build for ci environment.
 .PHONY: ci
 ci:

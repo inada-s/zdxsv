@@ -20,9 +20,8 @@ jobs:
           go-version: stable
       - name: go vet
         run: go vet ./...
-      # pkg/assets/assets.go is generated
       - name: gofmt
-        run: test -z "$(gofmt -l pkg src | grep -v '^pkg/assets/assets.go$' | tee /dev/stderr)"
+        run: test -z "$(gofmt -l pkg src | tee /dev/stderr)"
       - name: go test
         run: make cover
       - name: coverage summary
