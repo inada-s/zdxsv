@@ -11,12 +11,14 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/golang/protobuf/proto"
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
+	"zdxsv/pkg/proto"
 	"zdxsv/pkg/session"
 )
 
@@ -145,6 +147,19 @@ func (c *testClient) expect(command uint16, category byte) *Message {
 		}
 		c.buf = append(c.buf, tmp[:n]...)
 	}
+}
+
+func (c *testClient) sendCustom(command uint16, body []byte) {
+	c.t.Helper()
+	m := NewClientNotice(command)
+	m.Category = CategoryCustom
+	m.Body = body
+	c.send(m)
+}
+
+// platformInfo is the 0x9950 body the emulator of player i sends on connect.
+func platformInfo(i int) []byte {
+	return []byte(fmt.Sprintf("emulator=pcsx2\nsync=0123456789abcdef\nudp=1\nudp_addr=203.0.113.%d:40000\nggpo=%d\n", i+1, 7000+i))
 }
 
 // ask sends a client question and returns the server answer.
@@ -374,10 +389,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		}
 		p.c = dialLobby(t, addr)
 		if emu {
-			info := NewClientNotice(0x9950)
-			info.Category = CategoryCustom
-			info.Body = []byte(fmt.Sprintf("emulator=pcsx2\nsync=0123456789abcdef\nudp=1\nudp_addr=203.0.113.%d:40000\nggpo=%d\n", i+1, 7000+i))
-			p.c.send(info)
+			p.c.sendCustom(0x9950, platformInfo(i))
 		}
 		var listed []string
 		p.userID, listed, _ = p.c.login(p.ac, "******", fmt.Sprintf("pilot%d", i))
@@ -486,6 +498,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		}
 	}
 
+	usedMs := [][]int32{{3, 5, 7, 9}, {4, 6, 8, 10}}
 	// Each client leaves for the battle server, then reconnects with the
 	// same session: the lobby offers only the battle user, takes the result
 	// and both meet in the battle after room.
@@ -495,6 +508,18 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 	}
 	for i, p := range players {
 		p.c = dialLobby(t, addr)
+		if emu {
+			p.c.sendCustom(0x9950, platformInfo(i))
+			report := &proto.P2PMatchingReport{BattleCode: pb.String(battleCode), UserId: pb.String(p.userID)}
+			for _, ms := range usedMs {
+				report.RoundData = append(report.RoundData, &proto.BattleLogRound{WinTeam: pb.Int32(1), UsedMs: ms})
+			}
+			body, err := pb.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.c.sendCustom(0x9952, body)
+		}
 		userID, listed, ask := p.c.login(p.ac, p.userID, fmt.Sprintf("pilot%d", i))
 		if userID != p.userID || len(listed) != 1 || listed[0] != p.userID {
 			t.Fatalf("relogin as %q listed %v", userID, listed)
@@ -527,6 +552,13 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		}
 		if rec.Round != 5 || rec.Win != win || rec.Lose != lose || rec.Kill != 7 || rec.Death != 4 || rec.Frame != 12345 {
 			t.Errorf("battle record after result %+v", rec)
+		}
+		wantMs := ""
+		if emu {
+			wantMs = fmt.Sprintf("%d,%d", usedMs[0][p.pos-1], usedMs[1][p.pos-1])
+		}
+		if rec.UsedMsList != wantMs {
+			t.Errorf("player %d used ms %q, want %q", i, rec.UsedMsList, wantMs)
 		}
 		u, err := db.DefaultDB.GetUser(p.userID)
 		if err != nil {
