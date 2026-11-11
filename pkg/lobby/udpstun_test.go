@@ -58,9 +58,21 @@ func TestUDPStunServer(t *testing.T) {
 	}
 	srv := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}
 	go (&Server{}).ServeUDPStunServer(srv.String())
-	time.Sleep(200 * time.Millisecond)
 	test := &net.UDPAddr{IP: srv.IP, Port: port + 1}
 
+	// a client bound to port + 1 before the server would take its test socket
+	waitFor(t, "the stun test socket", func() bool {
+		probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer probe.Close()
+		if probe.LocalAddr().(*net.UDPAddr).Port == test.Port {
+			return false
+		}
+		stunPing(t, probe, test, "AAAAAA")
+		return len(stunPongs(t, probe, 20*time.Millisecond)) > 0
+	})
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)

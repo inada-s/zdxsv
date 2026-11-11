@@ -64,7 +64,7 @@ func TestTCPRelay(t *testing.T) {
 	// "0123505679" parses to "12345678": see ParseSessionID
 	c1.Write(hello("0123505679"))
 	c2.Write(hello("0876604322"))
-	time.Sleep(100 * time.Millisecond) // both joined before relaying
+	waitJoined(t, logic, 2)
 
 	// size-prefixed frames; a split frame is held until complete
 	c1.Write([]byte{3, 0xA, 0xB, 4, 0xC})

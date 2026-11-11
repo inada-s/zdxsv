@@ -202,7 +202,7 @@ func TestUDPRelay(t *testing.T) {
 	// "0123505679" parses to "12345678": see ParseSessionID
 	c1.send(udpJoin("0123505679"))
 	c2.send(udpJoin("0876604322"))
-	time.Sleep(100 * time.Millisecond) // both joined before relaying
+	waitJoined(t, s.logic, 2)
 
 	// Resent messages (no ack yet) reach the other peer once.
 	c1.send([]byte("a1"))

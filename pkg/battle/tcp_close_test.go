@@ -36,7 +36,7 @@ func joinedTCPClient(t *testing.T) net.Conn {
 	}
 	// "0123505679" is session "12345678" (ParseSessionID)
 	c.Write(append(make([]byte, 12), "0123505679"...))
-	time.Sleep(50 * time.Millisecond)
+	waitJoined(t, logic, 1)
 	return c
 }
 

@@ -3,6 +3,7 @@ package battle
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/proto"
@@ -135,5 +136,32 @@ func TestLogicJoin(t *testing.T) {
 	info.Users[0].SessionID = "other"
 	if _, ok := l.FindWaitingUser("S4"); ok {
 		t.Errorf("FindWaitingUser found a session missing from its battle info")
+	}
+}
+
+func waitJoined(t *testing.T, m *Logic, n int) {
+	t.Helper()
+	joined := func() int {
+		m.roomsMtx.Lock()
+		defer m.roomsMtx.Unlock()
+		c := 0
+		for _, r := range m.rooms {
+			if r == nil {
+				continue
+			}
+			r.RLock()
+			for _, p := range r.peers {
+				if p != nil {
+					c++
+				}
+			}
+			r.RUnlock()
+		}
+		return c
+	}
+	for deadline := time.Now().Add(2 * time.Second); joined() != n; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("joined = %d, want %d", joined(), n)
+		}
 	}
 }
