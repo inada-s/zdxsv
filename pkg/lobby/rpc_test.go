@@ -2,8 +2,10 @@ package lobby
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,15 +18,50 @@ import (
 	"github.com/valyala/gorpc"
 )
 
+// pipeListener hands the lobby RPC server the server ends of in-memory connections.
+type pipeListener struct {
+	conns chan net.Conn
+	done  chan struct{}
+	once  sync.Once
+}
+
+func (l *pipeListener) Init(string) error { return nil }
+
+func (l *pipeListener) Accept() (io.ReadWriteCloser, string, error) {
+	select {
+	case c := <-l.conns:
+		return c, c.RemoteAddr().String(), nil
+	case <-l.done:
+		return nil, "", net.ErrClosed
+	}
+}
+
+func (l *pipeListener) Close() error {
+	l.once.Do(func() { close(l.done) })
+	return nil
+}
+
+func (l *pipeListener) ListenAddr() net.Addr { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)} }
+
 // startLobbyRPC runs the lobby RPC server zproxy talks to and returns a client of it.
 func startLobbyRPC(t *testing.T, app *App) *gorpc.Client {
 	t.Helper()
-	s := newLobbyRPCServer(app, "127.0.0.1:0")
+	l := &pipeListener{conns: make(chan net.Conn), done: make(chan struct{})}
+	s := newLobbyRPCServer(app, "")
+	s.Listener = l
 	if err := s.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Stop)
-	c := gorpc.NewTCPClient(s.Listener.ListenAddr().String())
+	c := &gorpc.Client{Dial: func(string) (io.ReadWriteCloser, error) {
+		sv, cl := newPipe(t)
+		select {
+		case l.conns <- sv:
+			return cl, nil
+		case <-l.done:
+			return nil, net.ErrClosed
+		}
+	}}
 	c.Start()
 	t.Cleanup(c.Stop)
 	return c
