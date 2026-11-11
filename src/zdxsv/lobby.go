@@ -12,12 +12,15 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"zdxsv/pkg/auth"
 	"zdxsv/pkg/chatops"
 	"zdxsv/pkg/config"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/lobby"
+	"zdxsv/pkg/lobby/lobbyrpc"
 
+	"github.com/valyala/gorpc"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/google"
 	"zdxsv/pkg/zlog"
@@ -216,4 +219,18 @@ func newDiscord() *chatops.Discord {
 		Allow:     allow,
 		Commands:  chatops.MasterCommands(sheet, &chatops.MasterUpdater{Sheet: sheet}),
 	}
+}
+
+// mainLobbyRPCCheck asks the lobby RPC at addr for its status.
+func mainLobbyRPCCheck(addr string) {
+	c := gorpc.NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+	res, err := c.CallTimeout(&lobbyrpc.StatusRequest{}, 5*time.Second)
+	st, ok := res.(*lobbyrpc.StatusResponse)
+	if err != nil || !ok {
+		fmt.Println("FAIL", addr, err, res)
+		os.Exit(1)
+	}
+	fmt.Println("OK", addr, "lobby users", len(st.LobbyUsers), "battles", len(st.Battles))
 }
