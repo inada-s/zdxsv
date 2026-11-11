@@ -5,20 +5,7 @@ import (
 	"fmt"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
-
-	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/transform"
 )
-
-// maxChatTextBytes is the longest chat text the game's input sends. Longer text overflows
-// the receiving PS2's stack (52 bytes crash it).
-const maxChatTextBytes = 40
-
-func chatTextTooLong(s string) bool {
-	b, _, _ := transform.String(encoding.ReplaceUnsupported(japanese.ShiftJIS.NewEncoder()), s)
-	return len(b) > maxChatTextBytes
-}
 
 var _ = register(0x6203, "GetPlazaCount", func(p *AppPeer, m *Message) {
 	a := NewServerAnswer(m)
@@ -161,17 +148,7 @@ var _ = register(0x6704, "SendMailMessage", func(p *AppPeer, m *Message) {
 })
 
 var _ = register(0x6701, "SendChatMessage", func(p *AppPeer, m *Message) {
-	str := m.Reader().ReadEncryptedString()
-	if chatTextTooLong(str) {
-		return
-	}
-	if p.Lobby != nil && lobbyHasHack(lobbySetting(p.Platform, p.Lobby.ID), model.HackChatCommand) {
-		if lobbyChatCarry(p, str) {
-			return
-		}
-		LobbyChatHack(p, str)
-	}
-	p.app.OnSendChatMessage(p, str)
+	p.app.OnSendChatMessage(p, m.Reader().ReadEncryptedString())
 })
 
 func NoticeBothPlazaJoinUser(p *AppPeer, id uint16, count uint16) {

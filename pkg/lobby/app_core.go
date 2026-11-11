@@ -3,11 +3,15 @@ package lobby
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 	"zdxsv/pkg/zlog"
 
 	"zdxsv/pkg/battle/battlerpc"
@@ -765,7 +769,25 @@ func (a *App) OnGetBattleAfterRoomUserCount(p *AppPeer) uint16 {
 	return a.noticeBattleAfterRoomUserCountAll(p.Battle)
 }
 
+// maxChatTextBytes is the longest chat text the game's input sends. Longer text overflows
+// the receiving PS2's stack (52 bytes crash it).
+const maxChatTextBytes = 40
+
+func chatTextTooLong(s string) bool {
+	b, _, _ := transform.String(encoding.ReplaceUnsupported(japanese.ShiftJIS.NewEncoder()), s)
+	return len(b) > maxChatTextBytes
+}
+
 func (a *App) OnSendChatMessage(p *AppPeer, msg string) {
+	if chatTextTooLong(msg) {
+		return
+	}
+	if p.Lobby != nil && lobbyHasHack(lobbySetting(p.Platform, p.Lobby.ID), model.HackChatCommand) {
+		if lobbyChatCarry(p, msg) {
+			return
+		}
+		LobbyChatHack(p, msg)
+	}
 	if p.inBattleAfterRoom {
 		if p.Battle == nil {
 			NoticeChatMessage(p, p.UserID, p.Name, msg)
@@ -1144,4 +1166,37 @@ func (a *App) OnNoticeRoomBattleStart(p *AppPeer) {
 	} else {
 		zlog.Error("failed to start battle")
 	}
+}
+
+// OnGetRanking returns a page of 10 of the win count (or kill count) ranking for side
+// (0 total, 1 AEUG, 2 TITANS) and the last page number.
+func (a *App) OnGetRanking(kill bool, side byte, page int) ([]*db.RankingRecord, int) {
+	get := db.DefaultDB.GetWinCountRanking
+	if kill {
+		get = db.DefaultDB.GetKillCountRanking
+	}
+	ranking, err := get(side)
+	if err != nil {
+		zlog.Error("info message failed", zap.Error(err))
+	}
+	return rankingPage(ranking, page, 10)
+}
+
+func rankingPage(r []*db.RankingRecord, page int, size int) ([]*db.RankingRecord, int) {
+	lb := page * size
+	if lb > len(r) {
+		lb = len(r)
+	}
+
+	ub := lb + size
+	if ub > len(r) {
+		ub = len(r)
+	}
+
+	maxPage := 0
+	if 0 < len(r) {
+		n := float64(len(r))
+		maxPage = int(math.Ceil(n/float64(size))) - 1
+	}
+	return r[lb:ub], maxPage
 }
