@@ -57,10 +57,15 @@ func (s *Server) Serve(l net.Listener) error {
 			continue
 		}
 		zlog.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
-		conn := NewConn(tcpConn)
-		conn.peer = s.pf.NewPeer(conn)
-		go conn.serve()
+		go s.ServeConn(tcpConn)
 	}
+}
+
+// ServeConn serves one client connection until it closes.
+func (s *Server) ServeConn(c net.Conn) {
+	conn := NewConn(c)
+	conn.peer = s.pf.NewPeer(conn)
+	conn.serve()
 }
 
 type Conn struct {

@@ -3,10 +3,14 @@ package lobby
 import (
 	"errors"
 	"io"
+	"net"
+	"net/http"
+	"net/rpc"
 	"testing"
 	"time"
 
 	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/config"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 )
@@ -91,7 +95,18 @@ func TestAliveCheckBattleTimeout(t *testing.T) {
 }
 
 func TestAliveCheckBattleServerReconnect(t *testing.T) {
-	_, app := startLobbyApp(t, battlerpc.NewBattleRpc())
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	rs := rpc.NewServer()
+	if err := rs.RegisterName("Logic", battlerpc.NewBattleRpc()); err != nil {
+		t.Fatal(err)
+	}
+	go http.Serve(l, rs)
+	config.Conf.Battle.RPCAddr = l.Addr().String()
+	_, app := startLobbyAppWith(t, nil, func(a *App) { a.battleServer = nil })
 	ping := func(a *App) error {
 		ping, reply := "Ping", ""
 		return a.battleServer.PingPong(&ping, &reply)

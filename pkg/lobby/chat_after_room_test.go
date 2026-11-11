@@ -2,7 +2,6 @@ package lobby
 
 import (
 	"fmt"
-	"net"
 	"testing"
 
 	"zdxsv/pkg/db"
@@ -13,16 +12,7 @@ import (
 // addPeer adds a logged in peer to app; sent messages stay in its Conn's outbuf.
 func addPeer(t *testing.T, app *App, userID string) *AppPeer {
 	t.Helper()
-	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { ln.Close() })
-	c, err := net.DialTCP("tcp", nil, ln.Addr().(*net.TCPAddr))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { c.Close() })
+	c, _ := newPipe(t)
 	p := &AppPeer{app: app, conn: NewConn(c), Platform: model.PlatformConsole}
 	p.User = model.User{User: db.User{UserID: userID, Name: userID, SessionID: "S" + userID}}
 	app.users[userID] = p

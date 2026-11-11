@@ -227,10 +227,6 @@ func stripHost(addr string) string {
 func (a *App) Serve() {
 	aliveCheck := time.NewTicker(a.aliveCheckInterval)
 	defer aliveCheck.Stop()
-	err := newLobbyRPCServer(a, stripHost(config.Conf.Lobby.RPCAddr)).Start()
-	if err != nil {
-		zlog.Error("lobby setup failed", zap.Error(err))
-	}
 	if a.battleServer == nil {
 		a.connectToBattleServer()
 	}
