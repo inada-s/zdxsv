@@ -233,6 +233,59 @@ func loginAgain(loginKey string) *testLogin {
 
 func u16(v uint16) []byte { return []byte{byte(v >> 8), byte(v)} }
 
+// A client walks the plaza and the lobby list the way the game does after login,
+// and sees the user who entered a lobby.
+func TestLobbyList(t *testing.T) {
+	dbtest.Use(t)
+	addr := startLobby(t, battlerpc.NewBattleRpc())
+	in, look := dialLobby(t, addr), dialLobby(t, addr)
+	in.login(registerAccount(t), "******", "inside")
+	look.login(registerAccount(t), "******", "looker")
+	const lobbyID = 4
+	if a := in.ask(0x6305, u16(lobbyID)); a.Status != StatusSuccess {
+		t.Fatalf("EnterLobby status %x", a.Status)
+	}
+
+	plazas := look.ask(0x6203, nil).Reader().Read16()
+	if plazas == 0 {
+		t.Fatal("no plaza")
+	}
+	for id := uint16(1); id <= plazas; id++ {
+		r := look.ask(0x6205, u16(id)).Reader()
+		if got, _, battles := r.Read16(), r.Read16(), r.Read16(); got != id || battles != 0 {
+			t.Fatalf("GetPlazaJoinUser(%d) = plaza %d, %d battles", id, got, battles)
+		}
+		if got := look.ask(0x6206, u16(id)).Reader().Read16(); got != id {
+			t.Fatalf("GetPlazaStatus(%d) = plaza %d", id, got)
+		}
+	}
+	if a := look.ask(0x6207, u16(1)); a.Status != StatusSuccess {
+		t.Fatalf("EnterPlaza status %x", a.Status)
+	}
+
+	lobbies := look.ask(0x6301, nil).Reader().Read16()
+	if int(lobbies) >= model.LobbyCount || lobbies < lobbyID {
+		t.Fatalf("GetLobbyCount = %d, lobby ids 1..%d", lobbies, model.LobbyCount-1)
+	}
+	for id := uint16(1); id <= lobbies; id++ {
+		r := look.ask(0x6303, u16(id)).Reader()
+		want := uint16(0)
+		if id == lobbyID {
+			want = 1
+		}
+		if got, users := r.Read16(), r.Read16(); got != id || users != want {
+			t.Errorf("GetLobbyUserCount(%d) = lobby %d, %d users, want %d", id, got, users, want)
+		}
+		r = look.ask(0x6304, u16(id)).Reader()
+		if got, status := r.Read16(), r.Read8(); got != id || status != 3 {
+			t.Errorf("GetLobbyUserStatus(%d) = lobby %d, status %d, want 3 (open)", id, got, status)
+		}
+		if a := look.ask(0x6308, u16(id)); a.Status != StatusSuccess {
+			t.Errorf("GetLobbyExplain(%d) status %x", id, a.Status)
+		}
+	}
+}
+
 // Clients log in, enter a lobby and entry: the lobby starts the battle, tells
 // the battle server and records it; after the battle they report the result.
 func TestLobbyBattleRoundTrip(t *testing.T) {
