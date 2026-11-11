@@ -499,7 +499,7 @@ func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, body []byte) {
 
 func p2pMatchingReportField(body []byte) zap.Field {
 	if json.Valid(body) {
-		return zap.Any("report", json.RawMessage(body))
+		return zap.Reflect("report", json.RawMessage(body))
 	}
 	return zap.ByteString("report", body)
 }
