@@ -219,6 +219,8 @@ func LobbyChatHack(p *LbsPeer, str string) {
 
 // SetPadDelayLobbyHack writes answer of LobbyExplain message
 // with a function that sets pad delay to static value.
+// The table at 0x5ffba0 is the in-flight input cap table the 0x6913 answer's last byte selects
+// rows of (6: rows 0-2, else 3-5); all 6 rows get (2, 5, 5), so that byte makes no difference here.
 func SetPadDelayLobbyHack(p *LbsPeer, m *LbsMessage) *LbsMessage {
 	lobbyID := m.Reader().Read16()
 	a := NewServerAnswer(m)

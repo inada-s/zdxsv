@@ -430,6 +430,9 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 			if bin := r.ReadString(); strings.TrimRight(bin, "\x00") != fmt.Sprintf("Pilot%d", j) {
 				t.Errorf("player %d: opponent %d binary %q", i, j, bin)
 			}
+			if kind := r.Read8(); kind != 6 {
+				t.Errorf("player %d: opponent %d last byte %d, want 6", i, j, kind)
+			}
 		}
 		for j, q := range players {
 			r := p.c.ask(0x6917, []byte{q.pos}).Reader()
