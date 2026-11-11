@@ -5,9 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"net/http"
-	"net/rpc"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,52 +19,56 @@ import (
 	"zdxsv/pkg/session"
 )
 
-func listenLocal(t *testing.T) *net.TCPListener {
+// pipeConn is one end of an in-memory connection that reports addr as its peer's address.
+type pipeConn struct {
+	net.Conn
+	addr net.Addr
+}
+
+func (c pipeConn) RemoteAddr() net.Addr { return c.addr }
+
+var pipePort atomic.Int32
+
+// newPipe returns the server and the client end of an in-memory connection.
+// Each server end has its own loopback address, as the App tells clients apart by it.
+func newPipe(t *testing.T) (net.Conn, net.Conn) {
 	t.Helper()
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { l.Close() })
+	s, c := net.Pipe()
+	t.Cleanup(func() { c.Close(); s.Close() })
+	addr := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 20000 + int(pipePort.Add(1))}
+	return pipeConn{s, addr}, c
+}
+
+// testLobby is a lobby that clients reach through in-memory connections.
+type testLobby struct {
+	sv *Server
+}
+
+// startLobby runs a lobby App with the battle logic b in process.
+func startLobby(t *testing.T, b *battlerpc.BattleRpc) *testLobby {
+	t.Helper()
+	l, _ := startLobbyApp(t, b)
 	return l
 }
 
-// startLobby runs a lobby App and its TCP server against the battle RPC b.
-// It returns the lobby address.
-func startLobby(t *testing.T, b *battlerpc.BattleRpc) string {
-	t.Helper()
-	addr, _ := startLobbyApp(t, b)
-	return addr
-}
-
 // startLobbyApp is startLobby that also returns the App.
-func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (string, *App) {
+func startLobbyApp(t *testing.T, b *battlerpc.BattleRpc) (*testLobby, *App) {
 	t.Helper()
 	return startLobbyAppWith(t, b, func(*App) {})
 }
 
 // startLobbyAppWith is startLobbyApp with setup run on the App before it serves.
-func startLobbyAppWith(t *testing.T, b *battlerpc.BattleRpc, setup func(*App)) (string, *App) {
+func startLobbyAppWith(t *testing.T, b *battlerpc.BattleRpc, setup func(*App)) (*testLobby, *App) {
 	t.Helper()
-	rl := listenLocal(t)
-	rs := rpc.NewServer()
-	if err := rs.RegisterName("Logic", b); err != nil {
-		t.Fatal(err)
-	}
-	go http.Serve(rl, rs)
-
-	config.Conf.Battle.RPCAddr = rl.Addr().String()
 	config.Conf.Battle.PublicAddr = "127.0.0.2:8210"
 	config.Conf.Lobby.RPCAddr = "127.0.0.1:0"
 
 	app := NewApp()
+	app.SetBattleServer(b)
 	setup(app)
 	go app.Serve()
 	t.Cleanup(app.Quit)
-
-	ll := listenLocal(t)
-	go NewServer(app).Serve(ll)
-	return ll.Addr().String(), app
+	return &testLobby{sv: NewServer(app)}, app
 }
 
 // encryptString is the client side of MessageBodyReader.ReadEncryptedString.
@@ -100,13 +103,10 @@ type testClient struct {
 	queue []*Message
 }
 
-func dialLobby(t *testing.T, addr string) *testClient {
+func dialLobby(t *testing.T, l *testLobby) *testClient {
 	t.Helper()
-	c, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { c.Close() })
+	s, c := newPipe(t)
+	go l.sv.ServeConn(s)
 	return &testClient{t: t, conn: c}
 }
 

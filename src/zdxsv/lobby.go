@@ -42,6 +42,9 @@ func serveLobby(app *lobby.App) {
 	if authServer != nil {
 		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
+	if err := app.StartRPC(stripHost(config.Conf.Lobby.RPCAddr)); err != nil {
+		zlog.Error("lobby setup failed", zap.Error(err))
+	}
 	go app.Serve()
 	sv := lobby.NewServer(app)
 	go sv.ListenAndServe(stripHost(config.Conf.Lobby.Addr))

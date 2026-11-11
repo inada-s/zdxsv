@@ -39,6 +39,11 @@ func newLobbyRPCServer(app *App, addr string) *gorpc.Server {
 	return gorpc.NewTCPServer(addr, m.newHandler())
 }
 
+// StartRPC starts the lobby RPC server the proxies talk to on addr.
+func (a *App) StartRPC(addr string) error {
+	return newLobbyRPCServer(a, addr).Start()
+}
+
 func (m *lobbyRPC) registerProxy(remoteAddr string, req *RegisterProxyRequest) *RegisterProxyResponse {
 	zlog.Info("RegisterProxyRequest", zap.Any("addr", remoteAddr), zap.Any("req", req))
 	res := new(RegisterProxyResponse)

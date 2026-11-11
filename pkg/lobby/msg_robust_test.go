@@ -3,7 +3,6 @@ package lobby
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"sort"
 	"testing"
 
@@ -16,16 +15,7 @@ import (
 // newRobustPeer returns a logged in peer of a new App; sent messages stay in its Conn's outbuf.
 func newRobustPeer(t *testing.T) *AppPeer {
 	t.Helper()
-	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { ln.Close() })
-	c, err := net.DialTCP("tcp", nil, ln.Addr().(*net.TCPAddr))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { c.Close() })
+	c, _ := newPipe(t)
 	app := NewApp()
 	p := &AppPeer{app: app, conn: NewConn(c), Platform: model.PlatformConsole}
 	p.User = model.User{User: db.User{UserID: "ROBUST", Name: "robust"}}
