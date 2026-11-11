@@ -2,8 +2,8 @@
 // (github.com/FogNo23/DNASrep, AGPL-3.0 like zdxsv).
 //
 // The PS2 opens with an SSLv2-format ClientHello and TLS 1.0 RC4 (dnas_tls10.go).
-// DNAS queries are answered with canned
-// packets (dnas/www/<gateway>/packets/<gameid>_<qrytype>); i-connect answers
+// DNAS queries are answered with canned packets from a DNASrep checkout
+// (ZDXSV_DNAS_DATA_DIR, not part of this repository); i-connect answers
 // get two 3DES-CBC layers. /00000020/* goes to the zdxsv login pages
 // (the game's browser opens the login page through the same host).
 package main
@@ -20,27 +20,56 @@ import (
 	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
-	"embed"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 )
 
-// dnas/: DNASrep (8e8dad3) etc/dnas (certificates) and www/dnas/<gateway>/{error.raw,packets}.
-// testdata/golden.txt: the PHP DNASrep's answers (testdata/golden.py).
-//
-//go:embed dnas
-var dnasFS embed.FS
+// dnasData is a DNASrep checkout: etc/dnas holds the certificates, www/dnas/<gateway>/
+// error.raw and packets/<gameid>_<qrytype>, and www/dnas/gai-gw/connect.php the envelope
+// key of the i-connect answers. testdata/golden.txt holds the PHP DNASrep's answers
+// (testdata/golden.py).
+type dnasData struct {
+	fs          fs.FS
+	envelopeKey []byte // 3DES k1 k2 k3
+	envelopeIV  []byte
+}
+
+var envelopeRE = regexp.MustCompile(`encrypt3\(\$packet, 0x28, 0x120, pack\("H\*", "([0-9a-f]{16})"\), pack\("H\*", "([0-9a-f]{16})"\), pack\("H\*", "([0-9a-f]{16})"\), pack\("H\*", "([0-9a-f]{16})"\)\)`)
+
+var gatewayRE = regexp.MustCompile(`^[a-z]+-gw$`)
+
+func loadDnasData(dir string) (*dnasData, error) {
+	if dir == "" {
+		return nil, errors.New("ZDXSV_DNAS_DATA_DIR is not set: a DNASrep checkout (docs/DEPLOY.md)")
+	}
+	fsys := os.DirFS(dir)
+	php, err := fs.ReadFile(fsys, "www/dnas/gai-gw/connect.php")
+	if err != nil {
+		return nil, fmt.Errorf("ZDXSV_DNAS_DATA_DIR %s: %w", dir, err)
+	}
+	m := envelopeRE.FindSubmatch(php)
+	if m == nil {
+		return nil, fmt.Errorf("ZDXSV_DNAS_DATA_DIR %s: no envelope key in www/dnas/gai-gw/connect.php", dir)
+	}
+	return &dnasData{
+		fs:          fsys,
+		envelopeKey: mustHex(string(m[1]) + string(m[2]) + string(m[3])),
+		envelopeIV:  mustHex(string(m[4])),
+	}, nil
+}
 
 // substr is PHP substr for in-range starts: clamped to the end of b.
 func substr(b []byte, off, n int) []byte {
@@ -62,11 +91,6 @@ func encrypt3(b []byte, off, n int, key, iv []byte) {
 	cipher.NewCBCEncrypter(c, iv).CryptBlocks(b[off:off+n], b[off:off+n])
 }
 
-var (
-	envelopeKey = mustHex("eb711416cb0ab016ae190174b5ce63397b01b91880145e34")
-	envelopeIV  = mustHex("c510a6400a9b022f")
-)
-
 func mustHex(s string) []byte {
 	b, err := hex.DecodeString(s)
 	if err != nil {
@@ -75,10 +99,13 @@ func mustHex(s string) []byte {
 	return b
 }
 
-// DnasAnswer returns the answer to query q at gateway gw (gai-gw, us-gw, eu-gw):
+// Answer returns the answer to query q at gateway gw (gai-gw, us-gw, eu-gw):
 // connect = i-connect, else others. note names the packet used, or why error.raw.
-func DnasAnswer(gw string, connect bool, q []byte) (ans []byte, note string) {
-	errRaw, err := dnasFS.ReadFile(path.Join("dnas/www", gw, "error.raw"))
+func (d *dnasData) Answer(gw string, connect bool, q []byte) (ans []byte, note string) {
+	if !gatewayRE.MatchString(gw) {
+		return nil, "no gateway " + gw
+	}
+	errRaw, err := fs.ReadFile(d.fs, path.Join("www/dnas", gw, "error.raw"))
 	if err != nil {
 		return nil, "no gateway " + gw
 	}
@@ -87,7 +114,7 @@ func DnasAnswer(gw string, connect bool, q []byte) (ans []byte, note string) {
 		idOff = 0x2c
 	}
 	fname := hex.EncodeToString(substr(q, idOff, 8)) + "_" + hex.EncodeToString(substr(q, 0, 4))
-	p, err := dnasFS.ReadFile(path.Join("dnas/www", gw, "packets", fname))
+	p, err := fs.ReadFile(d.fs, path.Join("www/dnas", gw, "packets", fname))
 	if err != nil {
 		return errRaw, fname + " missing"
 	}
@@ -99,13 +126,13 @@ func DnasAnswer(gw string, connect bool, q []byte) (ans []byte, note string) {
 		c2 := sha1.Sum(substr(q, 0x48, 0xec))
 		full := append(c2[:], c1[:0xc]...) // k1 k2 k3 iv
 		encrypt3(p, 0xc8, 0x20, full[:24], full[24:32])
-		encrypt3(p, 0x28, 0x120, envelopeKey, envelopeIV)
+		encrypt3(p, 0x28, 0x120, d.envelopeKey, d.envelopeIV)
 	}
 	return p, fname
 }
 
-func pemBlocks(name string) ([][]byte, error) {
-	b, err := dnasFS.ReadFile(name)
+func (d *dnasData) pemBlocks(name string) ([][]byte, error) {
+	b, err := fs.ReadFile(d.fs, name)
 	if err != nil {
 		return nil, err
 	}
@@ -120,17 +147,17 @@ func pemBlocks(name string) ([][]byte, error) {
 	}
 }
 
-func loadDnasTLS(region string) (*tlsConfig, error) {
-	certs, err := pemBlocks("dnas/etc/cert-" + region + ".pem")
+func (d *dnasData) tlsConfig(region string) (*tlsConfig, error) {
+	certs, err := d.pemBlocks("etc/dnas/cert-" + region + ".pem")
 	if err != nil {
 		return nil, err
 	}
-	ca, err := pemBlocks("dnas/etc/ca-cert.pem")
+	ca, err := d.pemBlocks("etc/dnas/ca-cert.pem")
 	if err != nil {
 		return nil, err
 	}
 	certs = append(certs, ca...)
-	keys, err := pemBlocks("dnas/etc/cert-" + region + "-key.pem")
+	keys, err := d.pemBlocks("etc/dnas/cert-" + region + "-key.pem")
 	if err != nil {
 		return nil, err
 	}
@@ -153,24 +180,25 @@ func loadDnasTLS(region string) (*tlsConfig, error) {
 
 // DnasServer answers DNAS on the PS2's TLS dialect.
 type DnasServer struct {
-	tls *tlsConfig
-	mux *http.ServeMux
+	data *dnasData
+	tls  *tlsConfig
+	mux  *http.ServeMux
 }
 
 // NewDnasServer: region selects the certificate (jp, us, eu); login serves the zdxsv login
 // pages behind /00000020/.
-func NewDnasServer(region string, login http.Handler) (*DnasServer, error) {
-	cfg, err := loadDnasTLS(region)
+func NewDnasServer(data *dnasData, region string, login http.Handler) (*DnasServer, error) {
+	cfg, err := data.tlsConfig(region)
 	if err != nil {
 		return nil, err
 	}
-	s := &DnasServer{tls: cfg, mux: http.NewServeMux()}
-	s.mux.HandleFunc("/", handleDNAS)
+	s := &DnasServer{data: data, tls: cfg, mux: http.NewServeMux()}
+	s.mux.HandleFunc("/", s.handleDNAS)
 	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", login))
 	return s, nil
 }
 
-func handleDNAS(w http.ResponseWriter, r *http.Request) {
+func (s *DnasServer) handleDNAS(w http.ResponseWriter, r *http.Request) {
 	q, _ := io.ReadAll(r.Body)
 	dir, base := path.Split(r.URL.Path)
 	gw := path.Base(dir)
@@ -178,9 +206,9 @@ func handleDNAS(w http.ResponseWriter, r *http.Request) {
 	var note string
 	switch {
 	case strings.HasSuffix(base, "i-connect"):
-		ans, note = DnasAnswer(gw, true, q)
+		ans, note = s.data.Answer(gw, true, q)
 	case strings.HasSuffix(base, "others"):
-		ans, note = DnasAnswer(gw, false, q)
+		ans, note = s.data.Answer(gw, false, q)
 	}
 	if ans == nil {
 		logger.Info("dnas 404", zap.String("method", r.Method), zap.Stringer("url", r.URL))
@@ -396,7 +424,11 @@ func DnasQuery(conn net.Conn, method, urlPath string, body []byte) (int, []byte,
 // newDNASRouter is the 443 front end: game consoles get the DNAS server (with the login
 // pages behind /00000020/), other TLS goes to ZDXSV_DNAS_HTTPS_BACKEND.
 func newDNASRouter(login http.Handler) (*Router, error) {
-	s, err := NewDnasServer(Conf.DNAS.Region, login)
+	data, err := loadDnasData(Conf.DNAS.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	s, err := NewDnasServer(data, Conf.DNAS.Region, login)
 	if err != nil {
 		return nil, err
 	}
@@ -407,6 +439,11 @@ func newDNASRouter(login http.Handler) (*Router, error) {
 // (i-connect, then others), then the login page proxy (/00000020/health), and
 // exits 1 unless all three answer as expected. With pins it goes through the TLS port addr.
 func mainDNASCheck(addr string, pins []string) {
+	data, err := loadDnasData(Conf.DNAS.DataDir)
+	if err != nil {
+		fmt.Println("FAIL", err)
+		os.Exit(1)
+	}
 	ok := true
 	for _, q := range []struct {
 		kind  string
@@ -415,7 +452,7 @@ func mainDNASCheck(addr string, pins []string) {
 		{"i-connect", dnasCheckQuery(0x2c, "01180000", "c9acca0f30eecbf7", 308)},
 		{"others", dnasCheckQuery(0x1b, "01188001", "bdfe36f1209991ec", 184)},
 	} {
-		want, note := DnasAnswer("gai-gw", q.kind == "i-connect", q.query)
+		want, note := data.Answer("gai-gw", q.kind == "i-connect", q.query)
 		c, err := dialCheck(addr, pins)
 		if err == nil {
 			c.SetDeadline(time.Now().Add(20 * time.Second))
