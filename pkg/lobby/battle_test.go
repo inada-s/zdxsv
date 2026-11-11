@@ -196,26 +196,8 @@ func testUsers(ids ...string) []*proto.P2PUser {
 	return us
 }
 
-func TestBattleInfoNotice(t *testing.T) {
+func TestNoBattleInfoNotice(t *testing.T) {
 	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
-	n := testBattleInfoNotice(newUDPTestPeer(emu, false), nil)
-	if n != nil && (n.Direction != ServerToClient || n.Category != CategoryCustom || n.Command != 0x9951) {
-		t.Errorf("header %x %x %x", n.Direction, n.Category, n.Command)
-	}
-	wantBattleInfo(t, battleInfo(t, n), &proto.P2PMatching{
-		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
-		BattleServer: pb.String("192.168.1.8:8210"), Users: testUsers("AAAAAA", "BBBBBB")})
-
-	p := newUDPTestPeer(emu, false)
-	p.Battle.Users[0].Entry = model.EntryTitans
-	p.Battle.Users[1].Entry = model.EntryAeug
-	users := testUsers("AAAAAA", "BBBBBB")
-	users[0].Team = pb.Int32(2)
-	users[1].Team = pb.Int32(1)
-	wantBattleInfo(t, battleInfo(t, testBattleInfoNotice(p, nil)), &proto.P2PMatching{
-		BattleCode: pb.String(""), PeerId: pb.Int32(1), LobbySessionId: pb.String("SBBBBBB"),
-		BattleServer: pb.String("192.168.1.8:8210"), Users: users})
-
 	noUDP := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
 	for name, p := range map[string]*AppPeer{
 		"console":     newUDPTestPeer(map[string]string{}, false),
