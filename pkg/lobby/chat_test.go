@@ -2,12 +2,14 @@ package lobby
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"golang.org/x/text/encoding/japanese"
-
 	"zdxsv/pkg/battle/battlerpc"
+	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
+	"zdxsv/pkg/lobby/message"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 )
@@ -134,6 +136,139 @@ func TestLobbyTestBattleWithoutProxy(t *testing.T) {
 	for _, m := range c.queue {
 		if m.Command == 0x6910 {
 			t.Errorf("battle start notice without a proxy")
+		}
+	}
+}
+
+// Each chat notice ends with 4 zero bytes after the text: type and the ID, name
+// and text colors, which mean the default colors.
+func TestChatNoticeColorBytes(t *testing.T) {
+	dbtest.Use(t)
+	addr := startLobby(t, battlerpc.NewBattleRpc())
+
+	c := dialLobby(t, addr)
+	c.login(registerAccount(t), "******", "pilot")
+	c.ask(0x6305, u16(4))
+	c.say("11111111")
+	c.say("a")
+	c.ask(0x600E, nil)
+
+	n := 0
+	for _, m := range c.queue {
+		if m.Command != 0x6702 || m.Category != CategoryNotice {
+			continue
+		}
+		n++
+		r := m.Reader()
+		r.ReadString()
+		r.ReadString()
+		text := r.ReadString()
+		if r.Remaining() != 4 {
+			t.Fatalf("%q: %d bytes after the text, want 4", text, r.Remaining())
+		}
+		for i := 0; i < 4; i++ {
+			if b := r.Read8(); b != 0 {
+				t.Errorf("%q: byte %d after the text is %#x, want 0", text, i, b)
+			}
+		}
+	}
+	if n != 2 {
+		t.Fatalf("got %d chat notices, want 2", n)
+	}
+}
+
+func TestLobbyChatDropsTextLongerThanGameInput(t *testing.T) {
+	dbtest.Use(t)
+	addr := startLobby(t, battlerpc.NewBattleRpc())
+	var cs []*testClient
+	var ids []string
+	for _, name := range []string{"pilot0", "pilot1"} {
+		c := dialLobby(t, addr)
+		id, _, _ := c.login(registerAccount(t), "******", name)
+		c.ask(0x6305, u16(4))
+		c.heard()
+		cs = append(cs, c)
+		ids = append(ids, id)
+	}
+	for _, tc := range []struct {
+		line  string
+		heard bool
+	}{
+		{strings.Repeat("あ", 20), true},
+		{strings.Repeat("あ", 21), false},
+		{strings.Repeat("あ", 26), false},
+		{strings.Repeat("a", 40), true},
+		{strings.Repeat("a", 41), false},
+	} {
+		cs[0].say(sjis(t, tc.line))
+		for i, c := range cs {
+			got := c.heard()
+			want := 0
+			if tc.heard {
+				want = 1
+			}
+			if len(got) != want || (want == 1 && got[0] != ids[0]+":"+sjis(t, tc.line)) {
+				t.Errorf("%d chars, client %d heard %q", len([]rune(tc.line)), i, got)
+			}
+		}
+	}
+}
+
+// addPeer adds a logged in peer to app; sent messages stay in its Conn's outbuf.
+func addPeer(t *testing.T, app *App, userID string) *AppPeer {
+	t.Helper()
+	c, _ := newPipe(t)
+	p := &AppPeer{app: app, conn: NewConn(c), Platform: model.PlatformConsole}
+	p.User = model.User{User: db.User{UserID: userID, Name: userID, SessionID: "S" + userID}}
+	app.users[userID] = p
+	return p
+}
+
+// chatLines returns the chat lines in p's unsent output and clears it.
+func chatLines(p *AppPeer) []string {
+	var got []string
+	buf := p.conn.outbuf
+	for len(buf) > 0 {
+		n, m := message.Deserialize(buf)
+		if n == 0 {
+			break
+		}
+		buf = buf[n:]
+		if m.Command == 0x6702 {
+			r := m.Reader()
+			from := r.ReadString()
+			r.ReadString()
+			got = append(got, from+":"+r.ReadString())
+		}
+	}
+	p.conn.outbuf = p.conn.outbuf[:0]
+	return got
+}
+
+// Chat in the battle after room reaches only the battle's users in that
+// room, not a battle user still elsewhere.
+func TestChatInBattleAfterRoom(t *testing.T) {
+	app := NewApp()
+	a, b, c := addPeer(t, app, "A"), addPeer(t, app, "B"), addPeer(t, app, "C")
+	battle := model.NewBattle(model.PlatformConsole, 0)
+	for _, p := range []*AppPeer{a, b, c} {
+		battle.Add(&p.User)
+		app.battles[p.SessionID] = battle
+	}
+	app.OnEnterBattleAfterRoom(a)
+	app.OnEnterBattleAfterRoom(b)
+	c.Battle = battle
+	for _, p := range []*AppPeer{a, b, c} {
+		chatLines(p)
+	}
+
+	app.OnSendChatMessage(a, "gg")
+	for _, w := range []struct {
+		p    *AppPeer
+		want string
+	}{{a, "[A:gg]"}, {b, "[A:gg]"}, {c, "[]"}} {
+		if got := chatLines(w.p); fmt.Sprint(got) != w.want {
+			t.Errorf("%s heard %v, want %s", w.p.UserID, got, w.want)
 		}
 	}
 }
