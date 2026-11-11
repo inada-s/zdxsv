@@ -1,238 +1,232 @@
 <!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8">
-<meta name="description" content="Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバです。PS2 実機と PCSX2 で遊べます。">
+<meta name="description" content="Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバーです。PS2 実機と PCSX2 で遊べます。">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="canonical" href="https://www.zdxsv.net/">
-
-<link href="/static/css/bootstrap.min.css" rel="stylesheet">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <link href="/static/css/style.css" rel="stylesheet">
-
-<title>ガンダムvs.Zガンダム 非公式通信対戦サーバ</title>
+<title>ガンダムvs.Zガンダム 非公式通信対戦サーバー</title>
 </head>
 <body>
 
-<div class="jumbotron">
-<div class="container">
-<h1>zdxsv.net</h1>
-<p>ガンダムvs.Zガンダム 非公式通信対戦サーバ</p>
-</div>
-</div>
-
-<div class="links-wrapper">
-<div class="container">
-<div class="btn-group btn-group-justified links">
-  <a href="#top" class="btn btn-default" data-toggle="tab">トップ</a>
-  <a href="#ps2" class="btn btn-default" data-toggle="tab">PS2</a>
-  <a href="#pcsx2" class="btn btn-default" data-toggle="tab">PCSX2</a>
-  <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank" class="btn btn-default">Discord</a>
-</div>
-</div>
-</div>
-
-<div class="container main-contents">
-<div class="row">
-
-<div class="col-sm-8">
-<div class="tab-content">
-<div class="tab-pane active" id="top">
-  <h2>基本情報</h2>
-  <p>Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバです。</p>
-  <p class="danger">※公式の通信対戦サービスは2011年6月30日に終了しています。非公式サーバに関するお問い合わせは絶対しないでください。 </p>
-  <p>
-    PS2 実機での接続方法と UDPプロキシの使い方は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。<br>
-    PC (PCSX2) で遊ぶ方法は <a href="#pcsx2" data-toggle="tab">PCSX2</a> をご覧ください。PCSX2 版は現在検証中です。<br>
-    対戦の募集やボイスチャットは <a href="//discordapp.com/channels/142729493566586880/142729493566586880" target="_blank">Discord</a> を使用します。使い方は <a href="//eeharumt.github.io/how2usediscordjp/basicoperation.html">こちら</a>をご覧ください。<br>
-  <p>
-
-  <h2>YouTube</h2>
-  <div class="container">
-  <iframe class="latestVideoEmbed" cid="UCmH_v-7wWITjlx9rLk3BJmA" width="600" height="340" frameborder="0" allowfullscreen></iframe>
-  <p><a href="https://www.youtube.com/channel/UCmH_v-7wWITjlx9rLk3BJmA">YouTube</a>で対戦の様子を配信しています。 チャンネル登録、高評価をよろしくおねがいします！</p>
+<header class="hero">
+  <div class="wrap">
+    <h1>zdxsv.net</h1>
+    <p>ガンダムvs.Zガンダム 非公式通信対戦サーバー</p>
   </div>
+</header>
 
+<nav class="tabs">
+  <div class="wrap">
+    <a href="#top" data-tab="top"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11.5l1.3 1.5L5 11.6V21h5.5v-6h3v6H19v-9.4l1.7 1.4 1.3-1.5z"/></svg>トップ</a>
+    <a href="#ps2" data-tab="ps2"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 6h10c2.8 0 4.6 2.3 5 5.2l.9 6.1c.3 2-1.2 3.7-3 3.7-1.2 0-2.1-.6-2.7-1.6L16 17H8l-1.2 2.4c-.6 1-1.5 1.6-2.7 1.6-1.8 0-3.3-1.7-3-3.7l.9-6.1C2.4 8.3 4.2 6 7 6zm0 3v1.5H5.5v2H7V14h2v-1.5h1.5v-2H9V9zm9 0a1.1 1.1 0 1 0 0 2.2A1.1 1.1 0 0 0 16 9zm2.4 2.4a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"/></svg>PS2</a>
+    <a href="#pcsx2" data-tab="pcsx2"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v9h16V6z"/></svg>PCSX2</a>
+    <a href="https://discord.com/channels/142729493566586880/142729493566586880" target="_blank" rel="noopener"><svg viewBox="0 0 127.14 96.36" aria-hidden="true"><path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.44-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>Discord</a>
+  </div>
+</nav>
+
+<div class="wrap layout">
+<main>
+
+<section class="pane" id="top">
   <h2>新着情報</h2>
-  <ul>
-    <li>2019/11/13 戦績の記録とランキングを稼働</li>
-    <li>2019/11/04 ワイドスクリーンに対応するパッチを導入</li>
-    <li>2019/11/02 対戦中の入力遅延を軽減するパッチを導入</li>
-    <li>2016/09/28 ドメインを取得しサイトをリニューアル</li>
-    <li>2014/03/10 オープンβを開始</li>
-  </ul>
-</div>  <!-- end of top -->
+  <dl class="news">
+    <dt>2026/11/09</dt><dd>PCSX2 版の配布を開始</dd>
+    <dt>2019/11/13</dt><dd>戦績の記録とランキングを稼働</dd>
+    <dt>2019/11/04</dt><dd>ワイドスクリーンに対応するパッチを導入</dd>
+    <dt>2019/11/02</dt><dd>対戦中の入力遅延を軽減するパッチを導入</dd>
+    <dt>2016/09/28</dt><dd>ドメインを取得しサイトをリニューアル</dd>
+    <dt>2014/03/10</dt><dd>オープンβを開始</dd>
+  </dl>
 
-<div class="tab-pane" id="ps2">
+  <h2>基本情報</h2>
+  <p>Playstation2版 機動戦士ガンダム ガンダムvs.Zガンダム の非公式通信対戦サーバーです。</p>
+  <p class="danger">※公式の通信対戦サービスは2011年6月30日に終了しています。非公式サーバーに関するお問い合わせは絶対しないでください。</p>
+  <p>
+    PS2 実機での接続方法と UDPプロキシの使い方は <a href="#ps2" data-tab="ps2">PS2</a> をご覧ください。<br>
+    PC (PCSX2) で遊ぶ方法は <a href="#pcsx2" data-tab="pcsx2">PCSX2</a> をご覧ください。<br>
+    対戦の募集やボイスチャットは <a href="https://discord.com/channels/142729493566586880/142729493566586880" target="_blank" rel="noopener">Discord</a> を使用します。使い方は <a href="https://eeharumt.github.io/how2usediscordjp/basicoperation.html">こちら</a>をご覧ください。
+  </p>
+
+</section>
+
+<section class="pane" id="ps2">
   <h2>PS2 で遊ぶ</h2>
-  <p>PlayStation2 実機 (又は初期型 PlayStation3) で接続する方法です。PC で遊ぶ場合は <a href="#pcsx2" data-toggle="tab">PCSX2</a> をご覧ください。</p>
+  <p>PlayStation2 実機 (又は初期型 PlayStation3) で接続する方法です。PC で遊ぶ場合は <a href="#pcsx2" data-tab="pcsx2">PCSX2</a> をご覧ください。</p>
+
   <h3>必要なもの</h3>
   <ul>
-  <li>PlayStation2本体 又は 初期型PlayStation3本体</li>
-  <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
-  <li>メモリーカード</li>
-  <li>コントローラ</li>
-  <li>ネットワークアダプタ(薄型本体なら不要)</li>
+    <li>PlayStation2本体 又は 初期型PlayStation3本体</li>
+    <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
+    <li>メモリーカード</li>
+    <li>コントローラー</li>
+    <li>ネットワークアダプタ(薄型本体なら不要)</li>
   </ul>
 
   <h3>接続設定</h3>
-  <ul>
-	<li>PlayStation2とルータをLANケーブルで接続しゲームを起動</li>
-	<li>通信対戦 &gt; ブロードバンド接続 &gt; ネットワーク接続 &gt; ネットワーク設定の編集 を選択</li>
-	<li>環境に応じて設定を作成する 基本は「自動設定する」でOK</li>
-	<li>DNSサーバの設定で「自動設定しない」を選択</li>
-	<li>プライマリDNSに <span class="danger">153.121.44.150</span> を入力 セカンダリDNSは 0.0.0.0 でOK</li>
-	<li>設定を保存</li>
-	<li>通信対戦 &gt; ブロードバンド接続 &gt; ネットワーク接続</li>
-	<li>上で作った設定を選択</li>
-	<li>サーバTOPが表示されたら成功</li>
-  </ul>
+  <ol>
+    <li>PlayStation2とルーターをLANケーブルで接続しゲームを起動</li>
+    <li>通信対戦 &gt; ブロードバンド接続 &gt; ネットワーク接続 &gt; ネットワーク設定の編集 を選択</li>
+    <li>環境に応じて設定を作成する 基本は「自動設定する」でOK</li>
+    <li>DNSサーバーの設定で「自動設定しない」を選択</li>
+    <li>プライマリDNSに <code class="key">153.121.44.150</code> を入力 セカンダリDNSは 0.0.0.0 でOK</li>
+    <li>設定を保存</li>
+    <li>通信対戦 &gt; ブロードバンド接続 &gt; ネットワーク接続</li>
+    <li>上で作った設定を選択</li>
+    <li>サーバーTOPが表示されたら成功</li>
+  </ol>
 
   <h3>登録・ログイン</h3>
-  <ul>
-	<li>注意事項を熟読</li>
-	<li>「新規登録」を選択 (初回のみ)</li>
-	<li>「ログインIDとパスワードを記録する」を選択</li>
-	<li>サーバTOPに戻り「ログイン」を選択 (2回目以降はそのままログインでOK)</li>
-	<li>カプコンユーザ登録/変更は「登録しない」を選択</li>
-	<li>HNを決定し戦場選択画面へ</li>
-  </ul>
+  <ol>
+    <li>注意事項を熟読</li>
+    <li>「新規登録」を選択 (初回のみ)</li>
+    <li>「ログインIDとパスワードを記録する」を選択</li>
+    <li>サーバーTOPに戻り「ログイン」を選択 (2回目以降はそのままログインでOK)</li>
+    <li>カプコンユーザー登録/変更は「登録しない」を選択</li>
+    <li>HNを決定し戦場選択画面へ</li>
+  </ol>
 
-<div id="zproxy">
+  <div id="zproxy">
   <h2>UDPプロキシ (PS2 向け)</h2>
   <h3>概要</h3>
   <p>対戦中の通信方式を変換することによって、対戦中のラグを軽減します。</p>
   <p>対戦中の通信は、TCPという通信方式が使われています。TCPは高機能ですが、ゲームのようなリアルタイム通信には向いていません。</p>
-  <p>UDPという低機能でリアルタイムな通信に向いている通信方式に変換することで、ラグを軽減することができます。 変換は間にPCを挟んで行います。</p>
-  <pre>接続イメージ
-従来：[PS2] -----(TCP)----- [対戦サーバ]
-変換：[PS2] -----(TCP)----- [PC]-----(UDP)-----[対戦サーバ]</pre>
+  <p>UDPという低機能でリアルタイムな通信に向いている通信方式に変換することで、ラグを軽減することができます。変換は間にPCを挟んで行います。</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 600 160" role="img" aria-label="従来は PS2 と対戦サーバーが TCP で直接つながる。変換では PS2 から PC までが TCP、PC から対戦サーバーまでが UDP になる。">
+      <text class="row" x="0" y="50">従来</text><line class="tcp" x1="136" y1="45" x2="470" y2="45"/><text class="proto tcp" x="303.0" y="37">TCP</text><rect x="56" y="28" width="80" height="34" rx="4"/><text x="96.0" y="50">PS2</text><rect x="470" y="28" width="124" height="34" rx="4"/><text x="532.0" y="50">対戦サーバー</text>
+      <text class="row" x="0" y="130">変換</text><line class="tcp" x1="136" y1="125" x2="290" y2="125"/><text class="proto tcp" x="213.0" y="117">TCP</text><rect x="290" y="108" width="80" height="34" rx="4"/><text x="330.0" y="130">PC</text><line class="udp" x1="370" y1="125" x2="470" y2="125"/><text class="proto udp" x="420.0" y="117">UDP</text><rect x="56" y="108" width="80" height="34" rx="4"/><text x="96.0" y="130">PS2</text><rect x="470" y="108" width="124" height="34" rx="4"/><text x="532.0" y="130">対戦サーバー</text>
+    </svg>
+  </figure>
 
   <h3>必要なもの</h3>
   <ul>
-  <li>PS2と同じネットワーク(ルータ)に接続しているPC(有線接続推奨)</li>
-  <li>プロキシソフト zproxy
-    <div class="download">
-      <a id="zproxy-download" class="btn btn-primary" href="https://github.com/inada-s/zdxsv/releases/latest">
-        <span class="glyphicon glyphicon-download-alt"></span> zproxy をダウンロード <span id="zproxy-platform"></span></a>
-      <div><small id="zproxy-file" class="text-muted">GitHub Releases から zdxsv_&lt;版&gt;_&lt;OS&gt;_&lt;CPU&gt;.zip を選んでください</small></div>
-      <div><small><a id="zproxy-others" href="https://github.com/inada-s/zdxsv/releases">他の OS / CPU 版はこちら (GitHub Releases)</a></small></div>
-    </div>
-    zip を解凍して中の zproxy (Windows は zproxy.exe) を実行してください。起動時に新しい版があれば自動で更新されます。</li>
+    <li>PS2と同じネットワーク(ルーター)に接続しているPC(有線接続推奨)</li>
+    <li>プロキシソフト zproxy</li>
   </ul>
+  <div class="download">
+    <a id="zproxy-download" class="btn" href="https://github.com/inada-s/zdxsv/releases/latest">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
+      zproxy をダウンロード <span id="zproxy-platform"></span></a>
+    <small id="zproxy-file">GitHub Releases から zdxsv_&lt;版&gt;_&lt;OS&gt;_&lt;CPU&gt;.zip を選んでください</small>
+    <small><a id="zproxy-others" href="https://github.com/inada-s/zdxsv/releases">他の OS / CPU 版はこちら (GitHub Releases)</a></small>
+  </div>
+  <p>zip を解凍して中の zproxy (Windows は zproxy.exe) を実行してください。起動時に新しい版があれば自動で更新されます。</p>
 
   <h3>使い方</h3>
-  <ul>
-	<li>サーバにログインしてロビーに接続しておきます</li>
-	<li>PCでプロキシソフトを起動し、登録ボタンを押します</li>
-	<li>プロキシソフトの画面に「登録成功 &lt;ログインしているZのユーザID&gt;」が表示されればOK</li>
-	<li>初めての場合は接続テストを行ってください</li>
-	<li>対戦中にPCがスリープや再起動しないようにしておいてください</li>
-  </ul>
+  <ol>
+    <li>サーバーにログインしてロビーに接続しておきます</li>
+    <li>PCでプロキシソフトを起動し、登録ボタンを押します</li>
+    <li>プロキシソフトの画面に「登録成功 &lt;ログインしているZのユーザーID&gt;」が表示されればOK</li>
+    <li>初めての場合は接続テストを行ってください</li>
+    <li>対戦中にPCがスリープや再起動しないようにしておいてください</li>
+  </ol>
 
   <h3>接続テスト</h3>
   <ul>
-	<li>UDPプロキシをつけた状態で、ケネディポートのロビー自動選抜に参加すると、PC-PS2間の接続テストができます</li>
-	<li>一人対戦が始まれば、テストは成功です</li>
+    <li>UDPプロキシをつけた状態で、ケネディポートのロビー自動選抜に参加すると、PC-PS2間の接続テストができます</li>
+    <li>一人対戦が始まれば、テストは成功です</li>
   </ul>
 
   <h3>アンチウイルスソフトの例外設定</h3>
   <p>接続テストが上手く行かない場合、アンチウイルスソフトによって通信がブロックされている可能性があります。</p>
-  <p>zproxyを例外ソフトとして登録することで回避ができます。 やり方は各アンチウイルスソフトごとに異なるので、設定の仕方を調べてください。</p>
-  <p>参考:<a href="//www.maru-jan.com/guide/security/">セキュリティソフトの設定 | オンライン麻雀 Maru-Jan 公式サイト</a>
+  <p>zproxyを例外ソフトとして登録することで回避ができます。やり方は各アンチウイルスソフトごとに異なるので、設定の仕方を調べてください。</p>
+  <p>参考: <a href="https://www.maru-jan.com/guide/security/">セキュリティソフトの設定 | オンライン麻雀 Maru-Jan 公式サイト</a></p>
 
   <h3>初回起動時の注意(Windows)</h3>
   <p class="danger">※他のアプリケーションで安全であるかわからない場合には、実行しないようにしましょう。</p>
   <p>起動時に以下のような警告が出た場合、詳細情報をクリックし、実行を押します。</p>
-	<div class="row">
-	<div class="col-sm-6"><img src="/static/img/win1.png" alt="警告例1" class="img-thumbnail"></div>
-  <div class="col-sm-6"><img src="/static/img/win2.png" alt="警告例2" class="img-thumbnail"></div>
-	</div>
+  <div class="shots">
+    <img src="/static/img/win1.png" alt="警告例1">
+    <img src="/static/img/win2.png" alt="警告例2">
+  </div>
   <p>セキュリティの警告が出た場合、赤枠のところにもチェックを入れて、アクセスを許可するを選択してください。</p>
-	<img src="/static/img/win3.png" alt="警告例1" class="img-thumbnail">
+  <div class="shots"><img src="/static/img/win3.png" alt="警告例3"></div>
+  </div>
+</section>
 
-</div>  <!-- end of zproxy -->
-</div>  <!-- end of ps2 -->
-
-<div class="tab-pane" id="pcsx2">
-  <h2>PCSX2 で遊ぶ (検証中)</h2>
-  <p class="danger">※PCSX2 版は現在検証中です。不具合や動作の変更があり得ます。</p>
-  <p>PC 上のエミュレーター PCSX2 で接続する方法です。PS2 実機で遊ぶ場合は <a href="#ps2" data-toggle="tab">PS2</a> をご覧ください。</p>
+<section class="pane" id="pcsx2">
+  <h2>PCSX2 で遊ぶ</h2>
+  <p>PC 上のエミュレーター PCSX2 で接続する方法です。PS2 実機で遊ぶ場合は <a href="#ps2" data-tab="ps2">PS2</a> をご覧ください。</p>
 
   <h3>必要なもの</h3>
   <ul>
-  <li>Windows (64bit) の PC</li>
-  <li>PS2 の BIOS (PS2 本体から吸い出したもの)</li>
-  <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
-  <li>Discord アカウント (サインインに使います)</li>
-  <li>コントローラー</li>
-  <li>PCSX2 for zdxsv
-    <div class="download">
-      <a id="pcsx2-download" class="btn btn-primary" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
-        <span class="glyphicon glyphicon-download-alt"></span> PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
-      <div><small id="pcsx2-file" class="text-muted">pcsx2-zdxsv-windows-x64.zip (最新版)</small></div>
-      <div><small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small></div>
-    </div>
-  </li>
+    <li>Windows (64bit) の PC</li>
+    <li>PS2 の BIOS (PS2 本体から吸い出したもの)</li>
+    <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
+    <li>Discord アカウント (ログインに使います)</li>
+    <li>コントローラー</li>
+    <li>PCSX2 for zdxsv</li>
   </ul>
+  <div class="download">
+    <a id="pcsx2-download" class="btn" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
+      PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
+    <small id="pcsx2-file">pcsx2-zdxsv-windows-x64.zip (最新版)</small>
+    <small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small>
+  </div>
 
   <h3>使い方</h3>
-  <ul>
-	<li>zip を解凍して中の pcsx2-qt.exe を実行します</li>
-	<li>初回起動時のセットアップで BIOS とゲームの場所を設定し、Discordでサインインします</li>
-	<li>ゲームを起動し、通信対戦を選択します</li>
-  </ul>
-</div>  <!-- end of pcsx2 -->
+  <ol>
+    <li>zip を解凍して中の pcsx2-qt.exe を実行します</li>
+    <li>初回起動時のセットアップで BIOS とゲームの場所を設定します</li>
+    <li>セットアップの「zdxsv アカウント」で「Discord でサインイン」を押します。ブラウザに「ZDXSV にログイン」の画面が開くので、「Discord でログイン」を押し、Discord の画面で認証してください。終わったら PCSX2 に戻ります</li>
+    <li>ゲームを起動し、通信対戦を選択します</li>
+  </ol>
+  <p>セットアップでログインしなかった場合は、あとから 設定 &gt; zdxsv でログインできます。</p>
 
-</div>  <!-- end of tab-content -->
-</div>  <!-- end of col  -->
+  <h3>PS2 のアカウントを引き継ぐ</h3>
+  <p>PS2 で遊んでいるアカウントを、PCSX2 でも使えます。PS2 では引き続き同じアカウントで遊べます。対戦数が 100 以上のアカウントが対象です。</p>
+  <ol>
+    <li>PS2 でケネディポートのロビーに入ります</li>
+    <li>チャットで <code class="key">ｄｃ</code> (全角) と入力すると、引き継ぎコードが表示されます</li>
+    <li>3分以内に、PCSX2 の 設定 &gt; zdxsv &gt;「PS2 から引き継ぐ...」でコードを入力します</li>
+  </ol>
+</section>
 
-<div class="col-sm-4">
-<div class="panel">
-  <div class="panel-heading">接続情報</div>
-  <div class="panel-body">
-    <p id="stat-updated">取得中</p>
-    <h5>PS2</h5>
+</main>
+
+<aside>
+  <div class="panel">
+    <h2>接続情報</h2>
+    <p id="stat-updated" class="muted">取得中</p>
+    <h3>PS2</h3>
     <p id="ps2-lobby-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="ps2-lobby-users-table"></table>
+    <table id="ps2-lobby-users-table"></table>
     <p id="ps2-battle-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="ps2-battle-users-table"></table>
-    <div id="emu-section">
-    <h5>PCSX2</h5>
+    <table id="ps2-battle-users-table"></table>
+    <h3>PCSX2</h3>
     <p id="emu-lobby-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="emu-lobby-users-table"></table>
+    <table id="emu-lobby-users-table"></table>
     <p id="emu-battle-user-count"></p>
-    <table class="table mini-font mini-table table-inverse" id="emu-battle-users-table"></table>
-    </div>
+    <table id="emu-battle-users-table"></table>
   </div>
-</div>  <!-- end of panel -->
+  <iframe class="discord" src="https://discord.com/widget?id=142729493566586880&amp;theme=dark" title="Discord"></iframe>
+</aside>
+</div>
 
-<div class="panel">
-<iframe src="https://discordapp.com/widget?id=142729493566586880&theme=dark" width="100%" height="500" allowtransparency="true" frameborder="0"></iframe>
-</div>  <!-- end of panel -->
-</div>  <!-- end of col  -->
-
-</div>  <!-- end of row -->
-</div>  <!-- end of main-contents -->
-
-<script src="/static/js/jquery.min.js"></script>
-<script src="/static/js/bootstrap.min.js"></script>
 <script>
-$(function() {
-// cf. https://codegena.com/auto-embed-latest-video-youtube-channel
-var reqURL = "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.youtube.com/feeds/videos.xml?channel_id=");
-function loadVideo(iframe){
-  $.getJSON(reqURL + iframe.getAttribute('cid'), function(data) {
-      var videoNumber = (iframe.getAttribute('vnum')?Number(iframe.getAttribute('vnum')):0);
-      console.log(videoNumber);
-      var link = data.items[videoNumber].link;
-      var id = link.substr(link.indexOf("=") + 1);  
-      iframe.setAttribute("src","https://youtube.com/embed/"+id + "?controls=1&autoplay=0");
-    }
-  );
+(function() {
+function $(id) { return document.getElementById(id); }
+function getJSON(url, f) {
+  fetch(url).then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(f, function() {});
 }
-var iframes = document.getElementsByClassName('latestVideoEmbed');
-for (var i = 0, len = iframes.length; i < len; i++){
-  loadVideo(iframes[i]);
+
+var panes = document.querySelectorAll(".pane");
+function show(name) {
+  var target = $(name), pane = target && target.closest(".pane");
+  if (!pane) pane = $("top");
+  for (var i = 0; i < panes.length; i++) panes[i].hidden = panes[i] !== pane;
+  var tabs = document.querySelectorAll(".tabs a[data-tab]");
+  for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle("active", tabs[j].dataset.tab === pane.id);
+  if (target && target !== pane) target.scrollIntoView();
 }
+window.addEventListener("hashchange", function() { show(location.hash.slice(1)); });
+show(location.hash.slice(1));
 
 // Servers before snake_case keys send UserID, Name, UDP, Platform.
 function statusUser(u) {
@@ -241,43 +235,38 @@ function statusUser(u) {
     name: u.name || u.Name || "",
     udp: u.udp || u.UDP || "",
     platform: u.platform || u.Platform || ""
-  }
+  };
 }
-function updateOnlineUser(t, u) {
-  while(0 < t.rows.length) t.deleteRow(-1)
-  if (!u) return
-  u.sort(function(a, b) {
-    if (a.user_id < b.user_id) return -1;
-    if (a.user_id > b.user_id) return 1;
-    return 0;
-  })
-  for (var i = 0; i < u.length; i++) {
+function updateOnlineUser(t, users) {
+  t.textContent = "";
+  users.sort(function(a, b) { return a.user_id < b.user_id ? -1 : a.user_id > b.user_id ? 1 : 0; });
+  users.forEach(function(u) {
     var r = t.insertRow(-1);
-    var uid = r.insertCell(0)
-    uid.innerHTML = "【" + u[i].user_id + "】"
-    uid.className = "z-user-id"
-    var uname = r.insertCell(1)
-    uname.innerHTML = u[i].name
-    uname.className = "z-user-name"
-    r.insertCell(2).innerHTML = u[i].udp ? '<span class="label label-primary">UDP</span>' : ""
-  }
+    var id = r.insertCell(-1);
+    id.textContent = "【" + u.user_id + "】";
+    id.className = "z-user-id";
+    var name = r.insertCell(-1);
+    name.textContent = u.name;
+    name.className = "z-user-name";
+    var udp = r.insertCell(-1);
+    if (u.udp) udp.innerHTML = '<span class="badge">UDP</span>';
+  });
 }
-function isConsole(u) {
-  return !u.platform || u.platform == "console"
+function isConsole(u) { return !u.platform || u.platform == "console"; }
+function updatePlatform(prefix, lobby, battle) {
+  $(prefix + "-lobby-user-count").textContent = "ロビー " + lobby.length + " 人";
+  $(prefix + "-battle-user-count").textContent = "対戦中 " + battle.length + " 人";
+  updateOnlineUser($(prefix + "-lobby-users-table"), lobby);
+  updateOnlineUser($(prefix + "-battle-users-table"), battle);
 }
-function updatePlatform(prefix, lobbyUsers, battleUsers) {
-  document.getElementById(prefix + "-lobby-user-count").innerHTML = "ロビー " + lobbyUsers.length + " 人"
-  document.getElementById(prefix + "-battle-user-count").innerHTML = "対戦中 " + battleUsers.length + " 人"
-  updateOnlineUser(document.getElementById(prefix + "-lobby-users-table"), lobbyUsers)
-  updateOnlineUser(document.getElementById(prefix + "-battle-users-table"), battleUsers)
-}
-function pollStat(){
-  $.ajax({url: 'https://lbs.zdxsv.net:8443/lbs/status', type: 'GET', dataType: 'json'}).done(function(res) {
-    document.getElementById("stat-updated").innerHTML = (res.now_date || res.NowDate) + "現在"
-    var lobbyUsers = (res.lobby_users || res.LobbyUsers || []).map(statusUser)
-    var battleUsers = (res.battle_users || res.BattleUsers || []).map(statusUser)
-    updatePlatform("ps2", lobbyUsers.filter(isConsole), battleUsers.filter(isConsole))
-    updatePlatform("emu", lobbyUsers.filter(function(u) { return !isConsole(u) }), battleUsers.filter(function(u) { return !isConsole(u) }))
+function pollStat() {
+  getJSON("https://lbs.zdxsv.net:8443/lbs/status", function(res) {
+    $("stat-updated").textContent = (res.now_date || res.NowDate) + "現在";
+    var lobby = (res.lobby_users || res.LobbyUsers || []).map(statusUser);
+    var battle = (res.battle_users || res.BattleUsers || []).map(statusUser);
+    var emu = function(u) { return !isConsole(u); };
+    updatePlatform("ps2", lobby.filter(isConsole), battle.filter(isConsole));
+    updatePlatform("emu", lobby.filter(emu), battle.filter(emu));
   });
 }
 pollStat();
@@ -296,12 +285,12 @@ function zproxyArchLabel(a) { return {amd64: "64bit", "386": "32bit", arm64: "Ap
 function setZproxyDownload(arch) {
   var want = zproxyPlatform(arch);
   if (!want) {
-    document.getElementById("zproxy-platform").innerHTML = "(GitHub Releases)";
+    $("zproxy-platform").textContent = "(GitHub Releases)";
     return;
   }
   var label = want.label + " " + (want.os == "darwin" ? (want.arch == "arm64" ? "Apple Silicon" : "Intel") : zproxyArchLabel(want.arch));
-  document.getElementById("zproxy-platform").innerHTML = "(" + label + ")";
-  $.getJSON('https://api.github.com/repos/inada-s/zdxsv/releases?per_page=30', function(rels) {
+  $("zproxy-platform").textContent = "(" + label + ")";
+  getJSON("https://api.github.com/repos/inada-s/zdxsv/releases?per_page=30", function(rels) {
     var name = new RegExp("^zdxsv_.*_" + want.os + "_" + want.arch + "[.]zip$");
     for (var i = 0; i < rels.length; i++) {
       var r = rels[i];
@@ -309,9 +298,9 @@ function setZproxyDownload(arch) {
       var assets = r.assets || [];
       for (var j = 0; j < assets.length; j++) {
         if (name.test(assets[j].name)) {
-          document.getElementById("zproxy-download").href = assets[j].browser_download_url;
-          document.getElementById("zproxy-file").innerHTML = r.tag_name + " / " + assets[j].name;
-          document.getElementById("zproxy-others").href = r.html_url;
+          $("zproxy-download").href = assets[j].browser_download_url;
+          $("zproxy-file").textContent = r.tag_name + " / " + assets[j].name;
+          $("zproxy-others").href = r.html_url;
           return;
         }
       }
@@ -321,24 +310,23 @@ function setZproxyDownload(arch) {
 // Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
 if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
   navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
-    var arch = v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386");
-    setZproxyDownload(arch);
+    setZproxyDownload(v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386"));
   }, function() { setZproxyDownload(); });
 } else {
   setZproxyDownload();
 }
 
-$.getJSON('https://api.github.com/repos/inada-s/pcsx2/releases/latest', function(r) {
+getJSON("https://api.github.com/repos/inada-s/pcsx2/releases/latest", function(r) {
   var assets = r.assets || [];
   for (var j = 0; j < assets.length; j++) {
     if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
-      document.getElementById("pcsx2-download").href = assets[j].browser_download_url;
-      document.getElementById("pcsx2-file").innerHTML = r.tag_name + " / " + assets[j].name;
-      document.getElementById("pcsx2-release").href = r.html_url;
+      $("pcsx2-download").href = assets[j].browser_download_url;
+      $("pcsx2-file").textContent = r.tag_name + " / " + assets[j].name;
+      $("pcsx2-release").href = r.html_url;
       return;
     }
   }
 });
-})
+})();
 </script>
 </body></html>
