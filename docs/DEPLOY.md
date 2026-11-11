@@ -98,8 +98,9 @@ Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
 
 ## Check
 
-`make smoke` runs the server on a throwaway database and checks every port, DNAS and the API.
-On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere.
+`make smoke` runs the server on a throwaway database and checks every port, DNAS, the lobby RPC and the API.
+On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere,
+`zdxsv lobbyrpccheck <host>:8201` the lobby RPC.
 
 ## Releases
 

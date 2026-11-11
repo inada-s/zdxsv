@@ -70,7 +70,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., lobbyrpccheck host:port, version]")
 }
 
 func prepareDB() {
@@ -146,6 +146,12 @@ func main() {
 			os.Exit(1)
 		}
 		mainTLSCheck(args[1], args[2:])
+	case "lobbyrpccheck":
+		if len(args) < 2 {
+			log.Println("Usage: ", os.Args[0], "lobbyrpccheck host:port")
+			os.Exit(1)
+		}
+		mainLobbyRPCCheck(args[1])
 	case "initdb":
 		os.Remove(config.Conf.DB.Name)
 		prepareDB()

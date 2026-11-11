@@ -66,6 +66,7 @@ for p in 443 8200 8201 8203 8210; do
 	check "tcp $p open" timeout 3 bash -c "</dev/tcp/127.0.0.1/$p"
 done
 check "dnas on 443 (DNAS answers, login pages)" "$bin" -profile=0 dnascheck 127.0.0.1:443
+check "lobby rpc on 8201 (status)" "$bin" -profile=0 lobbyrpccheck 127.0.0.1:8201
 check "lobby on tls 8220 (CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$ca_pin"
 check "lobby on tls 8220 (server key pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$server_pin"
 check "lobby on tls 8220 (backup CA pin, CA pin)" "$bin" -profile=0 tlscheck 127.0.0.1:8220 "$backup_pin" "$ca_pin"
