@@ -34,7 +34,7 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 	// is the 5th and dropped
 	want := []string{"198.51.100.1", "198.51.100.2", "198.51.100.4", "198.51.100.3"}
 	for _, peer := range []*AppPeer{p, q} {
-		got := battleInfo(t, battleInfoNotice(peer, lookup)).Relays
+		got := battleInfo(t, testBattleInfoNotice(peer, lookup)).Relays
 		if len(got) != len(want) {
 			t.Fatalf("%s: relays %v, want %v", peer.UserID, got, want)
 		}
@@ -54,7 +54,7 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 	// fewer regional relays: the lobby's own relay last
 	UnregisterRelay("198.51.100.3:8204")
 	UnregisterRelay("198.51.100.4:8204")
-	got := battleInfo(t, battleInfoNotice(p, lookup)).Relays
+	got := battleInfo(t, testBattleInfoNotice(p, lookup)).Relays
 	if len(got) != 3 || got[0].GetIp() != "198.51.100.1" || got[1].GetIp() != "198.51.100.2" || got[2].GetIp() != "192.168.1.8" {
 		t.Fatalf("relays %v, want asia-northeast1, asia-northeast2, the lobby's", got)
 	}
@@ -64,13 +64,13 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 
 	// no lobby relay: the regional ones alone
 	LobbyRelay = nil
-	if got := battleInfo(t, battleInfoNotice(p, lookup)).Relays; len(got) != 2 {
+	if got := battleInfo(t, testBattleInfoNotice(p, lookup)).Relays; len(got) != 2 {
 		t.Fatalf("relays without a lobby relay %v, want 2", got)
 	}
 
 	// a player without relay support: none
 	delete(infoA, "relay_server")
-	if got := battleInfo(t, battleInfoNotice(p, lookup)).Relays; len(got) != 0 {
+	if got := battleInfo(t, testBattleInfoNotice(p, lookup)).Relays; len(got) != 0 {
 		t.Fatalf("relays offered to a battle with a player without relay_server=1: %v", got)
 	}
 }
