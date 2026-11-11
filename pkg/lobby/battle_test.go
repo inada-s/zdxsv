@@ -116,7 +116,7 @@ func sentMessage(t *testing.T, p *AppPeer) *Message {
 
 func TestGetBattleOpponentStatus(t *testing.T) {
 	b := model.NewBattle(model.PlatformConsole, 2)
-	b.Add(&model.User{User: db.User{UserID: "A", BattleCount: 10, WinCount: 1500, LoseCount: 3}, Entry: model.EntryAeug})
+	b.Add(&model.User{User: db.User{UserID: "A", WinCount: 1500}, Entry: model.EntryAeug})
 	b.Add(&model.User{User: db.User{UserID: "B"}, Entry: model.EntryTitans})
 	handler := defaultHandlers.handlers[0x6917]
 
@@ -147,10 +147,6 @@ func TestGetBattleOpponentStatus(t *testing.T) {
 		r := a.Reader()
 		if pos, class := r.Read8(), r.Read16(); pos != 1 || class != 14 {
 			t.Errorf("pos %d class %d, want 1 14", pos, class)
-		}
-		r.Read32()
-		if bc, wc, lc := r.Read32(), r.Read32(), r.Read32(); bc != 10 || wc != 1500 || lc != 3 {
-			t.Errorf("counts %d %d %d", bc, wc, lc)
 		}
 	}
 }

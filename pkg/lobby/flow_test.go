@@ -181,6 +181,7 @@ func (c *testClient) chooseUser(ac *testLogin, userID, name string) []string {
 	a := NewClientAnswer(kp)
 	a.Writer().WriteString(keyPairKey1(ac.SessionID)).Write(encryptString(a.Seq, ac.LoginKey))
 	c.send(a)
+	c.ask(0x61A0, []byte{6})
 
 	c.send(NewClientAnswer(c.expect(0x6103, CategoryQuestion)))
 	r := c.expect(0x6131, CategoryNotice).Reader()
@@ -195,6 +196,40 @@ func (c *testClient) chooseUser(ac *testLogin, userID, name string) []string {
 	q.Writer().Write(append(encryptString(q.Seq, userID), encryptString(q.Seq, name)...))
 	c.send(q)
 	return listed
+}
+
+type personalRecord struct {
+	battle, win, lose, invalid, kill uint32
+	class                            byte
+}
+
+// topPage asks for what the game shows on its top page after login and
+// returns the personal record of all battles, as Aeug and as Titans.
+func (c *testClient) topPage() [3]personalRecord {
+	c.t.Helper()
+	c.ask(0x614C, nil)
+	c.ask(0x6144, nil)
+	var recs [3]personalRecord
+	for kind := byte(0); kind < 2; kind++ {
+		for page := byte(0); page < 3; page++ {
+			r := c.ask(0x6145, []byte{kind, page}).Reader()
+			if k, p := r.Read8(), r.Read8(); k != kind || p != page {
+				c.t.Fatalf("personal record kind %d page %d, asked %d %d", k, p, kind, page)
+			}
+			r.Read32()
+			r.Read32()
+			rec := personalRecord{invalid: r.Read32(), class: r.Read8()}
+			r.Read32()
+			r.Read32()
+			rec.battle, rec.win, rec.lose, rec.kill = r.Read32(), r.Read32(), r.Read32(), r.Read32()
+			if kind == 0 {
+				recs[page] = rec
+			} else if rec != recs[page] {
+				c.t.Errorf("personal record page %d: %+v, then %+v", page, recs[page], rec)
+			}
+		}
+	}
+	return recs
 }
 
 // battleResult is the client's answer body to the 0x6138 battle result question.
@@ -349,6 +384,9 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		if len(listed) != want {
 			t.Fatalf("player %d: account lists %v", i, listed)
 		}
+		if recs := p.c.topPage(); recs != [3]personalRecord{} {
+			t.Errorf("player %d: personal records of a new user %+v", i, recs)
+		}
 		bin := NewClientQuestion(0x6143)
 		bin.Writer().Write(encryptString(bin.Seq, fmt.Sprintf("Pilot%d", i)+strings.Repeat("\x00", 20)))
 		p.c.send(bin)
@@ -375,6 +413,28 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		if p.pos = p.c.ask(0x6912, nil).Reader().Read8(); p.pos == 0 || int(p.pos) > len(players) {
 			t.Errorf("player %d position %d", i, p.pos)
 		}
+	}
+	for i, p := range players {
+		for j, q := range players {
+			r := p.c.ask(0x6913, []byte{q.pos}).Reader()
+			if pos, entry, userID, name := r.Read8(), r.Read8(), r.ReadString(), r.ReadString(); pos != q.pos || entry != q.side || userID != q.userID || name != fmt.Sprintf("pilot%d", j) {
+				t.Errorf("player %d: opponent %d: pos %d entry %d user %q name %q", i, j, pos, entry, userID, name)
+			}
+			r.ReadString()
+			if bin := r.ReadString(); strings.TrimRight(bin, "\x00") != fmt.Sprintf("Pilot%d", j) {
+				t.Errorf("player %d: opponent %d binary %q", i, j, bin)
+			}
+		}
+		for j, q := range players {
+			r := p.c.ask(0x6917, []byte{q.pos}).Reader()
+			pos, class := r.Read8(), r.Read16()
+			r.Read32()
+			if battle, win, lose := r.Read32(), r.Read32(), r.Read32(); pos != q.pos || class != 0 || battle != 0 || win != 0 || lose != 0 {
+				t.Errorf("player %d: opponent %d status: pos %d class %d counts %d %d %d", i, j, pos, class, battle, win, lose)
+			}
+		}
+	}
+	for i, p := range players {
 		code := p.c.ask(0x6915, nil).Reader().ReadString()
 		if i == 0 {
 			battleCode = code
@@ -443,6 +503,14 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		win, lose := byte(3-i), byte(2+i)
 		a.Writer().Write(battleResult(a.Seq, battleCode, 5, win, lose, 7, 4, 12345, p.side))
 		p.c.send(a)
+		var want [3]personalRecord
+		if counted {
+			want[0] = personalRecord{battle: 5, win: uint32(win), lose: uint32(lose), kill: 7}
+			want[p.side] = want[0]
+		}
+		if recs := p.c.topPage(); recs != want {
+			t.Errorf("player %d: personal records after the result %+v, want %+v", i, recs, want)
+		}
 		if a := p.c.ask(0x6210, nil); a.Status != StatusSuccess {
 			t.Fatalf("EnterBattleAfterRoom status %x", a.Status)
 		}
