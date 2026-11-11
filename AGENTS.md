@@ -4,9 +4,14 @@ Rules for agents working in this repository.
 
 ## Design
 
-- `pkg/lobby` `msg_*.go`: decode the message, call an App method,
-  encode the answer. A fixed answer needs no App call. Decisions and
-  state changes live in App, and App stays unit-testable.
+- The server is one package, `zdxsv/` (`package main`): the lobby
+  server is `lbs` (`lbs_*.go`), the battle server `mcs` (`mcs_*.go`).
+  Generated protobuf code stays in `zdxsv/proto/`; zproxy is its own
+  module in `src/zproxy` and imports no server code.
+- `lbs_msg_*.go`: decode the message, call a `Lbs` method, encode the
+  answer. A fixed answer needs no `Lbs` call. Decisions and state
+  changes live in `Lbs`, and `Lbs` stays unit-testable. No package
+  boundary enforces this; keep it by hand.
 - Do not scatter one component over many small files.
 
 ## Tests
@@ -15,7 +20,7 @@ Three kinds:
 
 - Scenario tests: show that a real client works, by talking to the
   server the way the client does. They run without a TCP server.
-- Unit tests of App: what scenario tests cannot cover, such as
+- Unit tests of `Lbs`: what scenario tests cannot cover, such as
   boundary values and error handling.
 - Smoke test (`scripts/smoke.sh`): the server starts and answers. It
   also covers the TCP servers that scenario tests leave out.

@@ -35,7 +35,7 @@ builds:
     ldflags:
       - -s -w -X main.releaseVersion={{.Version}} -X main.releaseCommit={{.ShortCommit}} -X main.releaseDate={{.Date}}
   - id: zdxsv
-    main: ./src/zdxsv
+    main: ./zdxsv
     binary: zdxsv
     env:
       - CGO_ENABLED=1
