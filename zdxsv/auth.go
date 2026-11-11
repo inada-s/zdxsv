@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -188,6 +189,10 @@ func (s *AuthServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/auth/start":
 		s.serveStart(w, r)
+	case "/auth/icon.png":
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(authIcon)
 	case "/auth/" + s.Provider.Name + "/callback":
 		s.serveCallback(w, r)
 	case "/auth/token":
@@ -590,21 +595,19 @@ type page struct {
 var pages = map[string]page{
 	"ja": {
 		Lang:  "ja",
-		Title: "ZDXSV サインイン",
+		Title: "ZDXSV にログイン",
 		Notice: []string{
-			"Discord アカウントでサインインします。ZDXSV が保存するのは Discord のユーザー ID だけです。",
-			"サインインが終わったらエミュレーターに戻ってください。",
+			"ログインが終わったらエミュレーターに戻ってください。",
 		},
-		Button:        "Discord でサインイン",
-		Expired:       "サインインの期限が切れました。エミュレーターからやり直してください。",
-		Denied:        "サインインが取り消されました。",
-		ProviderError: "サインインに失敗しました。しばらくしてからやり直してください。",
+		Button:        "Discord でログイン",
+		Expired:       "ログインの期限が切れました。エミュレーターからやり直してください。",
+		Denied:        "ログインが取り消されました。",
+		ProviderError: "ログインに失敗しました。しばらくしてからやり直してください。",
 	},
 	"en": {
 		Lang:  "en",
-		Title: "ZDXSV sign in",
+		Title: "Sign in to ZDXSV",
 		Notice: []string{
-			"Sign in with your Discord account. ZDXSV stores only your Discord user ID.",
 			"When the sign-in is done, go back to the emulator.",
 		},
 		Button:        "Sign in with Discord",
@@ -614,9 +617,8 @@ var pages = map[string]page{
 	},
 	"zh-TW": {
 		Lang:  "zh-TW",
-		Title: "ZDXSV 登入",
+		Title: "登入 ZDXSV",
 		Notice: []string{
-			"使用 Discord 帳號登入。ZDXSV 只會儲存您的 Discord 使用者 ID。",
 			"登入完成後，請回到模擬器。",
 		},
 		Button:        "使用 Discord 登入",
@@ -650,14 +652,34 @@ func pageText(lang string) page {
 	return pages[lang]
 }
 
+//go:embed auth_icon.png
+var authIcon []byte
+
 const head = `<!DOCTYPE html><html lang="{{.Lang}}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Title}}</title>
-<style>body{font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em;line-height:1.6}
-a.b{display:inline-block;background:#5865f2;color:#fff;padding:.7em 1.4em;border-radius:6px;text-decoration:none}</style>
-</head><body><h1>{{.Title}}</h1>`
+<link rel="icon" href="/auth/icon.png">
+<style>
+:root{--bg1:#e9edf7;--bg2:#d5dcef;--card:#fff;--fg:#1d2433;--sub:#5b6478;--line:#e3e7f0}
+@media (prefers-color-scheme:dark){:root{--bg1:#10131c;--bg2:#1b2133;--card:#1e2433;--fg:#e8ebf3;--sub:#9aa3b8;--line:#2c3447}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+background:linear-gradient(160deg,var(--bg1),var(--bg2));color:var(--fg);line-height:1.7;
+font-family:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP","Microsoft JhengHei",sans-serif}
+main{text-align:center;width:100%;max-width:26rem;background:var(--card);border-radius:16px;padding:2.25rem 2rem 2rem;
+box-shadow:0 10px 40px rgba(20,30,60,.18);border-top:4px solid #5865f2}
+.logo{display:block;width:56px;height:56px;border-radius:12px;margin:0 auto 1rem}
+h1{font-size:1.45rem;margin:0 0 1.25rem}
+p{margin:0 0 .9rem;color:var(--sub);font-size:.95rem}
+.act{margin:1.6rem 0 0;padding-top:1.4rem;border-top:1px solid var(--line)}
+a.b{display:flex;align-items:center;justify-content:center;gap:.6em;background:#5865f2;color:#fff;font-weight:600;padding:.85em 1em;
+border-radius:10px;text-decoration:none;transition:background .15s,transform .15s}
+a.b svg{width:1.4em;height:1.1em;flex:none}
+a.b:hover{background:#4752c4}a.b:active{transform:translateY(1px)}
+</style>
+</head><body><main><img class="logo" src="/auth/icon.png" alt=""><h1>{{.Title}}</h1>`
 
 var tplStart = template.Must(template.New("start").Parse(head +
 	`{{range .Notice}}<p>{{.}}</p>{{end}}
-<p><a class="b" href="{{.ProviderURL}}">{{.Button}}</a></p></body></html>`))
+<p class="act"><a class="b" href="{{.ProviderURL}}"><svg viewBox="0 0 127.14 96.36" aria-hidden="true"><path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.44-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>{{.Button}}</a></p></main></body></html>`))
 
-var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></body></html>`))
+var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></main></body></html>`))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -78,7 +79,7 @@ func challenge(v string) string {
 	return base64.RawURLEncoding.EncodeToString(s[:])
 }
 
-var buttonRe = regexp.MustCompile(`href="([^"]+)"`)
+var buttonRe = regexp.MustCompile(`class="b" href="([^"]+)"`)
 
 // signIn runs the browser part and returns the one-time code given to the emulator, or the
 // status of the page that stopped it.
@@ -540,5 +541,18 @@ func TestDevCarryCode(t *testing.T) {
 	r := newAuthRig(t)
 	if resp, _ := get(t, http.DefaultClient, r.site.URL+"/auth/dev/carry"); resp.StatusCode != http.StatusNotFound {
 		t.Fatal("dev carry served by the discord provider", resp.StatusCode)
+	}
+}
+
+func TestAuthIcon(t *testing.T) {
+	r := newAuthRig(t)
+	resp, err := http.Get(r.site.URL + "/auth/icon.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || !bytes.Equal(body, authIcon) || len(authIcon) == 0 {
+		t.Fatalf("icon: %d %s %d bytes", resp.StatusCode, resp.Header.Get("Content-Type"), len(body))
 	}
 }
