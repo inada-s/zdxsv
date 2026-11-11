@@ -44,11 +44,12 @@ var _ = register(0x6301, "GetLobbyCount", func(p *LbsPeer, m *LbsMessage) {
 
 var _ = register(0x6303, "GetLobbyUserCount", func(p *LbsPeer, m *LbsMessage) {
 	lobbyID := m.Reader().Read16()
-	count := p.app.OnGetLobbyUserCount(p, lobbyID)
+	count, battles := p.app.OnGetLobbyUserCount(p, lobbyID)
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(lobbyID)
 	w.Write16(count)
+	w.Write16(battles)
 	p.SendMessage(a)
 })
 

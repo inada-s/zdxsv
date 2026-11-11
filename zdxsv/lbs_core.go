@@ -533,12 +533,7 @@ func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 	l, ok := a.getLobby(platform, lobbyID)
 	if ok {
 		lb := uint16(len(l.Users))
-		bt := uint16(0)
-		for _, battle := range a.battles {
-			if battle.Platform == platform && battle.LobbyID == lobbyID {
-				bt++
-			}
-		}
+		bt := a.lobbyBattleCount(platform, lobbyID)
 		for _, peer := range a.users {
 			if peer.Platform == platform {
 				NoticeLobbyUserCount(peer, lobbyID, lb, bt)
@@ -599,10 +594,21 @@ func (a *Lbs) OnExitLobby(p *LbsPeer) {
 	}
 }
 
-func (a *Lbs) OnGetLobbyUserCount(p *LbsPeer, lobbyID uint16) (count uint16) {
+func (a *Lbs) lobbyBattleCount(platform string, lobbyID uint16) uint16 {
+	n := uint16(0)
+	for _, battle := range a.battles {
+		if battle.Platform == platform && battle.LobbyID == lobbyID {
+			n++
+		}
+	}
+	return n
+}
+
+func (a *Lbs) OnGetLobbyUserCount(p *LbsPeer, lobbyID uint16) (count, battles uint16) {
 	lb, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
 		count = uint16(len(lb.Users))
+		battles = a.lobbyBattleCount(p.Platform, lobbyID)
 	}
 	return
 }
