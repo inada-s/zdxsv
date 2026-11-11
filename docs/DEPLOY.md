@@ -101,13 +101,15 @@ Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
 
 ## Check
 
-`make smoke` runs the server on a throwaway database and checks every port, DNAS and the API (incl. zproxy's).
+`make smoke` runs the server on a throwaway database and checks every port, DNAS and the API, and runs
+the real zproxy against it (STUN, register, battle info).
 On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS from anywhere.
 
 ## Releases
 
 `git tag vX.Y.Z && git push origin vX.Y.Z` publishes the server and, when its code changed,
-zproxy (`scripts/zproxy-release-needed.sh`). The server tarball's name must never end in
+zproxy (`scripts/zproxy-release-needed.sh`). zproxy is its own Go module (`src/zproxy/go.mod`) and
+imports no server package. The server tarball's name must never end in
 `<os>_<arch>`: zproxy's self-update would take it (`src/zproxy/release_test.go`).
 
 ## Clients
