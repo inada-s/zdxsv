@@ -17,7 +17,7 @@ import (
 	"zdxsv/pkg/battle/battlerpc"
 	"zdxsv/pkg/db"
 	"zdxsv/pkg/db/dbtest"
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby/lobbyapi"
 	. "zdxsv/pkg/lobby/message"
 	"zdxsv/pkg/lobby/model"
 	"zdxsv/pkg/proto"
@@ -485,7 +485,7 @@ func TestLobbyBattleSameSyncOnly(t *testing.T) {
 	}
 }
 
-// lobby1Proxy logs a user in, enters lobby 1 and registers its proxy over RPC.
+// lobby1Proxy logs a user in, enters lobby 1 and registers its proxy with the lobby API.
 func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
 	t.Helper()
 	conn := dbtest.Use(t)
@@ -493,18 +493,18 @@ func lobby1Proxy(t *testing.T) (*App, *testClient, *testLogin, string) {
 		t.Fatal(err)
 	}
 	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
-	rpcc := startLobbyRPC(t, app)
+	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
 	userID, _, _ := c.login(ac, "******", "pilot")
 	c.ask(0x6305, u16(1))
-	res := call(t, rpcc, &lobbyrpc.RegisterProxyRequest{
+	res := api.register(t, &lobbyapi.RegisterProxyRequest{
 		CurrentVersion: requiredVersion,
 		UserID:         userID,
 		LocalIP:        net.IPv4(192, 168, 0, 10),
 		Port:           9000,
 		UDPAddrs:       []string{"192.168.0.10:9000"},
-	}).(*lobbyrpc.RegisterProxyResponse)
+	})
 	if !res.Result {
 		t.Fatalf("register proxy: %+v", res)
 	}
@@ -529,8 +529,8 @@ func TestLobbyTestBattle(t *testing.T) {
 	c.expect(0x6910, CategoryNotice)
 	c.ask(0x6002, nil)
 
-	rpcc := startLobbyRPC(t, app)
-	res := call(t, rpcc, &lobbyrpc.BattleInfoRequest{SessionID: ac.SessionID}).(*lobbyrpc.BattleInfoResponse)
+	api := newZproxyAPI(app)
+	res := api.battleInfo(t, ac.SessionID)
 	if !res.Result || !res.IsTest || len(res.Users) != 1 || res.Users[0].UserID != userID {
 		t.Errorf("battle info: %+v", res)
 	}
@@ -560,18 +560,18 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 		t.Fatal(err)
 	}
 	addr, app := startLobbyApp(t, battlerpc.NewBattleRpc())
-	rpcc := startLobbyRPC(t, app)
+	api := newZproxyAPI(app)
 	ac := registerAccount(t)
 	c := dialLobby(t, addr)
 	userID, _, _ := c.login(ac, "******", "pilot")
 	c.ask(0x6305, u16(1))
-	if res := call(t, rpcc, &lobbyrpc.RegisterProxyRequest{
+	if res := api.register(t, &lobbyapi.RegisterProxyRequest{
 		CurrentVersion: requiredVersion,
 		UserID:         userID,
 		LocalIP:        net.IPv4(192, 168, 0, 10),
 		Port:           9000,
 		UDPAddrs:       []string{"192.168.0.10:9000"},
-	}).(*lobbyrpc.RegisterProxyResponse); !res.Result {
+	}); !res.Result {
 		t.Fatalf("register proxy: %+v", res)
 	}
 	c.ask(0x640E, []byte{model.EntryAeug})

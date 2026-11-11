@@ -3,15 +3,18 @@ package main
 import (
 	"context"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby"
+	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/proto"
 
 	pb "github.com/golang/protobuf/proto"
-	"github.com/valyala/gorpc"
 )
 
 // freePort reserves a loopback TCP port and frees it for a listener that takes an address.
@@ -25,45 +28,46 @@ func freePort(t *testing.T) *net.TCPAddr {
 	return ln.Addr().(*net.TCPAddr)
 }
 
-// fakeLobby is the lobby RPC server zproxy talks to, answering with battle and keeping the requests.
+// fakeLobby is the lobby API zproxy talks to, answering with battle and keeping the requests.
 type fakeLobby struct {
-	registers chan *lobbyrpc.RegisterProxyRequest
-	infos     chan *lobbyrpc.BattleInfoRequest
+	registers chan *lobbyapi.RegisterProxyRequest
+	infos     chan *lobbyapi.BattleInfoRequest
+	conns     atomic.Int32
 }
 
-// useFakeLobby points zproxy's lobby RPC client at a local fake lobby.
-func useFakeLobby(t *testing.T, register *lobbyrpc.RegisterProxyResponse, battle *lobbyrpc.BattleInfoResponse) *fakeLobby {
+// useFakeLobby points zproxy's lobby API client at a local fake lobby.
+func useFakeLobby(t *testing.T, register *lobbyapi.RegisterProxyResponse, battle *lobbyapi.BattleInfoResponse) *fakeLobby {
 	t.Helper()
 	l := &fakeLobby{
-		registers: make(chan *lobbyrpc.RegisterProxyRequest, 10),
-		infos:     make(chan *lobbyrpc.BattleInfoRequest, 10),
+		registers: make(chan *lobbyapi.RegisterProxyRequest, 10),
+		infos:     make(chan *lobbyapi.BattleInfoRequest, 10),
 	}
-	addr := freePort(t).String()
-	sv := gorpc.NewTCPServer(addr, func(_ string, req interface{}) interface{} {
-		switch r := req.(type) {
-		case *lobbyrpc.RegisterProxyRequest:
+	sv := httptest.NewUnstartedServer(&lobby.APIHandler{
+		RegisterProxy: func(_ string, r *lobbyapi.RegisterProxyRequest) *lobbyapi.RegisterProxyResponse {
 			l.registers <- r
 			return register
-		case *lobbyrpc.BattleInfoRequest:
+		},
+		BattleInfo: func(r *lobbyapi.BattleInfoRequest) *lobbyapi.BattleInfoResponse {
 			l.infos <- r
 			return battle
-		}
-		return nil
+		},
 	})
-	if err := sv.Start(); err != nil {
-		t.Fatal(err)
+	sv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			l.conns.Add(1)
+		}
 	}
-	t.Cleanup(sv.Stop)
-	useLobbyRPC(t, addr)
+	sv.Start()
+	t.Cleanup(sv.Close)
+	useLobbyAPI(t, sv.URL)
 	return l
 }
 
-func useLobbyRPC(t *testing.T, addr string) {
+func useLobbyAPI(t *testing.T, url string) {
 	t.Helper()
-	conf.LobbyRPCAddr = addr
+	conf.LobbyAPIURL = url
 	conf.RegisterUserID = "_AUTO_"
-	setupLobbyRPC()
-	t.Cleanup(lobbyRPCClient.Stop)
+	t.Cleanup(lobbyAPIClient.CloseIdleConnections)
 }
 
 // lobbyProxy is a zproxy as after Setup, on loopback, with its PS2 port listening.
@@ -152,9 +156,9 @@ func waitFor(t *testing.T, ch interface{}, d time.Duration, what string) interfa
 	return v.Interface()
 }
 
-func waitRegister(t *testing.T, l *fakeLobby, d time.Duration) *lobbyrpc.RegisterProxyRequest {
+func waitRegister(t *testing.T, l *fakeLobby, d time.Duration) *lobbyapi.RegisterProxyRequest {
 	t.Helper()
-	return waitFor(t, l.registers, d, "register").(*lobbyrpc.RegisterProxyRequest)
+	return waitFor(t, l.registers, d, "register").(*lobbyapi.RegisterProxyRequest)
 }
 
 func waitPoll(t *testing.T, done chan error, d time.Duration) error {
@@ -180,21 +184,21 @@ func TestPollLobbyBattle(t *testing.T) {
 	u3.SubscribePacket("t", func(*proto.Packet, *net.UDPAddr) {})
 
 	l := useFakeLobby(t,
-		&lobbyrpc.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1", LobbyUsers: []lobbyrpc.User{
+		&lobbyapi.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1", LobbyUsers: []lobbyapi.User{
 			{UserID: "U1", UDPAddrs: []string{"127.0.0.1:1"}},
 			{UserID: "U2", UDPAddrs: u2Addrs, UDP: true},
 			{UserID: "U3", UDPAddrs: u3Addrs, UDP: true},
 		}},
-		&lobbyrpc.BattleInfoResponse{Result: true, BattleIP: net.IPv4(127, 0, 0, 1), Port: 9999, Users: []lobbyrpc.User{
+		&lobbyapi.BattleInfoResponse{Result: true, BattleIP: net.IPv4(127, 0, 0, 1), Port: 9999, Users: []lobbyapi.User{
 			{UserID: "U1"}, {UserID: "U2"}, {UserID: "U3"},
 		}})
 	z, ps2Addr := lobbyProxy(t)
 	done := pollLobby(t, z, ps2Addr)
 
 	r := waitRegister(t, l, 2*time.Second)
-	want := &lobbyrpc.RegisterProxyRequest{CurrentVersion: protocolVersion, UserID: "_AUTO_",
-		LocalIP: z.selfLocalIP, Port: conf.TCPListenPort, UDPAddrs: z.selfUDPAddrs, P2PConnected: map[string]struct{}{}}
-	if !reflect.DeepEqual(r, want) {
+	want := &lobbyapi.RegisterProxyRequest{CurrentVersion: protocolVersion, UserID: "_AUTO_",
+		LocalIP: r.LocalIP, Port: conf.TCPListenPort, UDPAddrs: z.selfUDPAddrs, P2PConnected: map[string]struct{}{}}
+	if !reflect.DeepEqual(r, want) || !r.LocalIP.Equal(z.selfLocalIP) {
 		t.Fatalf("register %+v\nwant %+v", r, want)
 	}
 	if id := waitFor(t, pings, 2*time.Second, "ping to U2").(string); id != "U1" {
@@ -211,8 +215,11 @@ func TestPollLobbyBattle(t *testing.T) {
 	if err := waitPoll(t, done, 2*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if r := waitFor(t, l.infos, time.Second, "battle info").(*lobbyrpc.BattleInfoRequest); r.SessionID != "12345678" {
+	if r := waitFor(t, l.infos, time.Second, "battle info").(*lobbyapi.BattleInfoRequest); r.SessionID != "12345678" {
 		t.Fatalf("battle info for %q", r.SessionID)
+	}
+	if n := l.conns.Load(); n != 1 {
+		t.Fatalf("%d connections to the lobby API, want 1 for the registers and the battle info", n)
 	}
 	if z.userID != "U1" || z.sessionID != "12345678" || z.testBattle || z.ps2cl == nil {
 		t.Fatalf("userID %q sessionID %q test %v ps2 %v", z.userID, z.sessionID, z.testBattle, z.ps2cl)
@@ -230,7 +237,7 @@ func TestPollLobbyBattle(t *testing.T) {
 
 // A ping from another user is answered with this proxy's user id; one from itself is not.
 func TestPollLobbyAnswersPing(t *testing.T) {
-	l := useFakeLobby(t, &lobbyrpc.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1"}, nil)
+	l := useFakeLobby(t, &lobbyapi.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1"}, nil)
 	z, ps2Addr := lobbyProxy(t)
 	pollLobby(t, z, ps2Addr)
 	waitRegister(t, l, 2*time.Second)
@@ -284,9 +291,9 @@ registered:
 }
 
 func TestPollLobbyBattleInfo(t *testing.T) {
-	reg := &lobbyrpc.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1"}
+	reg := &lobbyapi.RegisterProxyResponse{Result: true, SessionID: "12345678", UserID: "U1"}
 	t.Run("test battle", func(t *testing.T) {
-		useFakeLobby(t, reg, &lobbyrpc.BattleInfoResponse{Result: true, IsTest: true, Users: []lobbyrpc.User{{UserID: "U1"}}})
+		useFakeLobby(t, reg, &lobbyapi.BattleInfoResponse{Result: true, IsTest: true, Users: []lobbyapi.User{{UserID: "U1"}}})
 		z, ps2Addr := lobbyProxy(t)
 		done := pollLobby(t, z, ps2Addr)
 		connectPS2(t, ps2Addr)
@@ -298,7 +305,7 @@ func TestPollLobbyBattleInfo(t *testing.T) {
 		}
 	})
 	t.Run("refused", func(t *testing.T) {
-		useFakeLobby(t, reg, &lobbyrpc.BattleInfoResponse{Result: false, Message: "no battle"})
+		useFakeLobby(t, reg, &lobbyapi.BattleInfoResponse{Result: false, Message: "no battle"})
 		z, ps2Addr := lobbyProxy(t)
 		done := pollLobby(t, z, ps2Addr)
 		connectPS2(t, ps2Addr)
@@ -309,7 +316,7 @@ func TestPollLobbyBattleInfo(t *testing.T) {
 }
 
 func TestPollLobbyUnreachable(t *testing.T) {
-	useLobbyRPC(t, freePort(t).String())
+	useLobbyAPI(t, "http://"+freePort(t).String())
 	z, ps2Addr := lobbyProxy(t)
 	if err := waitPoll(t, pollLobby(t, z, ps2Addr), 3*time.Second); err == nil {
 		t.Fatal("no error without a lobby")

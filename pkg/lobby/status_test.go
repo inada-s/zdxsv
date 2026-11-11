@@ -6,19 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"zdxsv/pkg/lobby/lobbyrpc"
+	"zdxsv/pkg/lobby/lobbyapi"
 	"zdxsv/pkg/lobby/model"
 )
 
 func TestMakeStatusPlatforms(t *testing.T) {
-	res := &lobbyrpc.StatusResponse{
-		LobbyUsers: []lobbyrpc.User{
+	res := &lobbyapi.StatusResponse{
+		LobbyUsers: []lobbyapi.User{
 			{UserID: "AAAAAA", Platform: model.PlatformConsole},
 			{UserID: "BBBBBB", Platform: model.PlatformEmu, UDP: true},
 			{UserID: "CCCCCC"}, // no platform: a console
 			{UserID: "DDDDDD", Platform: model.PlatformEmu},
 		},
-		Battles: []lobbyrpc.Battle{{Platform: model.PlatformEmu, Users: []lobbyrpc.User{
+		Battles: []lobbyapi.Battle{{Platform: model.PlatformEmu, Users: []lobbyapi.User{
 			{UserID: "DDDDDD", Platform: model.PlatformEmu}, // also in the lobby list: counted once
 			{UserID: "EEEEEE", Platform: model.PlatformEmu},
 		}}},
@@ -40,9 +40,9 @@ func TestMakeStatusPlatforms(t *testing.T) {
 
 func TestAPIStatus(t *testing.T) {
 	calls := 0
-	h := &APIHandler{Status: func() *lobbyrpc.StatusResponse {
+	h := &APIHandler{Status: func() *lobbyapi.StatusResponse {
 		calls++
-		return &lobbyrpc.StatusResponse{LobbyUsers: []lobbyrpc.User{{UserID: "AAAAAA"}, {UserID: "BBBBBB"}}}
+		return &lobbyapi.StatusResponse{LobbyUsers: []lobbyapi.User{{UserID: "AAAAAA"}, {UserID: "BBBBBB"}}}
 	}}
 	get := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
