@@ -621,6 +621,10 @@ func TestLobbyRoomBattle(t *testing.T) {
 	if name := guest.ask(0x6402, u16(roomID)).Reader(); name.Read16() != roomID || name.ReadString() != "testroom" {
 		t.Errorf("room name")
 	}
+	join := guest.ask(0x640B, u16(roomID)).Body
+	if want := append(u16(roomID), 0, 0, 0, 2, 0xFF, 0xFF, 0, 1); len(join) != 12 || !bytes.Equal(join[:2], want[:2]) || !bytes.Equal(join[4:], want[2:]) {
+		t.Errorf("room join info % x, want id, max, 0, 2, ffff, 1", join)
+	}
 	guest.ask(0x6406, append(u16(roomID), 0, 0, 0, 0))
 	if joined := owner.expect(0x6503, CategoryNotice).Reader().ReadString(); joined != ids[1] {
 		t.Errorf("owner saw %q join", joined)

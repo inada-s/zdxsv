@@ -28,7 +28,7 @@ var _ = register(0x640B, "GetRoomJoinInfo", func(p *LbsPeer, m *LbsMessage) {
 	p.SendMessage(a)
 })
 
-// The game refuses 対戦開始 locally unless both entry counts reach the two minimums.
+// The game refuses a battle start locally unless the entry counts reach these minimums.
 func writeRoomJoinInfo(w *MessageBodyWriter, roomID, max uint16) {
 	w.Write16(roomID)
 	w.Write16(max)
