@@ -292,8 +292,8 @@ func TestLobbyList(t *testing.T) {
 	}
 
 	plazas := look.ask(0x6203, nil).Reader().Read16()
-	if plazas == 0 {
-		t.Fatal("no plaza")
+	if plazas != 2 {
+		t.Fatalf("GetPlazaCount = %d, want 2", plazas)
 	}
 	for id := uint16(1); id <= plazas; id++ {
 		r := look.ask(0x6205, u16(id)).Reader()

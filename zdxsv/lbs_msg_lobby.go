@@ -6,7 +6,7 @@ import "fmt"
 var _ = register(0x6203, "GetPlazaCount", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
 	w := a.Writer()
-	w.Write16(25) // Not sure
+	w.Write16(2) // The game keeps two plaza entries; a larger count writes past them.
 	p.SendMessage(a)
 })
 
