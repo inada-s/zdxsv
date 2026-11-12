@@ -165,10 +165,10 @@
     <li>PCSX2 for zdxsv</li>
   </ul>
   <div class="download">
-    <a id="pcsx2-download" class="btn" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
+    <a id="pcsx2-download" class="btn" href="https://github.com/inada-s/pcsx2/releases/latest">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
       PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
-    <small id="pcsx2-file">pcsx2-zdxsv-windows-x64.zip (最新版)</small>
+    <small id="pcsx2-file">GitHub Releases から pcsx2-zdxsv-windows-x64.zip を選んでください</small>
     <small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small>
   </div>
 
@@ -220,9 +220,16 @@ function getJSON(url, f) {
 }
 
 var panes = document.querySelectorAll(".pane");
+// The GitHub API allows 60 unauthenticated calls per hour per IP: ask it only once a tab that needs it opens.
+var loaded = {};
 function show(name) {
   var target = $(name), pane = target && target.closest(".pane");
   if (!pane) pane = $("top");
+  var load = {ps2: loadZproxyDownload, pcsx2: loadPcsx2Download}[pane.id];
+  if (load && !loaded[pane.id]) {
+    loaded[pane.id] = true;
+    load();
+  }
   for (var i = 0; i < panes.length; i++) panes[i].hidden = panes[i] !== pane;
   var tabs = document.querySelectorAll(".tabs a[data-tab]");
   for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle("active", tabs[j].dataset.tab === pane.id);
@@ -310,26 +317,30 @@ function setZproxyDownload(arch) {
     }
   });
 }
-// Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
-if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-  navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
-    setZproxyDownload(v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386"));
-  }, function() { setZproxyDownload(); });
-} else {
-  setZproxyDownload();
+function loadZproxyDownload() {
+  // Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
+      setZproxyDownload(v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386"));
+    }, function() { setZproxyDownload(); });
+  } else {
+    setZproxyDownload();
+  }
 }
 
-getJSON("https://api.github.com/repos/inada-s/pcsx2/releases/latest", function(r) {
-  var assets = r.assets || [];
-  for (var j = 0; j < assets.length; j++) {
-    if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
-      $("pcsx2-download").href = assets[j].browser_download_url;
-      $("pcsx2-file").textContent = r.tag_name + " / " + assets[j].name;
-      $("pcsx2-release").href = r.html_url;
-      return;
+function loadPcsx2Download() {
+  getJSON("https://api.github.com/repos/inada-s/pcsx2/releases/latest", function(r) {
+    var assets = r.assets || [];
+    for (var j = 0; j < assets.length; j++) {
+      if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
+        $("pcsx2-download").href = assets[j].browser_download_url;
+        $("pcsx2-file").textContent = r.tag_name + " / " + assets[j].name;
+        $("pcsx2-release").href = r.html_url;
+        return;
+      }
     }
-  }
-});
+  });
+}
 })();
 </script>
 </body></html>
