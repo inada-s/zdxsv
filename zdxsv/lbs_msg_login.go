@@ -135,14 +135,9 @@ var _ = register(0x6190, "DecideTeam", func(p *LbsPeer, m *LbsMessage) {
 
 var _ = register(0x614C, "GetTopInformation", func(p *LbsPeer, m *LbsMessage) {
 	a := NewServerAnswer(m)
-	w := a.Writer()
-	w.Write8(0)
-	/*
-		FIXME:
-		It's works but buggy...
-		w.Write8(1)
-		w.WriteString("<BODY><LF=5><CENTER>ーパッド遅延軽減ハックを試験導入中ー<BR><BR>ＵＤＰプロキシ使用推奨です。<BR>不具合やラグの改善具合の報告にご協力ください。<END>")
-	*/
+	// 0: no カプコン情報 window. 1-3 show it to a wider audience each and
+	// must be followed by the text, e.g. "<BODY><LF=5><CENTER>...<END>".
+	a.Writer().Write8(0)
 	p.SendMessage(a)
 })
 

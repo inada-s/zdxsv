@@ -173,15 +173,16 @@ var _ = register(0x6608, "GetRuleElementName", func(p *LbsPeer, m *LbsMessage) {
 
 var _ = register(0x660E, "GetRuleControl", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
-	roomID := r.Read16()
+	r.Read16()
 	ruleID := r.Read8()
 	elemID := r.Read8()
-	result := p.app.OnGetRuleControl(p, roomID, ruleID, elemID)
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write8(ruleID)
 	w.Write8(elemID)
-	w.Write8(result)
+	// Count of (rule, min choice, max choice) limits the client applies
+	// while this choice is picked. The rules here are independent.
+	w.Write8(0)
 	p.SendMessage(a)
 })
 
