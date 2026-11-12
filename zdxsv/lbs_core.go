@@ -937,11 +937,6 @@ func (a *Lbs) OnGetRuleElementName(_ *LbsPeer, _ uint16, ruleID byte, elemID byt
 	return RuleElementName(ruleID, elemID)
 }
 
-func (a *Lbs) OnGetRuleControl(_ *LbsPeer, _ uint16, _ byte, _ byte) byte {
-	//TODO:調査
-	return 0
-}
-
 func (a *Lbs) OnGetRuleElementCount(_ *LbsPeer, _ uint16, ruleID byte) byte {
 	return RuleElementCount(ruleID)
 }
