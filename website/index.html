@@ -220,15 +220,14 @@ function getJSON(url, f) {
 }
 
 var panes = document.querySelectorAll(".pane");
-// The GitHub API allows 60 unauthenticated calls per hour per IP: ask it only once a tab that needs it opens.
-var loaded = {};
+// The GitHub API allows 60 unauthenticated calls per hour per IP: ask it only once the PS2 tab opens.
+var zproxyLoaded = false;
 function show(name) {
   var target = $(name), pane = target && target.closest(".pane");
   if (!pane) pane = $("top");
-  var load = {ps2: loadZproxyDownload, pcsx2: loadPcsx2Download}[pane.id];
-  if (load && !loaded[pane.id]) {
-    loaded[pane.id] = true;
-    load();
+  if (pane.id == "ps2" && !zproxyLoaded) {
+    zproxyLoaded = true;
+    loadZproxyDownload();
   }
   for (var i = 0; i < panes.length; i++) panes[i].hidden = panes[i] !== pane;
   var tabs = document.querySelectorAll(".tabs a[data-tab]");
@@ -326,20 +325,6 @@ function loadZproxyDownload() {
   } else {
     setZproxyDownload();
   }
-}
-
-function loadPcsx2Download() {
-  getJSON("https://api.github.com/repos/inada-s/pcsx2/releases/latest", function(r) {
-    var assets = r.assets || [];
-    for (var j = 0; j < assets.length; j++) {
-      if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
-        $("pcsx2-download").href = assets[j].browser_download_url;
-        $("pcsx2-file").textContent = r.tag_name + " / " + assets[j].name;
-        $("pcsx2-release").href = r.html_url;
-        return;
-      }
-    }
-  });
 }
 })();
 </script>
