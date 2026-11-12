@@ -220,9 +220,15 @@ function getJSON(url, f) {
 }
 
 var panes = document.querySelectorAll(".pane");
+// The GitHub API allows 60 unauthenticated calls per hour per IP: ask it only once the PS2 tab opens.
+var zproxyLoaded = false;
 function show(name) {
   var target = $(name), pane = target && target.closest(".pane");
   if (!pane) pane = $("top");
+  if (pane.id == "ps2" && !zproxyLoaded) {
+    zproxyLoaded = true;
+    loadZproxyDownload();
+  }
   for (var i = 0; i < panes.length; i++) panes[i].hidden = panes[i] !== pane;
   var tabs = document.querySelectorAll(".tabs a[data-tab]");
   for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle("active", tabs[j].dataset.tab === pane.id);
@@ -310,26 +316,16 @@ function setZproxyDownload(arch) {
     }
   });
 }
-// Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
-if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-  navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
-    setZproxyDownload(v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386"));
-  }, function() { setZproxyDownload(); });
-} else {
-  setZproxyDownload();
-}
-
-getJSON("https://api.github.com/repos/inada-s/pcsx2/releases/latest", function(r) {
-  var assets = r.assets || [];
-  for (var j = 0; j < assets.length; j++) {
-    if (assets[j].name == "pcsx2-zdxsv-windows-x64.zip") {
-      $("pcsx2-download").href = assets[j].browser_download_url;
-      $("pcsx2-file").textContent = r.tag_name + " / " + assets[j].name;
-      $("pcsx2-release").href = r.html_url;
-      return;
-    }
+function loadZproxyDownload() {
+  // Chromium tells the CPU (Apple Silicon vs Intel Mac, ARM Windows); elsewhere guess from the user agent.
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(function(v) {
+      setZproxyDownload(v.architecture == "arm" ? (v.bitness == "64" ? "arm64" : "arm") : (v.bitness == "64" ? "amd64" : "386"));
+    }, function() { setZproxyDownload(); });
+  } else {
+    setZproxyDownload();
   }
-});
+}
 })();
 </script>
 </body></html>
