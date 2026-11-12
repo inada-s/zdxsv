@@ -25,6 +25,9 @@ func (a *Lbs) OnOpen(p *LbsPeer) {
 	RequestKeyPair(p)
 }
 
+// If p drops while matching, the other peers of the match are not told. 0x6005 (NoticeMatchCancel) would
+// cancel the match on their clients, both while matching and after GotoBattle, and return
+// them to the lobby map.
 func (a *Lbs) OnClose(p *LbsPeer) {
 	if p.inBattleAfterRoom {
 		a.OnExitBattleAfterRoom(p)
@@ -303,8 +306,10 @@ func (a *Lbs) getUserRanking(userID string, side byte) *LbsRankingRecord {
 	}
 
 	return &LbsRankingRecord{
-		Rank:        0, // TODO
-		EntireCount: 0, // TODO
+		// The game draws these as "ランキング順位: Rank位／ EntireCount人"; Rank 0 shows "(ランク外)".
+		// Both stay 0: there is no rank source for them yet.
+		Rank:        0,
+		EntireCount: 0,
 		Class:       byte(c),
 		Battle:      uint32(res.Battle),
 		Win:         uint32(res.Win),
