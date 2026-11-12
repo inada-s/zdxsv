@@ -71,16 +71,10 @@ var _ = register(0x6404, "GetRoomStatus", func(p *LbsPeer, m *LbsMessage) {
 
 var _ = register(0x6405, "GetRoomPasswordInfo", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
-	pass, ok := p.app.OnGetRoomPasswordInfo(p, roomID)
 	a := NewServerAnswer(m)
 	w := a.Writer()
 	w.Write16(roomID)
-	if !ok {
-		w.Write8(0x00) // 0: パスワードなし
-	} else {
-		w.Write8(0x01)
-		_ = pass //TODO
-	}
+	w.Write8(p.app.OnGetRoomPasswordInfo(p, roomID))
 	p.SendMessage(a)
 })
 
@@ -213,7 +207,6 @@ var _ = register(0x660A, "DecideRoomPassword", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	pass := r.ReadEncryptedString()
 	p.app.OnDecideRoomPassword(p, pass)
-	logger.Info("room password", zap.Any("pass", pass))
 	p.SendMessage(NewServerAnswer(m))
 })
 
@@ -282,11 +275,17 @@ var _ = register(0x6504, "EntryRoomMatch", func(p *LbsPeer, m *LbsMessage) {
 var _ = register(0x6406, "EnterRoom", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
-	unk1 := r.Read16()
-	unk2 := r.Read16()
-	p.app.OnEnterRoom(p, roomID, unk1, unk2)
-	logger.Info("EnterRoom", zap.Any("room_id", roomID), zap.Any("unk1", unk1), zap.Any("unk2", unk2))
-	p.SendMessage(NewServerAnswer(m))
+	pass := r.ReadEncryptedString()
+	a := NewServerAnswer(m)
+	if !p.app.CheckRoomPassword(p, roomID, pass) {
+		a.Status = StatusError
+		a.Writer().WriteString("<B>パスワードが違います<B>")
+		p.SendMessage(a)
+		return
+	}
+	p.app.OnEnterRoom(p, roomID)
+	logger.Info("EnterRoom", zap.Any("room_id", roomID))
+	p.SendMessage(a)
 })
 
 var _ = register(0x6501, "ExitRoom", func(p *LbsPeer, m *LbsMessage) {
@@ -333,6 +332,14 @@ func NoticeRoomEntryUserCountForLobbyUser(p *LbsPeer, roomID, aeug, titans uint1
 	w.Write16(roomID)
 	w.Write16(aeug)
 	w.Write16(titans)
+	p.SendMessage(n)
+}
+
+func NoticeRoomPasswordInfo(p *LbsPeer, roomID uint16, locked byte) {
+	n := NewServerNotice(0x6405)
+	w := n.Writer()
+	w.Write16(roomID)
+	w.Write8(locked)
 	p.SendMessage(n)
 }
 
