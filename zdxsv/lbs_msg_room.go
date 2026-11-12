@@ -24,15 +24,19 @@ var _ = register(0x640B, "GetRoomJoinInfo", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	max := p.app.OnGetRoomJoinInfo(p, roomID)
 	a := NewServerAnswer(m)
-	w := a.Writer()
-	w.Write16(roomID)
-	w.Write16(max) // 最大人数
-	w.Write16(0)
-	w.Write16(0)      //
-	w.Write16(0xFFFF) // 最大参加人数?
-	w.Write16(0)      // 対戦開始押せるか 0:押せる 1:押せない
+	writeRoomJoinInfo(a.Writer(), roomID, max)
 	p.SendMessage(a)
 })
+
+// The game refuses 対戦開始 locally unless both entry counts reach the two minimums.
+func writeRoomJoinInfo(w *MessageBodyWriter, roomID, max uint16) {
+	w.Write16(roomID)
+	w.Write16(max)
+	w.Write16(0) // unused
+	w.Write16(roomMinEntryTotal)
+	w.Write16(0xFFFF) // unused
+	w.Write16(roomMinEntryPerSide)
+}
 
 var _ = register(0x6403, "GetRoomUserCount", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
@@ -350,13 +354,7 @@ func NoticeRoomUserCount(p *LbsPeer, roomID, count uint16) {
 
 func NoticeRoomJoinInfo(p *LbsPeer, roomID, max uint16) {
 	n := NewServerNotice(0x640B)
-	w := n.Writer()
-	w.Write16(roomID)
-	w.Write16(max)
-	w.Write16(0) // ティターンズの参加人数表示, 一旦0固定
-	w.Write16(0)
-	w.Write16(0xFFFF) // 参加できるか?
-	w.Write16(0)
+	writeRoomJoinInfo(n.Writer(), roomID, max)
 	p.SendMessage(n)
 }
 
