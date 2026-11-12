@@ -49,13 +49,9 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *LbsPeer, m *LbsMessage
 		w.WriteString(user.Name)
 		w.WriteString(user.Team)
 		w.WriteString(user.Bin)
-		// The game's only reader (0x3205dc) checks this byte == 6. With every player at 6, the match
-		// takes rows 0-2 of the in-flight input cap table at 0x5ffba0 (start cap 8/10/12 for 2/3/4
-		// players, max 16) instead of rows 3-5 (13/14/15). What 6 meant on the original server is
-		// unknown; hypothesis, not verified: a broadband connection (the smaller caps fit a faster
-		// line). See SLPS-25419/lobby-messages.md in inada-s/gdxsv-reveng.
-		// In a pad_delay lobby SetPadDelayLobbyHack writes all 6 rows to (2, 5, 5), so this value
-		// makes no difference there.
+		// The game only checks this byte == 6. 6 for every player starts the match with the smaller
+		// in-flight input cap (8/10/12 for 2/3/4 players instead of 13/14/15).
+		// Unverified guess: 6 meant a broadband line.
 		w.Write8(6)
 	} else {
 		logger.Info("UserPos not found", zap.Any("pos", pos))
