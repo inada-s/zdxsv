@@ -91,9 +91,14 @@ func (r *LbsRoom) GetEntryUserCount() (uint16, uint16) {
 	return a, b
 }
 
+const (
+	roomMinEntryPerSide = 1
+	roomMinEntryTotal   = 2 * roomMinEntryPerSide
+)
+
 func (r *LbsRoom) CanBattleStart() bool {
 	a, b := r.GetEntryUserCount()
-	return 0 < a && 0 < b && a <= 2 && b <= 2
+	return roomMinEntryPerSide <= a && roomMinEntryPerSide <= b && a <= 2 && b <= 2
 }
 
 func (r *LbsRoom) StartBattleUsers() (active []*LbsUser, inactive []*LbsUser) {
