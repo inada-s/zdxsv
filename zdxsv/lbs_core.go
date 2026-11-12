@@ -871,10 +871,23 @@ func (a *Lbs) OnGetRoomStatus(p *LbsPeer, roomID uint16) (status byte) {
 	return
 }
 
-func (a *Lbs) OnGetRoomPasswordInfo(p *LbsPeer, roomID uint16) (pass string, ok bool) {
-	//TODO
-	ok = false
-	return
+func (a *Lbs) OnGetRoomPasswordInfo(p *LbsPeer, roomID uint16) byte {
+	if p.Lobby == nil {
+		return 0
+	}
+	r, ok := p.Lobby.Rooms[roomID]
+	if !ok {
+		return 0
+	}
+	return r.Locked()
+}
+
+func (a *Lbs) CheckRoomPassword(p *LbsPeer, roomID uint16, pass string) bool {
+	if p.Lobby == nil {
+		return true
+	}
+	r, ok := p.Lobby.Rooms[roomID]
+	return !ok || r.Password == "" || r.Password == pass
 }
 
 func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
@@ -910,7 +923,7 @@ func (a *Lbs) OnGetNamePermission(p *LbsPeer, roomID uint16) byte {
 }
 
 func (a *Lbs) OnGetPasswordPermission(p *LbsPeer, roomID uint16) byte {
-	return 0 // 0: 不可 1: 可
+	return 1 // 0: 不可 1: 可
 }
 
 func (a *Lbs) OnGetRuleName(_ *LbsPeer, _ uint16, ruleID byte) string {
@@ -980,6 +993,7 @@ func (a *Lbs) OnDecideRuleFinish(p *LbsPeer) {
 			continue
 		}
 		NoticeRoomName(peer, r.ID, r.Name)
+		NoticeRoomPasswordInfo(peer, r.ID, r.Locked())
 		NoticeRoomStatus(peer, r.ID, r.Status)
 		NoticeRoomUserCount(peer, r.ID, uint16(len(r.Users)))
 		NoticeRoomJoinInfo(peer, r.ID, r.MaxPlayer)
@@ -1053,7 +1067,7 @@ func (a *Lbs) OnEntryRoomMatch(p *LbsPeer, side byte) {
 	}
 }
 
-func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID, _, _ uint16) bool {
+func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID uint16) bool {
 	if p.Lobby == nil {
 		return false
 	}

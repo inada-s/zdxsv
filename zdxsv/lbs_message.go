@@ -72,6 +72,11 @@ func (m *LbsMessage) String() string {
 
 	fmt.Fprintf(b, " ID:0x%X", m.Command)
 	fmt.Fprintf(b, " Seq:%v", m.Seq)
+	if m.Direction == ClientToServer && (m.Command == 0x6406 || m.Command == 0x660A) {
+		// carries a room password
+		fmt.Fprintf(b, " Body(%d bytes): hidden\n", len(m.Body))
+		return b.String()
+	}
 	fmt.Fprintf(b, " Body(%d bytes):\n", len(m.Body))
 	b.WriteString(hex.Dump(m.Body))
 	_ = hex.Dump

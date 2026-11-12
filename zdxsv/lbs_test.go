@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 // pipeConn is one end of an in-memory connection that reports addr as its peer's address.
@@ -647,6 +649,90 @@ func TestLobbyRoomBattle(t *testing.T) {
 		if n := c.ask(0x6911, nil).Reader().Read8(); n != 2 {
 			t.Errorf("player %d user count %d", i, n)
 		}
+	}
+}
+
+func enterRoom(c *testClient, roomID uint16, pass string) *LbsMessage {
+	q := NewClientQuestion(0x6406)
+	q.Writer().Write(append(u16(roomID), encryptString(q.Seq, pass)...))
+	c.send(q)
+	return c.expect(0x6406, CategoryAnswer)
+}
+
+func TestLobbyRoomPassword(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+
+	const lobbyID, locked, open = 4, 1, 2
+	var cs []*testClient
+	var ids []string
+	for i := 0; i < 2; i++ {
+		c := dialLobby(t, addr)
+		id, _, _ := c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
+		c.ask(0x6305, u16(lobbyID))
+		cs = append(cs, c)
+		ids = append(ids, id)
+	}
+	owner, guest := cs[0], cs[1]
+
+	if b := owner.ask(0x6602, u16(locked)).Body; !bytes.Equal(b, []byte{1}) {
+		t.Errorf("password permission % x", b)
+	}
+	owner.ask(0x6407, u16(locked))
+	q := NewClientQuestion(0x660A)
+	q.Writer().Write(encryptString(q.Seq, "gp03"))
+	owner.send(q)
+	owner.expect(0x660A, CategoryAnswer)
+	owner.ask(0x660C, nil)
+
+	if b := guest.expect(0x6405, CategoryNotice).Body; !bytes.Equal(b, []byte{0, locked, 1}) {
+		t.Errorf("password notice % x", b)
+	}
+	if b := guest.ask(0x6405, u16(locked)).Body; !bytes.Equal(b, []byte{0, locked, 1}) {
+		t.Errorf("password info % x", b)
+	}
+
+	for _, pass := range []string{"gp04", ""} {
+		a := enterRoom(guest, locked, pass)
+		if a.Status != StatusError {
+			t.Fatalf("password %q: status %x", pass, a.Status)
+		}
+		if msg, _ := japanese.ShiftJIS.NewDecoder().String(a.Reader().ReadString()); msg != "<B>パスワードが違います<B>" {
+			t.Errorf("password %q: message %q", pass, msg)
+		}
+	}
+	if r := owner.ask(0x6403, u16(locked)).Reader(); r.Read16() != locked || r.Read16() != 1 {
+		t.Errorf("user count after wrong passwords")
+	}
+
+	if a := enterRoom(guest, locked, "gp03"); a.Status != StatusSuccess || len(a.Body) != 0 {
+		t.Fatalf("right password: status %x body % x", a.Status, a.Body)
+	}
+	if joined := owner.expect(0x6503, CategoryNotice).Reader().ReadString(); joined != ids[1] {
+		t.Errorf("owner saw %q join", joined)
+	}
+	if r := owner.ask(0x6403, u16(locked)).Reader(); r.Read16() != locked || r.Read16() != 2 {
+		t.Errorf("user count after the right password")
+	}
+
+	guest.ask(0x6501, nil)
+	guest.ask(0x6407, u16(open))
+	guest.ask(0x660C, nil)
+	if b := owner.expect(0x6405, CategoryNotice).Body; !bytes.Equal(b, []byte{0, locked, 1}) {
+		t.Errorf("own room password notice % x", b)
+	}
+	if b := owner.expect(0x6405, CategoryNotice).Body; !bytes.Equal(b, []byte{0, open, 0}) {
+		t.Errorf("open room password notice % x", b)
+	}
+	if b := owner.ask(0x6405, u16(open)).Body; !bytes.Equal(b, []byte{0, open, 0}) {
+		t.Errorf("open room password info % x", b)
+	}
+	owner.ask(0x6501, nil)
+	if a := enterRoom(owner, open, "gp03"); a.Status != StatusSuccess {
+		t.Errorf("open room with a leftover password: status %x", a.Status)
+	}
+	if r := owner.ask(0x6403, u16(open)).Reader(); r.Read16() != open || r.Read16() != 2 {
+		t.Errorf("open room user count")
 	}
 }
 

@@ -69,6 +69,13 @@ func (r *LbsRoom) Exit(userID string) {
 	}
 }
 
+func (r *LbsRoom) Locked() byte {
+	if r.Password == "" {
+		return 0
+	}
+	return 1
+}
+
 func (r *LbsRoom) Remove() {
 	*r = *NewRoom(r.LobbyID, r.ID)
 }
