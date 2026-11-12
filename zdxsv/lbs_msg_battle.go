@@ -49,7 +49,10 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *LbsPeer, m *LbsMessage
 		w.WriteString(user.Name)
 		w.WriteString(user.Team)
 		w.WriteString(user.Bin)
-		w.Write8(pos) // 不明
+		// The game only checks this byte == 6. 6 for every player starts the match with the smaller
+		// in-flight input cap (8/10/12 for 2/3/4 players instead of 13/14/15).
+		// Unverified guess: 6 meant a broadband line.
+		w.Write8(6)
 	} else {
 		logger.Info("UserPos not found", zap.Any("pos", pos))
 		a.Status = StatusError
