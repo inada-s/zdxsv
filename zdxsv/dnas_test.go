@@ -211,8 +211,10 @@ func TestServer(t *testing.T) {
 	if status, _ := dialQuery(t, addr, "GET", "/gai-gw/nothing", nil); status != 404 {
 		t.Errorf("unknown path: status %d", status)
 	}
-	status, got := dialQuery(t, addr, "GET", "/00000020/CRS-top.jsp", nil)
-	if status != 200 || string(got) != "login /CRS-top.jsp" {
-		t.Errorf("login pages: status %d %q", status, got)
+	for _, code := range []string{gameCodeZGVSZ, gameCodeAEUG} {
+		status, got := dialQuery(t, addr, "GET", "/"+code+"/CRS-top.jsp", nil)
+		if status != 200 || string(got) != "login /CRS-top.jsp" {
+			t.Errorf("login pages %s: status %d %q", code, status, got)
+		}
 	}
 }

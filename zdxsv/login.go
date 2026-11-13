@@ -159,6 +159,7 @@ type commonParam struct {
 	SessionID     string
 	ServerAddr    string
 	Message       string
+	GameCode      string
 }
 
 func HandleTopPage(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +195,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.ServerVersion = "1.0"
+	p.GameCode = gameCodeOf(r)
 	p.LoginKey = a.LoginKey
 	p.SessionID, _ = Sessions.Start(a.LoginKey, false)
 	p.ServerAddr = Conf.Lobby.PublicAddr

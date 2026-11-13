@@ -4,8 +4,8 @@
 "OK",
 "{{.LoginKey}}",
 "{{.SessionID}}",
-"https://www01.kddi-mmbb.jp/00000020/login",
-"https://www01.kddi-mmbb.jp/00000020/CRS-top.jsp",
+"https://www01.kddi-mmbb.jp/{{.GameCode}}/login",
+"https://www01.kddi-mmbb.jp/{{.GameCode}}/CRS-top.jsp",
 </CSV>
 -->
 

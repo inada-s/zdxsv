@@ -194,7 +194,9 @@ func NewDnasServer(data *dnasData, region string, login http.Handler) (*DnasServ
 	}
 	s := &DnasServer{data: data, tls: cfg, mux: http.NewServeMux()}
 	s.mux.HandleFunc("/", s.handleDNAS)
-	s.mux.Handle("/00000020/", http.StripPrefix("/00000020", login))
+	for _, code := range []string{gameCodeZGVSZ, gameCodeAEUG} {
+		s.mux.Handle("/"+code+"/", http.StripPrefix("/"+code, withGameCode(code, login)))
+	}
 	return s, nil
 }
 
