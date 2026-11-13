@@ -89,6 +89,7 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 	}
 
 	p.LoginKey = ac.LoginKey
+	p.Game = Sessions.Game(sessionID)
 	p.SessionID = sessionID
 	RequestFirstData(p)
 }
@@ -376,7 +377,7 @@ func (a *Lbs) OnUserTopPageJump(p *LbsPeer) {
 // Utility
 // ===========================
 
-func (a *Lbs) startTestBattle(platform string, lobbyID uint16, users []*LbsUser) (string, bool) {
+func (a *Lbs) startTestBattle(z zone, lobbyID uint16, users []*LbsUser) (string, bool) {
 	if len(users) != 1 {
 		return "ユーザー数エラー", false
 	}
@@ -389,7 +390,8 @@ func (a *Lbs) startTestBattle(platform string, lobbyID uint16, users []*LbsUser)
 	if !ok {
 		return "UDPプロキシが登録されていません", false
 	}
-	battle := NewBattle(platform, lobbyID)
+	battle := NewBattle(z.platform, lobbyID)
+	battle.Game = z.game
 	battle.TestBattle = true
 	battle.UDPUsers[u.UserID] = true
 	battle.P2PMap[u.UserID] = map[string]struct{}{}
@@ -408,7 +410,7 @@ func (a *Lbs) startTestBattle(platform string, lobbyID uint16, users []*LbsUser)
 	return "接続テスト対戦開始", true
 }
 
-func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rule *Rule) bool {
+func (a *Lbs) startBattle(z zone, lobbyID uint16, users []*LbsUser, rule *Rule) bool {
 	if a.mcs == nil {
 		logger.Error("failed to start battle: no battle server")
 		return false
@@ -421,7 +423,8 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 		}
 	}
 
-	b := NewBattle(platform, lobbyID)
+	b := NewBattle(z.platform, lobbyID)
+	b.Game = z.game
 	if rule != nil {
 		b.Rule = rule
 	}
@@ -520,10 +523,10 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 // Lobby
 // ===========================
 
-func (a *Lbs) countBattles(platform string) int {
+func (a *Lbs) countBattles(z zone) int {
 	count := 0
 	for _, battle := range a.battles {
-		if battle.Platform == platform {
+		if battle.zone() == z {
 			count++
 		}
 	}
@@ -531,16 +534,16 @@ func (a *Lbs) countBattles(platform string) int {
 }
 
 func (a *Lbs) OnGetPlazaJoinUser(p *LbsPeer) uint16 {
-	return uint16(a.countBattles(p.Platform))
+	return uint16(a.countBattles(p.zone()))
 }
 
-func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
-	l, ok := a.getLobby(platform, lobbyID)
+func (a *Lbs) noticeLobbyUserCountAll(z zone, lobbyID uint16) {
+	l, ok := a.getLobby(z, lobbyID)
 	if ok {
 		lb := uint16(len(l.Users))
-		bt := a.lobbyBattleCount(platform, lobbyID)
+		bt := a.lobbyBattleCount(z, lobbyID)
 		for _, peer := range a.users {
-			if peer.Platform == platform {
+			if peer.zone() == z {
 				NoticeLobbyUserCount(peer, lobbyID, lb, bt)
 			}
 		}
@@ -558,7 +561,7 @@ func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 }
 
 func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
-	l, ok := a.getLobby(p.Platform, lobbyID)
+	l, ok := a.getLobby(p.zone(), lobbyID)
 	if ok {
 		p.LbsUser.Sync = ""
 		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
@@ -567,7 +570,7 @@ func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
 		a.dropBattlesOf(p.UserID)
 		p.Lobby = l
 		p.Lobby.Enter(&p.LbsUser)
-		a.noticeLobbyUserCountAll(l.Platform, l.ID)
+		a.noticeLobbyUserCountAll(l.zone(), l.ID)
 	}
 }
 
@@ -579,7 +582,7 @@ func (a *Lbs) dropBattlesOf(userID string) {
 			if u.SessionID == sid && u.UserID == userID {
 				delete(a.battles, sid)
 				if battle.LobbyID != 0 {
-					a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
+					a.noticeLobbyUserCountAll(battle.zone(), battle.LobbyID)
 				}
 				break
 			}
@@ -594,15 +597,15 @@ func (a *Lbs) OnExitLobby(p *LbsPeer) {
 	}
 	if p.Lobby != nil {
 		p.Lobby.Exit(p.UserID)
-		a.noticeLobbyUserCountAll(p.Lobby.Platform, p.Lobby.ID)
+		a.noticeLobbyUserCountAll(p.Lobby.zone(), p.Lobby.ID)
 		p.Lobby = nil
 	}
 }
 
-func (a *Lbs) lobbyBattleCount(platform string, lobbyID uint16) uint16 {
+func (a *Lbs) lobbyBattleCount(z zone, lobbyID uint16) uint16 {
 	n := uint16(0)
 	for _, battle := range a.battles {
-		if battle.Platform == platform && battle.LobbyID == lobbyID {
+		if battle.zone() == z && battle.LobbyID == lobbyID {
 			n++
 		}
 	}
@@ -610,16 +613,16 @@ func (a *Lbs) lobbyBattleCount(platform string, lobbyID uint16) uint16 {
 }
 
 func (a *Lbs) OnGetLobbyUserCount(p *LbsPeer, lobbyID uint16) (count, battles uint16) {
-	lb, ok := a.getLobby(p.Platform, lobbyID)
+	lb, ok := a.getLobby(p.zone(), lobbyID)
 	if ok {
 		count = uint16(len(lb.Users))
-		battles = a.lobbyBattleCount(p.Platform, lobbyID)
+		battles = a.lobbyBattleCount(p.zone(), lobbyID)
 	}
 	return
 }
 
 func (a *Lbs) OnGetLobbyEntryUserCount(p *LbsPeer, lobbyID uint16) (uint16, uint16) {
-	l, ok := a.getLobby(p.Platform, lobbyID)
+	l, ok := a.getLobby(p.zone(), lobbyID)
 	if !ok {
 		return 0, 0
 	}
@@ -634,7 +637,7 @@ func (a *Lbs) OnEntryLobbyBattle(p *LbsPeer, side byte) {
 		setting := lobbySetting(lobby.Platform, lobby.ID)
 		if lobbyHasHack(setting, HackZproxyTest) && side != EntryNone {
 			users := lobby.StartBattleUsers()
-			message, result := a.startTestBattle(lobby.Platform, lobby.ID, users)
+			message, result := a.startTestBattle(lobby.zone(), lobby.ID, users)
 			NoticeChatMessage(p, "SERVER", ">", message)
 			if result {
 				for _, u := range users {
@@ -645,7 +648,7 @@ func (a *Lbs) OnEntryLobbyBattle(p *LbsPeer, side byte) {
 			}
 		} else if lobbyCanStart(lobby, setting) {
 			users := lobby.StartBattleUsers()
-			result := a.startBattle(lobby.Platform, lobby.ID, users, lobbyBattleRule(setting))
+			result := a.startBattle(lobby.zone(), lobby.ID, users, lobbyBattleRule(setting))
 			if result {
 				for _, u := range users {
 					u.Entry = EntryNone
@@ -743,15 +746,15 @@ func (a *Lbs) OnEnterBattleAfterRoom(p *LbsPeer) {
 	}
 	delete(a.battles, p.SessionID)
 	if battle.LobbyID != 0 {
-		a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
+		a.noticeLobbyUserCountAll(battle.zone(), battle.LobbyID)
 	}
 	p.Battle = battle
 	p.inBattleAfterRoom = true
 	a.noticeBattleAfterRoomUserCountAll(battle)
 
-	count := a.countBattles(battle.Platform)
+	count := a.countBattles(battle.zone())
 	for _, peer := range a.users {
-		if peer.Lobby == nil && peer.Platform == battle.Platform {
+		if peer.Lobby == nil && peer.zone() == battle.zone() {
 			NoticeBothPlazaJoinUser(peer, 1, uint16(count))
 		}
 	}
@@ -1169,7 +1172,7 @@ func (a *Lbs) OnNoticeRoomBattleStart(p *LbsPeer) {
 		return
 	}
 	active, inactive := p.Room.StartBattleUsers()
-	ok := a.startBattle(p.Platform, p.Room.LobbyID, active, p.Room.Rule)
+	ok := a.startBattle(p.zone(), p.Room.LobbyID, active, p.Room.Rule)
 	if ok {
 		for _, u := range inactive {
 			peer, ok := a.users[u.UserID]

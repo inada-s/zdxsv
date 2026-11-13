@@ -198,6 +198,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	p.GameCode = gameCodeOf(r)
 	p.LoginKey = a.LoginKey
 	p.SessionID, _ = Sessions.Start(a.LoginKey, false)
+	Sessions.SetGame(p.SessionID, p.GameCode)
 	p.ServerAddr = Conf.Lobby.PublicAddr
 
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -347,6 +348,7 @@ var Sessions = NewSessionStore()
 type loginSession struct {
 	loginKey string
 	tempKey  string
+	game     string
 	used     time.Time
 }
 
@@ -410,6 +412,25 @@ func (s *SessionStore) Use(id, key string) (loginKey string, ok bool) {
 	}
 	ss.used = now
 	return ss.loginKey, true
+}
+
+// SetGame records the game code of the client of session id.
+func (s *SessionStore) SetGame(id, game string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ss := s.sessions[id]; ss != nil {
+		ss.game = game
+	}
+}
+
+// Game returns the game code of the client of session id; SLPS-25419 when unknown.
+func (s *SessionStore) Game(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ss := s.sessions[id]; ss != nil && ss.game != "" {
+		return ss.game
+	}
+	return gameCodeZGVSZ
 }
 
 // Touch keeps session id for another SessionTTL.

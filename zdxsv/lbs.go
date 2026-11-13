@@ -52,6 +52,7 @@ type LbsPeer struct {
 	app               *Lbs
 	inBattleAfterRoom bool
 	Platform          string
+	Game              string
 	PlatformInfo      map[string]string
 
 	proxyIP           net.IP
@@ -93,7 +94,7 @@ type Lbs struct {
 	*handlerHolder
 	mcs     *Mcs
 	users   map[string]*LbsPeer
-	lobbys  map[string]map[uint16]*LbsLobby // platform -> lobby id -> lobby
+	lobbys  map[zone]map[uint16]*LbsLobby
 	battles map[string]*LbsBattle
 	peers   map[string]*LbsPeer // conn address -> peer, owned by Serve
 	chEvent chan interface{}
@@ -113,27 +114,28 @@ func NewLbs() *Lbs {
 	app := &Lbs{
 		handlerHolder:      defaultHandlers,
 		users:              make(map[string]*LbsPeer),
-		lobbys:             make(map[string]map[uint16]*LbsLobby),
+		lobbys:             make(map[zone]map[uint16]*LbsLobby),
 		battles:            make(map[string]*LbsBattle),
 		peers:              make(map[string]*LbsPeer),
 		chEvent:            make(chan interface{}, 64),
 		chQuit:             make(chan interface{}),
 		aliveCheckInterval: 10 * time.Second,
 	}
-	app.getLobby(PlatformConsole, 0)
-	app.getLobby(PlatformEmu, 0)
+	app.getLobby(zoneOf("", PlatformConsole), 0)
+	app.getLobby(zoneOf("", PlatformEmu), 0)
 	return app
 }
 
-// getLobby returns the lobby of the platform, creating the platform's lobbies on first use.
-func (a *Lbs) getLobby(platform string, lobbyID uint16) (*LbsLobby, bool) {
-	lobbys, ok := a.lobbys[platform]
+// getLobby returns the lobby of the zone, creating the zone's lobbies on first use.
+func (a *Lbs) getLobby(z zone, lobbyID uint16) (*LbsLobby, bool) {
+	lobbys, ok := a.lobbys[z]
 	if !ok {
 		lobbys = make(map[uint16]*LbsLobby)
 		for i := 0; i < LobbyCount; i++ {
-			lobbys[uint16(i)] = NewLobby(platform, uint16(i))
+			lobbys[uint16(i)] = NewLobby(z.platform, uint16(i))
+			lobbys[uint16(i)].Game = z.game
 		}
-		a.lobbys[platform] = lobbys
+		a.lobbys[z] = lobbys
 	}
 	l, ok := lobbys[lobbyID]
 	return l, ok

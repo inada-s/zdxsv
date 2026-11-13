@@ -29,6 +29,7 @@ type LbsBattle struct {
 	Rule       *Rule
 	LobbyID    uint16
 	Platform   string
+	Game       string
 	StartTime  time.Time
 	TestBattle bool
 	// GgpoSession: the GGPO and live uplink session id (battle info ggpo_session), random per

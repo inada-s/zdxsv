@@ -11,6 +11,7 @@ const LobbyCount = 26
 type LbsLobby struct {
 	ID         uint16
 	Platform   string
+	Game       string
 	Rule       *Rule
 	Start      string
 	Users      map[string]*LbsUser

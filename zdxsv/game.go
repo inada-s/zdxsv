@@ -25,3 +25,18 @@ func gameCodeOf(r *http.Request) string {
 	}
 	return gameCodeZGVSZ
 }
+
+// zone keeps players apart: lobbies, rooms and battles are per game and platform.
+// The games cannot battle each other.
+type zone struct{ game, platform string }
+
+func zoneOf(game, platform string) zone {
+	if game == "" {
+		game = gameCodeZGVSZ
+	}
+	return zone{game, platform}
+}
+
+func (p *LbsPeer) zone() zone   { return zoneOf(p.Game, p.Platform) }
+func (l *LbsLobby) zone() zone  { return zoneOf(l.Game, l.Platform) }
+func (b *LbsBattle) zone() zone { return zoneOf(b.Game, b.Platform) }
