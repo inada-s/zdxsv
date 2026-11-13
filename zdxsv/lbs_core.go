@@ -467,7 +467,7 @@ func (a *Lbs) startBattle(z zone, lobbyID uint16, users []*LbsUser, rule *Rule) 
 			P2PMap:    b.P2PMap[u.UserID],
 		})
 	}
-	a.mcs.AddBattle(battleUsers)
+	a.mcs.AddBattle(b.Game, battleUsers)
 
 	host, port, err := net.SplitHostPort(Conf.Battle.PublicAddr)
 	if err != nil {

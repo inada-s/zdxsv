@@ -106,7 +106,7 @@ func TestMcsJoin(t *testing.T) {
 		{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}},
 		{{UserID: "U3", SessionID: "S3"}},
 	} {
-		l.AddBattle(g)
+		l.AddBattle("", g)
 	}
 
 	if room := l.Join(&fakePeer{}, "unknown"); room != nil {
@@ -127,7 +127,7 @@ func TestMcsJoin(t *testing.T) {
 	}
 
 	// a battle info that does not list the session itself
-	l.AddBattle([]McsUser{{SessionID: "S4"}})
+	l.AddBattle("", []McsUser{{SessionID: "S4"}})
 	info := l.GetBattleInfo("S4")
 	info.Users[0].SessionID = "other"
 	if _, ok := l.FindWaitingUser("S4"); ok {
@@ -139,7 +139,7 @@ func TestAddBattleRoomIDWraps(t *testing.T) {
 	l := NewMcs()
 	users := []McsUser{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
 	for i := 0; i < MaxRoom+1; i++ {
-		l.AddBattle(users)
+		l.AddBattle("", users)
 	}
 	if info := l.GetBattleInfo("S2"); info == nil || info.RoomID != 0 || len(info.Users) != 2 {
 		t.Fatalf("GetBattleInfo = %+v", info)

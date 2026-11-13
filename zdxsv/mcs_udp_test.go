@@ -13,7 +13,7 @@ import (
 func startUDPServer(t *testing.T) (*McsUDPServer, *net.UDPAddr) {
 	t.Helper()
 	mcs := NewMcs()
-	mcs.AddBattle([]McsUser{
+	mcs.AddBattle("", []McsUser{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
 	})
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})

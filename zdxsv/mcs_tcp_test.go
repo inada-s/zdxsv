@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net"
+	"os"
 	"testing"
 	"time"
 )
@@ -41,7 +43,7 @@ func hello(encoded string) []byte {
 
 func TestTCPRelay(t *testing.T) {
 	mcs := NewMcs()
-	mcs.AddBattle([]McsUser{
+	mcs.AddBattle("", []McsUser{
 		{UserID: "U1", SessionID: "12345678"}, {UserID: "U2", SessionID: "87654321"},
 	})
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -96,8 +98,13 @@ func TestTCPUnknownSessionClosed(t *testing.T) {
 // joinedTCPClient returns a client connection whose server-side TCPPeer has joined a room.
 func joinedTCPClient(t *testing.T) net.Conn {
 	t.Helper()
+	return joinedGameTCPClient(t, "")
+}
+
+func joinedGameTCPClient(t *testing.T, game string) net.Conn {
+	t.Helper()
 	mcs := NewMcs()
-	mcs.AddBattle([]McsUser{{UserID: "U1", SessionID: "12345678"}})
+	mcs.AddBattle(game, []McsUser{{UserID: "U1", SessionID: "12345678"}})
 	ln, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +135,18 @@ func expectServerClose(t *testing.T, c net.Conn) {
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))
 	if n, err := c.Read(make([]byte, 1)); err != io.EOF {
 		t.Errorf("read = %d, %v; want EOF (server closed)", n, err)
+	}
+}
+
+func TestTCPReadTimeoutPerGame(t *testing.T) {
+	defer func(a, b time.Duration) { mcsTCPTimeout, mcsTCPTimeoutAEUG = a, b }(mcsTCPTimeout, mcsTCPTimeoutAEUG)
+	mcsTCPTimeout, mcsTCPTimeoutAEUG = 500*time.Millisecond, time.Hour
+	aeug := joinedGameTCPClient(t, gameCodeAEUG)
+	zgvsz := joinedGameTCPClient(t, gameCodeZGVSZ)
+	expectServerClose(t, zgvsz)
+	aeug.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	if _, err := aeug.Read(make([]byte, 1)); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("SLPS-25305 peer: read = %v; want still open", err)
 	}
 }
 

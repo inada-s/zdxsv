@@ -44,6 +44,20 @@ func (s *McsTCPServer) Serve(l net.Listener) error {
 	}
 }
 
+// A peer silent this long is dropped. SLPS-25305 clients send nothing while
+// a battle loads, up to 12.7 s measured.
+var (
+	mcsTCPTimeout     = 10 * time.Second
+	mcsTCPTimeoutAEUG = 30 * time.Second
+)
+
+func mcsTCPReadTimeout(game string) time.Duration {
+	if game == gameCodeAEUG {
+		return mcsTCPTimeoutAEUG
+	}
+	return mcsTCPTimeout
+}
+
 type McsTCPPeer struct {
 	BaseMcsPeer
 
@@ -101,9 +115,10 @@ func (u *McsTCPPeer) Address() string {
 func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 	buf := make([]byte, 1024)
 	inbuf := make([]byte, 0, 128)
+	timeout := mcsTCPReadTimeout("")
 
 	for {
-		u.conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		u.conn.SetReadDeadline(time.Now().Add(timeout))
 		n, err := u.conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
@@ -125,6 +140,9 @@ func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 			inbuf = inbuf[:0]
 			sessionID, err := ParseSessionID(value)
 			logger.Info("tcp session id", zap.Any("session_id", sessionID), zap.Error(err))
+			if info := mcs.GetBattleInfo(sessionID); info != nil {
+				timeout = mcsTCPReadTimeout(info.Game)
+			}
 			u.room = mcs.Join(u, sessionID)
 			if u.room == nil {
 				logger.Info("failed to join room", zap.Any("user_id", u.UserID()), zap.Any("addr", u.Address()))

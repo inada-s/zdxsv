@@ -75,6 +75,7 @@ type McsUser struct {
 type BattleInfo struct {
 	Users  []McsUser
 	RoomID int
+	Game   string
 }
 
 type Mcs struct {
@@ -92,9 +93,9 @@ func NewMcs() *Mcs {
 }
 
 // AddBattle takes the users of a battle the lobby started. Each joins by its session id.
-func (m *Mcs) AddBattle(users []McsUser) {
+func (m *Mcs) AddBattle(game string, users []McsUser) {
 	m.mtx.Lock()
-	info := &BattleInfo{Users: users, RoomID: m.nextRoomID}
+	info := &BattleInfo{Users: users, RoomID: m.nextRoomID, Game: game}
 	m.nextRoomID = (m.nextRoomID + 1) % MaxRoom
 	for _, u := range users {
 		m.waiting[u.SessionID] = info
