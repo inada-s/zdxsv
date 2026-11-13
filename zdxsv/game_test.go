@@ -16,10 +16,14 @@ func TestLoginPageGameCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, code := range []string{gameCodeZGVSZ, gameCodeAEUG} {
+	for code, title := range map[string]string{gameCodeZGVSZ: "ガンダムvs.Zガンダム", gameCodeAEUG: "エゥーゴvs.ティターンズ"} {
 		mux := http.NewServeMux()
 		mux.Handle("/"+code+"/", http.StripPrefix("/"+code, withGameCode(code, newLoginHandler())))
 		ts := httptest.NewServer(mux)
+		_, _, top := fetch(t)(http.Get(ts.URL + "/" + code + "/CRS-top.jsp"))
+		if !strings.Contains(top, title+" エミュ鯖") {
+			t.Errorf("%s: top page lacks %s: %.300q", code, title, top)
+		}
 		_, _, body := fetch(t)(http.PostForm(ts.URL+"/"+code+"/login", url.Values{"login_key": {a.LoginKey}}))
 		ts.Close()
 		for _, want := range []string{"https://www01.kddi-mmbb.jp/" + code + "/login", "https://www01.kddi-mmbb.jp/" + code + "/CRS-top.jsp"} {

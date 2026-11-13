@@ -160,11 +160,13 @@ type commonParam struct {
 	ServerAddr    string
 	Message       string
 	GameCode      string
+	GameTitle     string
 }
 
 func HandleTopPage(w http.ResponseWriter, r *http.Request) {
 	p := commonParam{}
 	p.ServerVersion = "1.0"
+	p.GameTitle = gameTitle(gameCodeOf(r))
 	w.Header().Set("Content-Type", "text/html; charset=cp932")
 	w.WriteHeader(200)
 
@@ -330,6 +332,7 @@ func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
 func writeMessagePage(w http.ResponseWriter, r *http.Request, message string) {
 	p := commonParam{}
 	p.ServerVersion = "1.0"
+	p.GameTitle = gameTitle(gameCodeOf(r))
 	p.Message = message
 	sw := japanese.ShiftJIS.NewEncoder().Writer(w)
 	tplLoginMessage.Execute(sw, p)

@@ -40,3 +40,10 @@ func zoneOf(game, platform string) zone {
 func (p *LbsPeer) zone() zone   { return zoneOf(p.Game, p.Platform) }
 func (l *LbsLobby) zone() zone  { return zoneOf(l.Game, l.Platform) }
 func (b *LbsBattle) zone() zone { return zoneOf(b.Game, b.Platform) }
+
+func gameTitle(code string) string {
+	if code == gameCodeAEUG {
+		return "エゥーゴvs.ティターンズ"
+	}
+	return "ガンダムvs.Zガンダム"
+}

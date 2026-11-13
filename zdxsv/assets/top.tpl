@@ -11,7 +11,7 @@
   -->
   <BODY text="white" link="white" background="afs://02/101.PNG" >
     <center>
-      ガンダムvs.Zガンダム エミュ鯖 1.0
+      {{.GameTitle}} エミュ鯖 1.0
       <TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0">
         <TR>
           <TD><IMG SRC="afs://02/124.PNG" width="36"  height="26"></TD>
