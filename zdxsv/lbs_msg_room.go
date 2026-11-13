@@ -24,17 +24,22 @@ var _ = register(0x640B, "GetRoomJoinInfo", func(p *LbsPeer, m *LbsMessage) {
 	roomID := m.Reader().Read16()
 	max := p.app.OnGetRoomJoinInfo(p, roomID)
 	a := NewServerAnswer(m)
-	writeRoomJoinInfo(a.Writer(), roomID, max)
+	writeRoomJoinInfo(a.Writer(), p.Game, roomID, max)
 	p.SendMessage(a)
 })
 
 // The game refuses a battle start locally unless the entry counts reach these minimums.
-func writeRoomJoinInfo(w *MessageBodyWriter, roomID, max uint16) {
+// SLPS-25305 reads the minimum total from the field SLPS-25419 ignores.
+func writeRoomJoinInfo(w *MessageBodyWriter, game string, roomID, max uint16) {
+	total, unused := uint16(roomMinEntryTotal), uint16(0xFFFF)
+	if game == gameCodeAEUG {
+		total, unused = unused, total
+	}
 	w.Write16(roomID)
 	w.Write16(max)
 	w.Write16(0) // unused
-	w.Write16(roomMinEntryTotal)
-	w.Write16(0xFFFF) // unused
+	w.Write16(total)
+	w.Write16(unused)
 	w.Write16(roomMinEntryPerSide)
 }
 
@@ -362,7 +367,7 @@ func NoticeRoomUserCount(p *LbsPeer, roomID, count uint16) {
 
 func NoticeRoomJoinInfo(p *LbsPeer, roomID, max uint16) {
 	n := NewServerNotice(0x640B)
-	writeRoomJoinInfo(n.Writer(), roomID, max)
+	writeRoomJoinInfo(n.Writer(), p.Game, roomID, max)
 	p.SendMessage(n)
 }
 

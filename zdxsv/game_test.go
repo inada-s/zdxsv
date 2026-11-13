@@ -92,3 +92,27 @@ func TestGamesKeepApart(t *testing.T) {
 		}
 	}
 }
+
+// Each game reads the minimum total for a battle start from a different 0x640B field.
+func TestRoomJoinInfoPerGame(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+	const lobbyID, roomID = 4, 1
+	for code, want := range map[string][3]uint16{
+		gameCodeZGVSZ: {roomMinEntryTotal, 0xFFFF, roomMinEntryPerSide},
+		gameCodeAEUG:  {0xFFFF, roomMinEntryTotal, roomMinEntryPerSide},
+	} {
+		c := dialLobby(t, addr)
+		c.login(gameLogin(t, code), "******", "u"+code)
+		if a := c.ask(0x6305, u16(lobbyID)); a.Status != StatusSuccess {
+			t.Fatalf("EnterLobby status %x", a.Status)
+		}
+		r := c.ask(0x640B, u16(roomID)).Reader()
+		r.Read16()
+		r.Read16()
+		r.Read16()
+		if got := [3]uint16{r.Read16(), r.Read16(), r.Read16()}; got != want {
+			t.Errorf("%s room join info fields 4-6 = %x, want %x", code, got, want)
+		}
+	}
+}
