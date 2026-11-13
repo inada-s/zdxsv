@@ -188,7 +188,7 @@ func AskBattleResult(p *LbsPeer) {
 	p.SendMessage(NewServerQuestion(0x6138))
 }
 
-func parseBattleResult(m *LbsMessage) *BattleResult {
+func parseBattleResult(m *LbsMessage, game string) *BattleResult {
 	r := m.Reader()
 	v01 := r.Read16()
 	v02 := r.ReadEncryptedString()
@@ -199,11 +199,14 @@ func parseBattleResult(m *LbsMessage) *BattleResult {
 	v07 := r.Read8()
 	v08 := r.Read8()
 	v09 := r.Read8()
+	var v11, v12, v13, v14 uint32
 	v10 := r.Read32()
-	v11 := r.Read32()
-	v12 := r.Read32()
-	v13 := r.Read32()
-	v14 := r.Read32()
+	if game != gameCodeAEUG {
+		v11 = r.Read32()
+		v12 = r.Read32()
+		v13 = r.Read32()
+		v14 = r.Read32()
+	}
 	v15 := r.Read8()
 	v16 := r.Read8()
 	v17 := r.Read8()
@@ -229,7 +232,7 @@ func parseBattleResult(m *LbsMessage) *BattleResult {
 }
 
 var _ = register(0x6138, "AnswerBattleResult", func(p *LbsPeer, m *LbsMessage) {
-	result := parseBattleResult(m)
+	result := parseBattleResult(m, p.Game)
 	js, _ := json.MarshalIndent(result, "", "  ")
 	logger.Info("battle result", zap.String("user_id", p.LbsUser.UserID), zap.String("name", p.LbsUser.Name), zap.String("result", string(js)))
 

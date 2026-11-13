@@ -88,7 +88,7 @@ func Test_ParseBattleResult(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parseBattleResult(tt.args.m)
+			parseBattleResult(tt.args.m, "")
 		})
 	}
 }
@@ -107,6 +107,19 @@ func sentMessage(t *testing.T, p *LbsPeer) *LbsMessage {
 		t.Fatalf("want one sent message, outbuf % x", p.conn.outbuf)
 	}
 	return m
+}
+
+func TestParseBattleResultAEUG(t *testing.T) {
+	m := &LbsMessage{Direction: ClientToServer, Category: CategoryAnswer, Command: 0x6138, BodySize: 53, Seq: 87, Body: []byte{
+		0x23, 0x45, 0x00, 0x11, 0x02, 0xb2, 0xf3, 0xf7, 0xea, 0xee, 0xf5, 0xe4, 0xee, 0xea, 0xef, 0xe9,
+		0xeb, 0xeb, 0xfc, 0xd4, 0xdf, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x04, 0x00, 0x03, 0x00, 0x08, 0x00, 0x00, 0x00,
+		0x02, 0x00, 0x00, 0x03, 0xe7,
+	}}
+	r := parseBattleResult(m, gameCodeAEUG)
+	if r.BattleCode != "1794589451094" || r.Side != 1 || r.Unk20 != 8 || r.Unk27 != 999 || r.DeathCount != 0 {
+		t.Errorf("got %+v", *r)
+	}
 }
 
 func TestGetBattleOpponentStatus(t *testing.T) {
