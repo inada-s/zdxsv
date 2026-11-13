@@ -183,6 +183,7 @@ type BattleRecord struct {
 // players matches one of the values (names are LIKE patterns); -1 = any players / aggregate.
 type FindReplayQuery struct {
 	BattleCode string   `json:"battle_code"`
+	Game       string   `json:"game"` // "" = any
 	UserIDs    []string `json:"user_id"`
 	UserNames  []string `json:"user_name"`
 	PilotNames []string `json:"pilot_name"`
@@ -214,6 +215,7 @@ type FoundReplay struct {
 	StartDate  time.Time     `json:"start_date,omitempty"`
 	ReplayURL  string        `json:"replay_url,omitempty"`
 	PlayCount  int           `json:"play_count"`
+	Game       string        `json:"game,omitempty"`
 }
 
 type BattleCountResult struct {

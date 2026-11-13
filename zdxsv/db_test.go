@@ -197,8 +197,8 @@ func test202SetReplayURL(t *testing.T) {
 
 func test204FindReplay(t *testing.T) {
 	// after Test202: replaycode (r1, r2) has a replay, othercode none
-	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r4", PilotName: "zaku", Players: 2, Pos: 2, Side: 2}))
-	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r3", PilotName: "gundam", Players: 2, Pos: 1, Side: 1}))
+	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r4", PilotName: "zaku", Players: 2, Pos: 2, Side: 2, Game: gameCodeAEUG}))
+	must(t, testDB.AddBattleRecord(&BattleRecord{BattleCode: "replaycode2", UserID: "r3", PilotName: "gundam", Players: 2, Pos: 1, Side: 1, Game: gameCodeAEUG}))
 	must(t, testDB.SetReplayURL("replaycode2", "https://example.com/replaycode2.pb"))
 	_, err := testDB.(SQLiteDB).Exec(`UPDATE battle_record SET created = ? WHERE battle_code = "replaycode2"`, time.Now().Add(time.Second))
 	must(t, err)
@@ -223,6 +223,11 @@ func test204FindReplay(t *testing.T) {
 	q.PilotNames = []string{"gun%"}
 	assertEq(t, []string{"replaycode2"}, codes(q))
 	q = NewFindReplayQuery()
+	q.Game = gameCodeAEUG
+	assertEq(t, []string{"replaycode2"}, codes(q))
+	q.Game = gameCodeZGVSZ
+	assertEq(t, []string(nil), codes(q))
+	q = NewFindReplayQuery()
 	q.BattleCode = "othercode"
 	assertEq(t, []string(nil), codes(q))
 	q = NewFindReplayQuery()
@@ -235,6 +240,7 @@ func test204FindReplay(t *testing.T) {
 	must(t, err)
 	assertEq(t, 1, len(found))
 	assertEq(t, "https://example.com/replaycode2.pb", found[0].ReplayURL)
+	assertEq(t, gameCodeAEUG, found[0].Game)
 	assertEq(t, 2, len(found[0].Users))
 	assertEq(t, "r3", found[0].Users[0].UserID)
 	assertEq(t, 1, found[0].Users[0].Team)

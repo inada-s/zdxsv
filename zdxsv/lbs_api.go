@@ -122,6 +122,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	q := NewFindReplayQuery()
 	q.BattleCode = r.FormValue("battle_code")
+	q.Game = r.FormValue("game")
 	for _, f := range []struct {
 		name string
 		dst  *[]string

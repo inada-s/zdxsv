@@ -569,6 +569,10 @@ func (db SQLiteDB) FindReplay(q *FindReplayQuery) ([]*FoundReplay, error) {
 		where = append(where, "battle_code = ?")
 		args = append(args, q.BattleCode)
 	}
+	if q.Game != "" {
+		where = append(where, "game = ?")
+		args = append(args, q.Game)
+	}
 	if q.Players >= 0 {
 		where = append(where, "players = ?")
 		args = append(args, q.Players)
@@ -632,7 +636,7 @@ ORDER BY created `+order, args...)
 	for _, r := range rs {
 		f := byCode[r.BattleCode]
 		if f == nil {
-			f = &FoundReplay{BattleCode: r.BattleCode, StartUnix: r.Created.Unix(), StartDate: r.Created, ReplayURL: r.ReplayURL}
+			f = &FoundReplay{BattleCode: r.BattleCode, StartUnix: r.Created.Unix(), StartDate: r.Created, ReplayURL: r.ReplayURL, Game: r.Game}
 			byCode[r.BattleCode] = f
 			found = append(found, f)
 		}
