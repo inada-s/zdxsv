@@ -27,6 +27,7 @@
     ],
     "battle_ip": "203.0.113.1",
     "port": 9001,
-    "is_test": true
+    "is_test": true,
+    "game": "00000004"
   }
 }

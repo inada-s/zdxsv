@@ -169,7 +169,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 
 	for _, p := range players {
 		res := api.battleInfo(t, p.ac.SessionID)
-		if !res.Result || !res.BattleIP.Equal(net.IPv4(127, 0, 0, 2)) || res.Port != 8210 || res.IsTest || len(res.Users) != 2 {
+		if !res.Result || !res.BattleIP.Equal(net.IPv4(127, 0, 0, 2)) || res.Port != 8210 || res.IsTest || res.Game != gameCodeZGVSZ || len(res.Users) != 2 {
 			t.Fatalf("battle info: %+v", res)
 		}
 		if u := findUser(res.Users, p0.userID); u == nil || u.Name != "pilot0" {

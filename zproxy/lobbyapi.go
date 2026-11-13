@@ -89,6 +89,7 @@ type BattleInfoResponse struct {
 	BattleIP net.IP      `json:"battle_ip"`
 	Port     uint16      `json:"port"`
 	IsTest   bool        `json:"is_test"`
+	Game     string      `json:"game,omitempty"`
 }
 
 type LobbyUser struct {

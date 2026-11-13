@@ -339,6 +339,7 @@ func (z *Zproxy) PollLobby() error {
 		log.Println(resp.Message)
 
 		z.testBattle = resp.IsTest
+		z.ps2cl.readTimeout = ps2ReadTimeout(resp.Game)
 		if !resp.IsTest {
 			svAddrStr := fmt.Sprintf("%s:%d", resp.BattleIP.String(), resp.Port)
 			if z.selfLocalIP.String() == resp.BattleIP.String() {

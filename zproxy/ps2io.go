@@ -14,7 +14,16 @@ type PS2Server struct {
 }
 
 type PS2Conn struct {
-	conn *net.TCPConn
+	conn        *net.TCPConn
+	readTimeout time.Duration
+}
+
+// SLPS-25305 sends nothing while a battle loads, up to 12.7 s measured.
+func ps2ReadTimeout(game string) time.Duration {
+	if game == "00000004" {
+		return 30 * time.Second
+	}
+	return 10 * time.Second
 }
 
 func NewPS2Server() *PS2Server {
@@ -38,7 +47,7 @@ func (sv *PS2Server) Listen(addr string) error {
 		if err != nil {
 			return err
 		}
-		sv.chNewConn <- &PS2Conn{conn}
+		sv.chNewConn <- &PS2Conn{conn: conn, readTimeout: ps2ReadTimeout("")}
 	}
 }
 
@@ -53,7 +62,7 @@ func (c *PS2Conn) Serve(ctx context.Context, onRead func([]byte)) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			c.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 			n, err := c.conn.Read(buf)
 			if err == io.EOF {
 				return nil

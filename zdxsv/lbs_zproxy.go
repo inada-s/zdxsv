@@ -123,6 +123,7 @@ func (a *Lbs) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
 		res.BattleIP = battle.ServerIP
 		res.Port = battle.ServerPort
 		res.IsTest = battle.TestBattle
+		res.Game = battle.Game
 		for _, u := range battle.Users {
 			res.Users = append(res.Users, ZproxyUser{
 				UserID: u.UserID,
@@ -218,6 +219,7 @@ type BattleInfoResponse struct {
 	BattleIP net.IP       `json:"battle_ip"`
 	Port     uint16       `json:"port"`
 	IsTest   bool         `json:"is_test"`
+	Game     string       `json:"game,omitempty"`
 }
 
 type ZproxyUser struct {
