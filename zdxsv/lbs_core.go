@@ -499,6 +499,7 @@ func (a *Lbs) startBattle(z zone, lobbyID uint16, users []*LbsUser, rule *Rule) 
 				Players:    len(users),
 				Pos:        int(b.GetPosition(u.UserID)),
 				Side:       int(u.Entry),
+				Game:       b.Game,
 			})
 			if err != nil {
 				logger.Info("failed to add battle record", zap.Error(err))

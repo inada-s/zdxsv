@@ -176,6 +176,7 @@ type BattleRecord struct {
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
 	System  uint32    `db:"system" json:"system,omitempty"`
+	Game    string    `db:"game" json:"game,omitempty"`
 }
 
 // FindReplayQuery filters FindReplay. A battle matches each player filter when one of its

@@ -134,6 +134,7 @@ func test200AddBattleRecord(t *testing.T) {
 		Pos:        1,
 		Side:       2,
 		System:     123,
+		Game:       gameCodeAEUG,
 	}
 	err := testDB.AddBattleRecord(br)
 	must(t, err)
@@ -555,6 +556,20 @@ func TestMigrateAddsReplayURL(t *testing.T) {
 	if len(found) != 1 || found[0].ReplayURL != "http://r/1" || found[0].Round != 5 {
 		t.Errorf("FindReplay after the migration: %+v", found)
 	}
+}
+
+func TestMigrateAddsGame(t *testing.T) {
+	before := strings.Replace(schema, "\tgame        text default '00000020',\n", "", 1)
+	if before == schema {
+		t.Fatal("game column not found in the schema")
+	}
+	db := openSchemaDB(t, before+indexes)
+	_, err := db.Exec(`INSERT INTO battle_record (battle_code, user_id, players) VALUES ('b1', 'U1', 2)`)
+	must(t, err)
+	must(t, db.Migrate())
+	var game string
+	must(t, db.Get(&game, `SELECT game FROM battle_record WHERE battle_code = 'b1'`))
+	assertEq(t, gameCodeZGVSZ, game)
 }
 
 func TestMigrateIdentityHoldsManyKeys(t *testing.T) {
