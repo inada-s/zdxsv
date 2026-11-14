@@ -299,6 +299,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// The emulator gets a key of its session, never the account's own.
 	sessionID, gameKey := Sessions.Start(a.LoginKey, true)
+	Sessions.SetGame(sessionID, apiGameCode(r.FormValue("game")))
 	w.Header().Set("Content-Type", "application/json")
 	res := APILoginResponse{
 		LoginKey:  gameKey,

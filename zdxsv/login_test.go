@@ -339,6 +339,20 @@ func TestAPILogin(t *testing.T) {
 	if got.SessionID == "" || got.LoginKey == "" || got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
+	for _, c := range []struct{ form, want string }{
+		{"", gameCodeZGVSZ},
+		{gameCodeAEUG, gameCodeAEUG},
+		{gameCodeZGVSZ, gameCodeZGVSZ},
+		{"99999999", gameCodeZGVSZ},
+	} {
+		var r APILoginResponse
+		if err := json.NewDecoder(post(http.MethodPost, url.Values{"token": {token}, "game": {c.form}}).Body).Decode(&r); err != nil {
+			t.Fatal(err)
+		}
+		if g := Sessions.Game(r.SessionID); g != c.want {
+			t.Errorf("game %q: session game %q, want %q", c.form, g, c.want)
+		}
+	}
 
 	for _, c := range []struct {
 		method string

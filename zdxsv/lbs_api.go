@@ -29,7 +29,7 @@ const (
 //	/lbs/live_stream: a battle's live stream, POST from its uplink, GET to watch (lbs_spectator.go).
 //	GET /lbs/status: the lobby and battle users (Status), for the website's online panel.
 //	POST /lbs/replay_upload: a battle's replay from an emulator.
-//	POST /lbs/login (form token): logs in like the login server's /login, as JSON
+//	POST /lbs/login (form token, game: a game code, default SLPS-25419): logs in like the login server's /login, as JSON
 //	  (login.HandleAPILogin) and answers a temporary key of the new login session.
 //	/auth/*: emulator sign-in (Auth).
 //	POST /discord/interactions: Discord slash commands (Discord).

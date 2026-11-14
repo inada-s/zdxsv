@@ -47,3 +47,10 @@ func gameTitle(code string) string {
 	}
 	return "ガンダムvs.Zガンダム"
 }
+
+func apiGameCode(code string) string {
+	if code == gameCodeAEUG {
+		return code
+	}
+	return gameCodeZGVSZ
+}
