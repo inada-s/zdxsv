@@ -58,7 +58,45 @@ func NewRule() *Rule {
 	return &r
 }
 
-func (r *Rule) Serialize() []byte {
+// Serialize is the 0x6914 battle rule of the game.
+func (r *Rule) Serialize(game string) []byte {
+	if game == gameCodeAEUG {
+		return r.serializeAEUG()
+	}
+	return r.serializeZGVSZ()
+}
+
+// serializeAEUG: a 32-byte MS mask, then the shared fields. The game reads
+// six u16 at +0x42..+0x4c and uses its own default for 0.
+func (r *Rule) serializeAEUG() []byte {
+	const bodyLen = 0x4e
+	b := new(bytes.Buffer)
+	binary.Write(b, binary.BigEndian, uint16(bodyLen))
+	b.Write([]byte{0, 0, 0, 0}) // CPU difficulty, empty slots, stage mode, stage ID
+	b.Write(bytes.Repeat([]byte{0xFF}, 32))
+	r.writeShared(b)
+	b.Write(make([]byte, 2+bodyLen-b.Len()))
+	return b.Bytes()
+}
+
+func (r *Rule) writeShared(b *bytes.Buffer) {
+	var zero8 byte
+	binary.Write(b, binary.BigEndian, zero8) // MS/MA Auto Only
+	binary.Write(b, binary.BigEndian, r.visibleTeam)
+	binary.Write(b, binary.BigEndian, r.battleGauge)
+	binary.Write(b, binary.BigEndian, r.battleGauge)
+	binary.Write(b, binary.BigEndian, r.awakeIncRatio)
+	binary.Write(b, binary.BigEndian, r.awakeDecRatio)
+	binary.Write(b, binary.BigEndian, r.battleTime)
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: boost gauge does not drain; only in a game mode a lobby battle is not in
+	binary.Write(b, binary.BigEndian, r.reloadType)
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: radar off
+	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
+	binary.Write(b, binary.BigEndian, r.damageLevel-1)
+	binary.Write(b, binary.BigEndian, r.battleCount)
+}
+
+func (r *Rule) serializeZGVSZ() []byte {
 	b := new(bytes.Buffer)
 	var zero8 byte
 	var (
@@ -77,19 +115,7 @@ func (r *Rule) Serialize() []byte {
 	for i := 0; i < 16*4; i++ {
 		binary.Write(b, binary.BigEndian, byte(0xFF)) // Available MS Mask
 	}
-	binary.Write(b, binary.BigEndian, zero8) // MS/MA Auto Only
-	binary.Write(b, binary.BigEndian, r.visibleTeam)
-	binary.Write(b, binary.BigEndian, r.battleGauge)
-	binary.Write(b, binary.BigEndian, r.battleGauge)
-	binary.Write(b, binary.BigEndian, r.awakeIncRatio)
-	binary.Write(b, binary.BigEndian, r.awakeDecRatio)
-	binary.Write(b, binary.BigEndian, r.battleTime)
-	binary.Write(b, binary.BigEndian, zero8) // Nonzero: boost gauge does not drain; only in a game mode a lobby battle is not in
-	binary.Write(b, binary.BigEndian, r.reloadType)
-	binary.Write(b, binary.BigEndian, zero8) // Nonzero: radar off
-	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
-	binary.Write(b, binary.BigEndian, r.damageLevel-1)
-	binary.Write(b, binary.BigEndian, r.battleCount)
+	r.writeShared(b)
 	binary.Write(b, binary.BigEndian, uint64(0)) // Stored by the game, never read
 	binary.Write(b, binary.BigEndian, r.awakeType)
 	binary.Write(b, binary.BigEndian, zero8) // Weapon Visible
@@ -150,26 +176,34 @@ func (r *Rule) Get(ruleID byte) byte {
 	return ruleList[ruleID].Default
 }
 
-func RuleCount() byte {
-	return byte(len(ruleList))
+// rulesOf is the room menu of the game: SLPS-25305 has no awakening.
+func rulesOf(game string) []ruleElement {
+	if game == gameCodeAEUG {
+		return ruleList[:ruleAwakeType]
+	}
+	return ruleList
 }
 
-func RuleTitle(ruleID byte) string {
-	if !validRule(ruleID) {
+func RuleCount(game string) byte {
+	return byte(len(rulesOf(game)))
+}
+
+func RuleTitle(game string, ruleID byte) string {
+	if int(ruleID) >= len(rulesOf(game)) {
 		return ""
 	}
 	return ruleList[ruleID].Title
 }
 
-func RuleElementCount(ruleID byte) byte {
-	if !validRule(ruleID) {
+func RuleElementCount(game string, ruleID byte) byte {
+	if int(ruleID) >= len(rulesOf(game)) {
 		return 0
 	}
 	return byte(len(ruleList[ruleID].List))
 }
 
-func RuleElementName(ruleID, elemID byte) string {
-	if !validElement(ruleID, elemID) {
+func RuleElementName(game string, ruleID, elemID byte) string {
+	if int(ruleID) >= len(rulesOf(game)) || !validElement(ruleID, elemID) {
 		return ""
 	}
 	return ruleList[ruleID].List[elemID].Name

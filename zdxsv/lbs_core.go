@@ -924,7 +924,7 @@ func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
 }
 
 func (a *Lbs) OnRequestGetRuleCount(p *LbsPeer, roomID uint16) byte {
-	return RuleCount()
+	return RuleCount(p.Game)
 }
 
 func (a *Lbs) OnGetNamePermission(p *LbsPeer, roomID uint16) byte {
@@ -935,8 +935,8 @@ func (a *Lbs) OnGetPasswordPermission(p *LbsPeer, roomID uint16) byte {
 	return 1 // 0: 不可 1: 可
 }
 
-func (a *Lbs) OnGetRuleName(_ *LbsPeer, _ uint16, ruleID byte) string {
-	return RuleTitle(ruleID)
+func (a *Lbs) OnGetRuleName(p *LbsPeer, _ uint16, ruleID byte) string {
+	return RuleTitle(p.Game, ruleID)
 }
 
 func (a *Lbs) OnGetRulePermission(_ *LbsPeer, _ uint16, _ byte) byte {
@@ -955,12 +955,12 @@ func (a *Lbs) OnGetRuleDefaultIndex(p *LbsPeer, roomID uint16, ruleID byte) byte
 	return room.Rule.Get(ruleID)
 }
 
-func (a *Lbs) OnGetRuleElementName(_ *LbsPeer, _ uint16, ruleID byte, elemID byte) string {
-	return RuleElementName(ruleID, elemID)
+func (a *Lbs) OnGetRuleElementName(p *LbsPeer, _ uint16, ruleID byte, elemID byte) string {
+	return RuleElementName(p.Game, ruleID, elemID)
 }
 
-func (a *Lbs) OnGetRuleElementCount(_ *LbsPeer, _ uint16, ruleID byte) byte {
-	return RuleElementCount(ruleID)
+func (a *Lbs) OnGetRuleElementCount(p *LbsPeer, _ uint16, ruleID byte) byte {
+	return RuleElementCount(p.Game, ruleID)
 }
 
 func (a *Lbs) OnDecideRoomName(p *LbsPeer, name string) {

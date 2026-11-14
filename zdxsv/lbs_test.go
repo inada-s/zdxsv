@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -642,13 +643,13 @@ func TestLobbyRoomBattle(t *testing.T) {
 
 	want := NewRule()
 	want.Set(battleTime, battleTimeElem)
-	if bytes.Equal(want.Serialize(), NewRule().Serialize()) {
+	if bytes.Equal(want.Serialize(gameCodeZGVSZ), NewRule().Serialize(gameCodeZGVSZ)) {
 		t.Fatal("the rule change does not show in the serialized rule")
 	}
 	for i, c := range cs {
 		c.expect(0x6910, CategoryNotice)
-		if rule := c.ask(0x6914, nil).Body; !bytes.Equal(rule, want.Serialize()) {
-			t.Errorf("player %d battle rule % x\nwant % x", i, rule, want.Serialize())
+		if rule := c.ask(0x6914, nil).Body; !bytes.Equal(rule, want.Serialize(gameCodeZGVSZ)) {
+			t.Errorf("player %d battle rule % x\nwant % x", i, rule, want.Serialize(gameCodeZGVSZ))
 		}
 		if n := c.ask(0x6911, nil).Reader().Read8(); n != 2 {
 			t.Errorf("player %d user count %d", i, n)
@@ -825,17 +826,20 @@ func newLbsUser(id string) *LbsUser {
 
 func TestRuleDefaults(t *testing.T) {
 	r := NewRule()
-	if RuleCount() != 10 {
-		t.Fatalf("RuleCount = %d, want 10", RuleCount())
+	if RuleCount(gameCodeZGVSZ) != 10 || RuleCount(gameCodeAEUG) != 7 {
+		t.Fatalf("RuleCount = %d, %d; want 10, 7", RuleCount(gameCodeZGVSZ), RuleCount(gameCodeAEUG))
 	}
-	for id := byte(0); id < RuleCount(); id++ {
+	if RuleTitle(gameCodeAEUG, ruleAwakeType) != "" || RuleElementCount(gameCodeAEUG, ruleAwakeIncRatio) != 0 || RuleElementName(gameCodeAEUG, ruleAwakeDecRatio, 0) != "" {
+		t.Errorf("awakening rule in the SLPS-25305 menu")
+	}
+	for id := byte(0); id < RuleCount(gameCodeZGVSZ); id++ {
 		if r.Get(id) != RuleElementDefault(id) {
 			t.Errorf("rule %d: Get = %d, default %d", id, r.Get(id), RuleElementDefault(id))
 		}
-		if RuleElementDefault(id) >= RuleElementCount(id) {
-			t.Errorf("rule %d: default %d out of %d elements", id, RuleElementDefault(id), RuleElementCount(id))
+		if RuleElementDefault(id) >= RuleElementCount(gameCodeZGVSZ, id) {
+			t.Errorf("rule %d: default %d out of %d elements", id, RuleElementDefault(id), RuleElementCount(gameCodeZGVSZ, id))
 		}
-		if RuleTitle(id) == "" || RuleElementName(id, 0) == "" {
+		if RuleTitle(gameCodeZGVSZ, id) == "" || RuleElementName(gameCodeZGVSZ, id, 0) == "" {
 			t.Errorf("rule %d: empty title or element name", id)
 		}
 	}
@@ -877,7 +881,7 @@ func TestRuleSerialize(t *testing.T) {
 	r.Set(ruleDamageLevel, 3) // 4, sent as 3
 	r.Set(ruleBattleCount, 2) // 3
 	r.Set(ruleBattleTime, 4)  // 270
-	b := r.Serialize()
+	b := r.Serialize(gameCodeZGVSZ)
 	if len(b) != 102 || binary.BigEndian.Uint16(b) != 100 {
 		t.Fatalf("len = %d, length field = %d; want 102, 100", len(b), binary.BigEndian.Uint16(b))
 	}
@@ -892,6 +896,32 @@ func TestRuleSerialize(t *testing.T) {
 	}
 	if b[86] != 3 || b[87] != 3 || b[100] != 0 || b[101] != 1 {
 		t.Errorf("damage %d, battle count %d, lose points %d, zz pilot %d", b[86], b[87], b[100], b[101])
+	}
+}
+
+func TestRuleSerializePerGame(t *testing.T) {
+	mask := func(n int) string { return strings.Repeat("ff", n) }
+	zgvsz := "0064" + "00000000" + mask(64) + "0000" + "0258025800640064" + "00d2" + "0000000002" + "00" +
+		"0000000000000000" + "00" + "00" + "000000" + "01"
+	aeug := "004e" + "00000000" + mask(32) + "0000" + "0258025800640064" + "00d2" + "0000000002" + "00" +
+		strings.Repeat("00", 0x4e-0x36)
+	for game, want := range map[string]string{gameCodeZGVSZ: zgvsz, gameCodeAEUG: aeug} {
+		if got := hex.EncodeToString(NewRule().Serialize(game)); got != want {
+			t.Errorf("game %s default rule\n got %s\nwant %s", game, got, want)
+		}
+	}
+
+	r := NewRule()
+	r.Set(ruleBattleGauge, 5) // 900
+	r.Set(ruleDamageLevel, 3) // 4, sent as 3
+	r.Set(ruleBattleCount, 2) // 3
+	r.Set(ruleBattleTime, 4)  // 270
+	r.Set(ruleVisibleTeam, 1)
+	r.Set(ruleReloadType, 2)
+	want := "004e" + "00000000" + mask(32) + "0001" + "0384038400640064" + "010e" + "0002000003" + "03" +
+		strings.Repeat("00", 0x4e-0x36)
+	if got := hex.EncodeToString(r.Serialize(gameCodeAEUG)); got != want {
+		t.Errorf("SLPS-25305 rule\n got %s\nwant %s", got, want)
 	}
 }
 

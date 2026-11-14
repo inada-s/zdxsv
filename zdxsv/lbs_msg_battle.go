@@ -90,7 +90,7 @@ var _ = register(0x6914, "GetBattleRule", func(p *LbsPeer, m *LbsMessage) {
 	if rule == nil {
 		a.Status = StatusError
 	} else {
-		w.Write(rule.Serialize())
+		w.Write(rule.Serialize(p.Game))
 	}
 	p.SendMessage(a)
 })
