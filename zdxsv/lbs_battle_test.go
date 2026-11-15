@@ -204,11 +204,9 @@ func testUsers(ids ...string) []P2PUser {
 }
 
 func TestNoBattleInfoNotice(t *testing.T) {
-	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64", "udp": "1"}
-	noUDP := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
+	emu := map[string]string{"emulator": "pcsx2", "cpu": "x86/64"}
 	for name, p := range map[string]*LbsPeer{
 		"console":     newUDPTestPeer(map[string]string{}, false),
-		"no udp":      newUDPTestPeer(noUDP, false),
 		"test battle": newUDPTestPeer(emu, true),
 	} {
 		if testBattleInfoNotice(p, nil) != nil {
@@ -223,31 +221,31 @@ func TestBattleInfoNoticeAlone(t *testing.T) {
 		p.Battle.Users = p.Battle.Users[1:]
 		return battleInfo(t, testBattleInfoNotice(p, func(string) map[string]string { return info }))
 	}
-	m := alone(map[string]string{"emulator": "pcsx2", "udp": "1", "ggpo": "7100"})
+	m := alone(map[string]string{"emulator": "pcsx2", "ggpo": "7100"})
 	if m.SessionID == 0 || m.PingTestDuration != 0 || len(m.Users) != 1 {
 		t.Errorf("alone with a GGPO port: %+v", m)
 	}
-	if m := alone(map[string]string{"emulator": "pcsx2", "udp": "1"}); m.SessionID != 0 {
+	if m := alone(map[string]string{"emulator": "pcsx2"}); m.SessionID != 0 {
 		t.Errorf("alone without a GGPO port: %+v", m)
 	}
 }
 
 func TestBattleInfoNoticeP2P(t *testing.T) {
-	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "sync": "0123456789abcdef"}
+	emu := map[string]string{"emulator": "pcsx2", "sync": "0123456789abcdef"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.Users = append(p.Battle.Users,
 		LbsUser{DBUser: DBUser{UserID: "CCCCCC", SessionID: "SCCCCCC"}},
 		LbsUser{DBUser: DBUser{UserID: "DDDDDD", SessionID: "SDDDDDD"}})
 	infos := map[string]map[string]string{
 		// every address (IPv4 public, local, IPv6); the TCP source IP is udp_addr's: not added
-		"AAAAAA": {"udp": "1", "udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5", "sync": "fedcba9876543210"},
+		"AAAAAA": {"udp_addr": "203.0.113.5:40001", "udp_local": "192.168.1.20:40001", "udp_addr6": "[2001:db8::5]:40001", "ggpo": "7001", "tcp_ip": "203.0.113.5", "sync": "fedcba9876543210"},
 		// self: never listed
-		"BBBBBB": {"udp": "1", "udp_addr": "203.0.113.6:40002"},
+		"BBBBBB": {"udp_addr": "203.0.113.6:40002"},
 		// local IPv4 only (no STUN answer), and IPv6; its TCP source IP with the local port;
 		// a bad port, a bad ggpo port, a bad fingerprint: dropped
-		"CCCCCC": {"udp": "1", "udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "udp_addr": "203.0.113.9:0", "ggpo": "70000", "tcp_ip": "198.51.100.9", "sync": "FEDCBA9876543210"},
-		// not a bridge: no candidates even with an address
-		"DDDDDD": {"udp_addr": "203.0.113.7:40004", "ggpo": "7004"},
+		"CCCCCC": {"udp_local": "192.168.1.21:40003", "udp_addr6": "[2001:db8::21]:40003", "udp_addr": "203.0.113.9:0", "ggpo": "70000", "tcp_ip": "198.51.100.9", "sync": "FEDCBA9876543210"},
+		// no platform info: listed, no candidates
+		"DDDDDD": {},
 	}
 	p.Battle.BattleCode = "1696492800000"
 	p.Battle.GgpoSession = 1462212142 // NewBattle draws a random one
@@ -389,11 +387,11 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	r := NewRelay()
 	LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = r, "192.168.1.8:8203", "[2001:db8::8]:8204"
 	defer func() { LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = nil, "", "" }()
-	emu := map[string]string{"emulator": "pcsx2", "udp": "1", "relay_server": "1"}
+	emu := map[string]string{"emulator": "pcsx2", "relay_server": "1"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.BattleCode = "1696492800000"
 	p.Battle.GgpoSession = 1462212142
-	other := map[string]string{"udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
+	other := map[string]string{"udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
 	info := func(id string) map[string]string { return other }
 
 	// the relay token is derived from the battle's ggpo_session
@@ -412,7 +410,7 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 		t.Fatalf("relay offered to a battle with a player without relay_server=1: %v", got)
 	}
 	other["relay_server"] = "1"
-	p.PlatformInfo = map[string]string{"emulator": "pcsx2", "udp": "1"}
+	p.PlatformInfo = map[string]string{"emulator": "pcsx2"}
 	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 0 {
 		t.Fatalf("relay offered to a client without relay_server=1: %v", got)
 	}
@@ -448,7 +446,7 @@ func TestBattleInfoAfterPeersLeft(t *testing.T) {
 	for i := range sides {
 		c := dialLobby(t, addr)
 		n := NewClientNotice(0x9950)
-		n.Writer().Write([]byte(fmt.Sprintf("emulator=pcsx2\nudp=1\nggpo=%d\nudp_addr=192.0.2.%d:%d\nsync=0123456789abcdef\n",
+		n.Writer().Write([]byte(fmt.Sprintf("emulator=pcsx2\nggpo=%d\nudp_addr=192.0.2.%d:%d\nsync=0123456789abcdef\n",
 			20000+i, 10+i, 30000+i)))
 		c.send(n)
 		id, _, _ := c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
@@ -800,14 +798,13 @@ func TestGamePatchNotice(t *testing.T) {
 	}
 
 	emu := battle([]string{
-		"emulator=pcsx2\nudp=1\nudp_addr=192.0.2.10:30000\nsync=0123456789abcdef\n",
+		"emulator=pcsx2\nudp_addr=192.0.2.10:30000\nsync=0123456789abcdef\n",
 		"emulator=pcsx2\nsync=0123456789abcdef\n",
 	})
-	if got := notices(emu[0]); !reflect.DeepEqual(got, []uint16{0x9953, 0x9951}) {
-		t.Errorf("bridge emulator custom notices %x", got)
-	}
-	if got := notices(emu[1]); !reflect.DeepEqual(got, []uint16{0x9953}) {
-		t.Errorf("emulator custom notices %x", got)
+	for i, c := range emu {
+		if got := notices(c); !reflect.DeepEqual(got, []uint16{0x9953, 0x9951}) {
+			t.Errorf("emulator %d custom notices %x", i, got)
+		}
 	}
 	n := emu[1].expect(0x9953, CategoryCustom)
 	if !bytes.Equal(n.Body, emu[0].expect(0x9953, CategoryCustom).Body) {

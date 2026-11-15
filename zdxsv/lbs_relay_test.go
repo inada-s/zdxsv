@@ -236,9 +236,9 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 		RegisterRelay(&RegionalRelay{Region: r.region, PublicAddr: r.addr, PublicAddr6: r.addr6, Sessions: relays[r.addr]})
 		defer UnregisterRelay(r.addr)
 	}
-	infoA := map[string]string{"emulator": "pcsx2", "udp": "1", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1",
+	infoA := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1",
 		"asia-northeast1": "20", "asia-northeast2": "40", "asia-east1": "60", "us-west1": "100"}
-	infoB := map[string]string{"emulator": "pcsx2", "udp": "1", "udp_addr": "203.0.113.6:40001", "ggpo": "7002", "relay_server": "1",
+	infoB := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.6:40001", "ggpo": "7002", "relay_server": "1",
 		"asia-northeast1": "30", "asia-northeast2": "80", "us-west1": "100"}
 	p := newUDPTestPeer(infoB, false)
 	p.Battle.BattleCode = "1696492800000"
