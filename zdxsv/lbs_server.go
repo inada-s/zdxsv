@@ -210,16 +210,12 @@ func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 			c.mInbuf.Lock()
 			for len(c.inbuf) >= HeaderSize {
 				n, msg := Deserialize(c.inbuf)
-				c.inbuf = c.inbuf[n:]
-
-				if msg != nil {
-					logger.Debug("recv", zap.Any("addr", c.Address()), zap.Any("msg", msg))
-					c.peer.OnMessage(msg)
-				}
 				if n == 0 {
-					logger.Error("got zero byte msg", zap.Any("addr", c.Address()))
-					return
+					break // the body is still arriving
 				}
+				c.inbuf = c.inbuf[n:]
+				logger.Debug("recv", zap.Any("addr", c.Address()), zap.Any("msg", msg))
+				c.peer.OnMessage(msg)
 			}
 			c.mInbuf.Unlock()
 		}
