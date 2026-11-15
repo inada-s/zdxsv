@@ -343,8 +343,19 @@ func checkPatchNames(d DB, m *Master) error {
 	return errors.Join(errs...)
 }
 
+func parseSheetBool(name, cell string) (bool, error) {
+	switch v := strings.ToUpper(cell); v {
+	case "", "FALSE", "0":
+		return false, nil
+	case "TRUE", "1":
+		return true, nil
+	default:
+		return false, fmt.Errorf("%s %q is not TRUE, FALSE, 1 or 0", name, cell)
+	}
+}
+
 // ParsePatches checks the m_patch table (header first): platform, name and codes are
-// required, game and write_once (TRUE / FALSE, empty: FALSE) optional.
+// required, game and write_once (parseSheetBool) optional.
 func ParsePatches(table [][]string) ([]*MPatch, error) {
 	col, errs := columns(table, []string{"platform", "name", "codes"}, []string{"game", "write_once"})
 	if len(errs) > 0 {
@@ -367,13 +378,11 @@ func ParsePatches(table [][]string) ([]*MPatch, error) {
 			errs = append(errs, fmt.Errorf("row %d: patch %s is also on row %d", line, key, prev))
 		}
 		seen[key] = line
-		switch w := strings.ToUpper(cell("write_once")); w {
-		case "", "FALSE":
-		case "TRUE":
-			p.WriteOnce = true
-		default:
-			errs = append(errs, fmt.Errorf("row %d: write_once %q is not TRUE or FALSE", line, w))
+		writeOnce, err := parseSheetBool("write_once", cell("write_once"))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
+		p.WriteOnce = writeOnce
 		if _, err := ParsePatchCodes(p.Codes); err != nil {
 			errs = append(errs, fmt.Errorf("row %d: codes: %w", line, err))
 		}
@@ -551,11 +560,11 @@ func parseLobbyHack(cell string) (string, error) {
 }
 
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
-// and no (lobby number) are required; start, explain, rule_id, hack and patches (m_patch names,
-// comma separated) optional.
+// and no (lobby number) are required; start, explain, rule_id, hack, patches (m_patch names,
+// comma separated) and team_shuffle (parseSheetBool) optional.
 // An empty cell keeps the lobby's default.
 func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
-	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack", "patches"})
+	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack", "patches", "team_shuffle"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -582,6 +591,9 @@ func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
 			errs = append(errs, fmt.Errorf("row %d: start %q is not one of %v", line, s.Start, lobbyStarts))
 		}
 		if s.Hack, err = parseLobbyHack(s.Hack); err != nil {
+			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
+		}
+		if s.TeamShuffle, err = parseSheetBool("team_shuffle", cell("team_shuffle")); err != nil {
 			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
 		settings = append(settings, s)

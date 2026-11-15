@@ -478,7 +478,7 @@ func TestReloadPatch(t *testing.T) {
 	}{
 		{[][]string{patchHeader, {"emu", "", "bad", "", "24,003080a0,0,1"}}, nil, `row 1: codes: line 1: size "24" is not 8, 16 or 32`},
 		{[][]string{patchHeader, {"emu", "", "a,b", "", codes}}, nil, `row 1: name "a,b" is empty or has a comma`},
-		{[][]string{patchHeader, {"emu", "", "x", "yes", codes}}, nil, `row 1: write_once "YES" is not TRUE or FALSE`},
+		{[][]string{patchHeader, {"emu", "", "x", "yes", codes}}, nil, `row 1: write_once "yes" is not TRUE, FALSE, 1 or 0`},
 		{[][]string{patchHeader, {"emu", "", "x", "", codes}, {"emu", "", "x", "", codes}}, nil, `row 2: patch emu x is also on row 1`},
 		{nil, [][]string{lobbyHeader, {"emu", "4", "nosuch"}}, `lobby emu 4: patch "nosuch" is not in m_patch`},
 		{nil, [][]string{lobbyHeader, {"console", "4", "once"}}, `lobby console 4: patch "once" is not in m_patch`},
@@ -527,5 +527,32 @@ func TestDiscordRejects(t *testing.T) {
 	r.d.Wait()
 	if len(r.edits) != 0 || len(masterBans(t)) != 0 || banned(t, u) {
 		t.Errorf("a rejected command ran")
+	}
+}
+
+func TestParseLobbySettingsTeamShuffle(t *testing.T) {
+	header := []string{"platform", "no", "team_shuffle"}
+	got, err := ParseLobbySettings([][]string{header, {"emu", "1", "TRUE"}, {"emu", "2", "false"}, {"emu", "3", ""}, {"emu", "4", "1"}, {"emu", "5", "0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []bool{true, false, false, true, false} {
+		if got[i].TeamShuffle != want {
+			t.Errorf("row %d: team_shuffle %v, want %v", i+1, got[i].TeamShuffle, want)
+		}
+	}
+	if _, err := ParseLobbySettings([][]string{header, {"emu", "1", "yes"}}); err == nil || !strings.Contains(err.Error(), `team_shuffle "yes" is not TRUE, FALSE, 1 or 0`) {
+		t.Errorf("error %v", err)
+	}
+}
+
+func TestParsePatchesWriteOnceNumbers(t *testing.T) {
+	codes := "32,003080a0,00000000,00000001"
+	got, err := ParsePatches([][]string{{"platform", "name", "write_once", "codes"}, {"emu", "a", "1", codes}, {"emu", "b", "0", codes}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got[0].WriteOnce || got[1].WriteOnce {
+		t.Errorf("write_once %v %v, want true false", got[0].WriteOnce, got[1].WriteOnce)
 	}
 }

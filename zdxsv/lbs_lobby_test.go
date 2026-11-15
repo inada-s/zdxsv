@@ -291,3 +291,55 @@ func TestLobbyExplainHacks(t *testing.T) {
 		t.Errorf("after w0: widescreen value %08x, system %x", v, s)
 	}
 }
+
+func TestLobbyTeamShuffle(t *testing.T) {
+	conn := UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, team_shuffle) VALUES ('emu', 9, 1), ('emu', 10, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	enter := func(lobbyID uint16) *testClient {
+		c := dialLobby(t, addr)
+		m := NewClientNotice(0x9950)
+		m.Writer().Write([]byte("emulator=pcsx2\nsync=00000000000000aa\n"))
+		c.send(m)
+		n++
+		c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", n))
+		if a := c.ask(0x6305, u16(lobbyID)); a.Status != StatusSuccess {
+			t.Fatalf("EnterLobby status %x", a.Status)
+		}
+		c.ask(0x640E, []byte{EntryAeug})
+		return c
+	}
+
+	var plain []*testClient
+	for range 4 {
+		plain = append(plain, enter(10))
+	}
+	plain[3].ask(0x600E, nil)
+	for _, m := range plain[3].queue {
+		if m.Command == 0x6910 {
+			t.Fatal("a battle started with 4 aeug entries in a lobby without team_shuffle")
+		}
+	}
+
+	var shuffled []*testClient
+	for range 4 {
+		shuffled = append(shuffled, enter(9))
+	}
+	for _, c := range shuffled {
+		c.expect(0x6910, CategoryNotice)
+	}
+	for i, c := range shuffled {
+		sides := map[byte]int{}
+		for pos := byte(1); pos <= 4; pos++ {
+			r := c.ask(0x6913, []byte{pos}).Reader()
+			r.Read8()
+			sides[r.Read8()]++
+		}
+		if sides[EntryAeug] != 2 || sides[EntryTitans] != 2 {
+			t.Errorf("player %d sees sides %v, want 2 aeug and 2 titans", i, sides)
+		}
+	}
+}
