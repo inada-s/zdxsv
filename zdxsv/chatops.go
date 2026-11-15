@@ -343,7 +343,6 @@ func checkPatchNames(d DB, m *Master) error {
 	return errors.Join(errs...)
 }
 
-// parseSheetBool reads a yes/no cell: TRUE or 1, FALSE, 0 or empty (a checkbox gives TRUE / FALSE).
 func parseSheetBool(name, cell string) (bool, error) {
 	switch v := strings.ToUpper(cell); v {
 	case "", "FALSE", "0":

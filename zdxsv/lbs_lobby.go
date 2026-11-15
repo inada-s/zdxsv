@@ -10,11 +10,10 @@ const roomCount = 5
 const LobbyCount = 26
 
 type LbsLobby struct {
-	ID       uint16
-	Platform string
-	Rule     *Rule
-	Start    string
-	// TeamShuffle: see MLobbySetting.TeamShuffle.
+	ID          uint16
+	Platform    string
+	Rule        *Rule
+	Start       string
 	TeamShuffle bool
 	Users       map[string]*LbsUser
 	Rooms       map[uint16]*LbsRoom
@@ -100,7 +99,6 @@ const (
 	StartSolo = "solo"
 )
 
-// perSide is the players per side a battle of the lobby takes; 0 for solo.
 func (l *LbsLobby) perSide() int {
 	switch l.Start {
 	case Start1v1:
@@ -153,8 +151,7 @@ func (l *LbsLobby) startGroup() (string, bool) {
 	return first, false
 }
 
-// StartBattleUsers picks up to two users per side from the startGroup. With TeamShuffle it picks the
-// first users in entry order and sets their sides at random, half each.
+// StartBattleUsers picks up to two users per side from the startGroup.
 func (l *LbsLobby) StartBattleUsers() []*LbsUser {
 	sync, _ := l.startGroup()
 	if n := l.perSide(); l.TeamShuffle && n > 0 {
