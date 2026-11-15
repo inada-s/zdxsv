@@ -40,6 +40,7 @@ type ruleElement struct {
 type Rule struct {
 	playerCount   uint16
 	battleCount   byte
+	maxBattles    byte
 	visibleTeam   byte
 	battleTime    uint16
 	battleGauge   uint16
@@ -90,7 +91,8 @@ func (r *Rule) Serialize() []byte {
 	binary.Write(b, binary.BigEndian, zero8) // Nonzero: button-triggered voice messages off
 	binary.Write(b, binary.BigEndian, r.damageLevel-1)
 	binary.Write(b, binary.BigEndian, r.battleCount)
-	binary.Write(b, binary.BigEndian, uint64(0)) // Stored by the game, never read
+	// Low byte (+95): the series length when a rematch patch is loaded; the unpatched game never reads it.
+	binary.Write(b, binary.BigEndian, uint64(r.maxBattles))
 	binary.Write(b, binary.BigEndian, r.awakeType)
 	binary.Write(b, binary.BigEndian, zero8) // Weapon Visible
 	binary.Write(b, binary.BigEndian, pointScore)
@@ -120,6 +122,7 @@ func (r *Rule) Set(ruleID, elemID byte) {
 		r.playerCount = value
 	case ruleBattleCount:
 		r.battleCount = byte(value)
+		r.maxBattles = byte(value >> 8)
 	case ruleVisibleTeam:
 		r.visibleTeam = byte(value)
 	case ruleBattleTime:

@@ -895,6 +895,21 @@ func TestRuleSerialize(t *testing.T) {
 	}
 }
 
+func TestRuleSerializeMaxBattles(t *testing.T) {
+	r := NewRule()
+	ruleList[ruleBattleCount].List = append(ruleList[ruleBattleCount].List, ruleElementElement{"５戦・自動３", 3 | 5<<8})
+	defer func() { ruleList[ruleBattleCount].List = ruleList[ruleBattleCount].List[:5] }()
+	r.Set(ruleBattleCount, 5)
+	b := r.Serialize()
+	if b[87] != 3 || b[95] != 5 || binary.BigEndian.Uint64(b[88:]) != 5 {
+		t.Errorf("auto %d, max %d, u64 %x; want 3, 5, 5", b[87], b[95], b[88:96])
+	}
+	r.Set(ruleBattleCount, 2)
+	if b = r.Serialize(); b[87] != 3 || b[95] != 0 {
+		t.Errorf("３戦: auto %d, max %d; want 3, 0", b[87], b[95])
+	}
+}
+
 func TestRoomLifecycle(t *testing.T) {
 	r := NewRoom(2, 1)
 	r.Rule.Set(rulePlayerCount, 0) // 2 players
