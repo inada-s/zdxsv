@@ -1,0 +1,1 @@
+{"patches":[{"name":"once","game":"SLPS-25419","write_once":true,"codes":[{"size":32,"address":3178656,"original":604110849,"changed":604110850},{"size":8,"address":2031619,"original":0,"changed":255}]},{"name":"frame","game":"SLPS-25419","codes":[{"size":16,"address":4194304,"original":4660,"changed":43981}]}]}

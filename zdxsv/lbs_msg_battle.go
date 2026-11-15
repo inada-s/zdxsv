@@ -131,8 +131,26 @@ func battleInfoNotice(info *P2PMatching) *LbsMessage {
 	return n
 }
 
+func gamePatchNotice(patches *GamePatches) *LbsMessage {
+	if patches == nil {
+		return nil
+	}
+	body, err := json.Marshal(patches)
+	if err != nil {
+		logger.Error("game patch notice failed", zap.Error(err))
+		return nil
+	}
+	n := NewServerNotice(0x9953)
+	n.Category = CategoryCustom
+	n.Body = body
+	return n
+}
+
 var _ = register(0x6916, "GetBattleServerAddress", func(p *LbsPeer, m *LbsMessage) {
 	ip, port := p.app.OnGetBattleServerAddress(p)
+	if n := gamePatchNotice(p.app.OnGetGamePatches(p)); n != nil {
+		p.SendMessage(n)
+	}
 	if n := battleInfoNotice(p.app.OnGetBattleInfo(p)); n != nil {
 		logger.Info("udp bridge battle info", zap.String("user_id", p.UserID))
 		p.SendMessage(n)

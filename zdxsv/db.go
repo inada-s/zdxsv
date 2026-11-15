@@ -75,6 +75,8 @@ type Master struct {
 	LobbySettings []*MLobbySetting
 	// Rules replaces m_rule; nil keeps it.
 	Rules []*MRule
+	// Patches replaces m_patch; nil keeps it.
+	Patches []*MPatch
 }
 
 type MLobbySetting struct {
@@ -86,6 +88,18 @@ type MLobbySetting struct {
 	RuleID string `db:"rule_id"`
 	// Hack lists the lobby's special uses (model.Hack*), comma separated; empty: none.
 	Hack string `db:"hack"`
+	// Patches lists the m_patch names the lobby's emulator battles apply, comma separated.
+	Patches string `db:"patches"`
+}
+
+// MPatch is a game memory patch an emulator applies during a battle. Codes: one
+// "size,address,original,changed" line per code (size 8, 16 or 32), "#" lines are comments.
+type MPatch struct {
+	Platform  string `db:"platform"`
+	Game      string `db:"game"`
+	Name      string `db:"name"`
+	WriteOnce bool   `db:"write_once"`
+	Codes     string `db:"codes"`
 }
 
 type MRule struct {
@@ -273,6 +287,8 @@ type DB interface {
 	GetLobbySettings() ([]*MLobbySetting, error)
 	// GetRule returns the m_rule of id, nil if none.
 	GetRule(id string) (*MRule, error)
+	// GetPatch returns the m_patch of a platform's patch name, nil if none.
+	GetPatch(platform, name string) (*MPatch, error)
 	// ReplaceMaster replaces every m_ table of m in one transaction.
 	ReplaceMaster(m *Master) error
 	GetMasterBans() ([]*MasterBan, error)
