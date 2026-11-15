@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"os"
@@ -111,5 +112,47 @@ func TestUDPStunServer(t *testing.T) {
 	stunPing(t, c, test, "AAAAAA")
 	if got := stunPongs(t, c, 500*time.Millisecond); len(got) != 1 || got[port+1] != me {
 		t.Fatalf("test socket ping: %v want only {%d:%s}", got, port+1, me)
+	}
+}
+
+type recordingPeer struct {
+	msgs   chan *LbsMessage
+	closed chan struct{}
+}
+
+func (p *recordingPeer) OnOpen()                      {}
+func (p *recordingPeer) OnMessage(m *LbsMessage)      { p.msgs <- m }
+func (p *recordingPeer) OnClose()                     { close(p.closed) }
+func (p *recordingPeer) NewPeer(*LbsConn) LbsConnPeer { return p }
+
+func TestLbsConnMessageSplitAcrossReads(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	peer := &recordingPeer{msgs: make(chan *LbsMessage, 4), closed: make(chan struct{})}
+	go NewLbsServer(peer).ServeConn(server)
+
+	body := bytes.Repeat([]byte("x"), 20000)
+	big := (&LbsMessage{Direction: ClientToServer, Category: CategoryCustom, Command: 0x9952, Body: body}).Serialize()
+	small := (&LbsMessage{Direction: ClientToServer, Category: CategoryCustom, Command: 0x9950, Body: []byte("a=1\n")}).Serialize()
+	for _, part := range [][]byte{big[:HeaderSize+10], big[HeaderSize+10 : 9000], append(big[9000:], small...)} {
+		if _, err := client.Write(part); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	for _, want := range []struct {
+		cmd  uint16
+		size int
+	}{{0x9952, len(body)}, {0x9950, 4}} {
+		select {
+		case m := <-peer.msgs:
+			if m.Command != want.cmd || len(m.Body) != want.size {
+				t.Fatalf("got command %#x with %d bytes, want %#x with %d", m.Command, len(m.Body), want.cmd, want.size)
+			}
+		case <-peer.closed:
+			t.Fatalf("connection closed before command %#x", want.cmd)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no command %#x", want.cmd)
+		}
 	}
 }
