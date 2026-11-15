@@ -253,3 +253,7 @@ var _ = register(0x6138, "AnswerBattleResult", func(p *LbsPeer, m *LbsMessage) {
 
 	p.app.OnGetBattleResult(p, result)
 })
+
+var _ = register(lbsRelayStatus, "RelayStatus", func(p *LbsPeer, m *LbsMessage) {
+	p.app.OnRelayStatus(p, m.Body)
+})

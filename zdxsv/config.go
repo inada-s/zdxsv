@@ -81,14 +81,13 @@ type LbsConfig struct {
 	RelayAddr        string `env:"ZDXSV_LOBBY_RELAY_ADDR"`
 	RelayPublicAddr  string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR"`
 	RelayPublicAddr6 string `env:"ZDXSV_LOBBY_RELAY_PUBLIC_ADDR6"`
-	// TCP address where regional relays (`zdxsv relay`) register, off when empty; they must
-	// send RelaySecret.
-	RelayControlAddr string `env:"ZDXSV_LOBBY_RELAY_CONTROL_ADDR"`
-	RelaySecret      Secret `env:"ZDXSV_RELAY_SECRET"`
+	// Regional relays (`zdxsv relay`) register at PublicAddr with RelaySecret.
+	RelaySecret Secret `env:"ZDXSV_RELAY_SECRET"`
 	// On-demand regional relays, off when RelayRegions (comma separated "<region>=<ms>" keys) is
-	// empty: RelayStartCommand is run with a region as its argument to start a relay there.
-	RelayRegions      string `env:"ZDXSV_LOBBY_RELAY_REGIONS"`
-	RelayStartCommand string `env:"ZDXSV_LOBBY_RELAY_START_COMMAND"`
+	// empty: a relay VM is started on GCE (lbs_gce.go) in each of them while relays may be needed.
+	RelayRegions string `env:"ZDXSV_LOBBY_RELAY_REGIONS"`
+	GCEOnDemand  bool   `env:"ZDXSV_GCE_ONDEMAND"`
+	GCPProjectID string `env:"ZDXSV_GCP_PROJECT_ID"`
 	// Public HTTP API (APIHandler, /lbs/replay, /lbs/live, /lbs/status), off when empty.
 	// Unlike the game ports, the host part is bound (127.0.0.1:8203 stays on loopback).
 	APIAddr string `env:"ZDXSV_LOBBY_API_ADDR"`
@@ -135,13 +134,12 @@ type TLSConfig struct {
 
 // RelayConfig is a regional relay (`zdxsv relay`): it relays on Addr, offered to players at
 // PublicAddr / PublicAddr6, for the players near Region (a "<region>=<ms>" platform info key),
-// registered with the lobby's LobbyConfig.RelayControlAddr at LobbyAddr with Lobby.RelaySecret.
+// registered with the lobby at Lobby.PublicAddr with Lobby.RelaySecret.
 type RelayConfig struct {
 	Region      string `env:"ZDXSV_RELAY_REGION"`
 	Addr        string `env:"ZDXSV_RELAY_ADDR" envDefault:":8223"`
 	PublicAddr  string `env:"ZDXSV_RELAY_PUBLIC_ADDR"`
 	PublicAddr6 string `env:"ZDXSV_RELAY_PUBLIC_ADDR6"`
-	LobbyAddr   string `env:"ZDXSV_RELAY_LOBBY_ADDR"`
 }
 
 // Secret is kept out of the logged config.

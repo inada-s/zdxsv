@@ -66,7 +66,32 @@ Optional:
   `EnvironmentFile` under `/etc/zdxsv/`. In-game chat `ｄｃ` gives a carry-over code (3 min, single
   use) that links an existing account at sign-in.
 - Master data from a Google Spreadsheet by a Discord slash command: see [Master data](#master-data)
-- Regional relays: `zdxsv relay` on other hosts, see `RelayConfig` in `zdxsv/config.go`
+- On-demand regional relays on GCE: see [Regional relays](#regional-relays)
+
+## Regional relays
+
+With `ZDXSV_LOBBY_RELAY_REGIONS` set (comma separated regions, e.g. `asia-east2,us-west2`), the lobby
+starts a relay VM in each of them while players from two region groups are online, and stops it once
+unneeded for 30 minutes. One VM per region, named `zdxsv-relay-<region>-latest`: stopped VMs are
+started again, unused ones deleted after 5 days. A VM downloads the latest release, runs `zdxsv relay`
+on UDP 8223, and registers at `ZDXSV_LOBBY_PUBLIC_ADDR` with `ZDXSV_RELAY_SECRET`.
+
+```sh
+ZDXSV_LOBBY_RELAY_REGIONS=asia-east2,us-west2
+ZDXSV_GCE_ONDEMAND=true
+ZDXSV_GCP_PROJECT_ID=<project>
+ZDXSV_RELAY_SECRET=<[A-Za-z0-9_-]{16,}>
+```
+
+The GCP project needs:
+
+- a custom-mode VPC `zdxsv-relay` with an IPv4/IPv6 dual-stack subnet `zdxsv-relay-<region>` (external
+  IPv6) in each region, and a firewall rule allowing UDP 8223 from anywhere (IPv4 and IPv6) to the tag
+  `zdxsv-relay`
+- a service account `zdxsv-service@<project>.iam.gserviceaccount.com` for the VMs, with
+  `roles/logging.logWriter`
+- for the lobby's credentials (`GOOGLE_APPLICATION_CREDENTIALS`): `roles/compute.instanceAdmin.v1` and
+  `roles/iam.serviceAccountUser` on `zdxsv-service`
 
 ## Master data
 

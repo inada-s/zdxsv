@@ -29,6 +29,7 @@ func (a *Lbs) OnOpen(p *LbsPeer) {
 // cancel the match on their clients, both while matching and after GotoBattle, and return
 // them to the lobby map.
 func (a *Lbs) OnClose(p *LbsPeer) {
+	a.closeRelayPeer(p)
 	if p.inBattleAfterRoom {
 		a.OnExitBattleAfterRoom(p)
 	}
