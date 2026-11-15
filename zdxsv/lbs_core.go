@@ -1301,6 +1301,7 @@ func lobbyBattleRule(s *MLobbySetting) *Rule {
 
 func lobbyCanStart(l *LbsLobby, s *MLobbySetting) bool {
 	l.Start = s.Start
+	l.TeamShuffle = s.TeamShuffle
 	return l.CanBattleStart()
 }
 

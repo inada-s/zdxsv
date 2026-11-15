@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand/v2"
 )
 
 const roomCount = 5
@@ -9,13 +10,15 @@ const roomCount = 5
 const LobbyCount = 26
 
 type LbsLobby struct {
-	ID         uint16
-	Platform   string
-	Rule       *Rule
-	Start      string
-	Users      map[string]*LbsUser
-	Rooms      map[uint16]*LbsRoom
-	EntryUsers []string
+	ID       uint16
+	Platform string
+	Rule     *Rule
+	Start    string
+	// TeamShuffle: see MLobbySetting.TeamShuffle.
+	TeamShuffle bool
+	Users       map[string]*LbsUser
+	Rooms       map[uint16]*LbsRoom
+	EntryUsers  []string
 }
 
 func NewLobby(platform string, lobbyID uint16) *LbsLobby {
@@ -97,14 +100,26 @@ const (
 	StartSolo = "solo"
 )
 
-func (l *LbsLobby) canStart(a, b int) bool {
+// perSide is the players per side a battle of the lobby takes; 0 for solo.
+func (l *LbsLobby) perSide() int {
 	switch l.Start {
 	case Start1v1:
-		return 1 <= a && 1 <= b
+		return 1
 	case StartSolo:
+		return 0
+	}
+	return 2
+}
+
+func (l *LbsLobby) canStart(a, b int) bool {
+	n := l.perSide()
+	if n == 0 {
 		return 1 <= a || 1 <= b
 	}
-	return 2 <= a && 2 <= b
+	if l.TeamShuffle {
+		return 2*n <= a+b
+	}
+	return n <= a && n <= b
 }
 
 // startGroup returns the sync fingerprint of the first entry group (in entry order)
@@ -138,9 +153,26 @@ func (l *LbsLobby) startGroup() (string, bool) {
 	return first, false
 }
 
-// StartBattleUsers picks up to two users per side from the startGroup.
+// StartBattleUsers picks up to two users per side from the startGroup. With TeamShuffle it picks the
+// first users in entry order and sets their sides at random, half each.
 func (l *LbsLobby) StartBattleUsers() []*LbsUser {
 	sync, _ := l.startGroup()
+	if n := l.perSide(); l.TeamShuffle && n > 0 {
+		var ret []*LbsUser
+		for _, id := range l.EntryUsers {
+			if u, ok := l.Users[id]; ok && u.Sync == sync && (u.Entry == EntryAeug || u.Entry == EntryTitans) && len(ret) < 2*n {
+				ret = append(ret, u)
+			}
+		}
+		for i, j := range rand.Perm(len(ret)) {
+			if i < len(ret)/2 {
+				ret[j].Entry = EntryAeug
+			} else {
+				ret[j].Entry = EntryTitans
+			}
+		}
+		return ret
+	}
 	a := uint16(0)
 	b := uint16(0)
 	ret := []*LbsUser{}
