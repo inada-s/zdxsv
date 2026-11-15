@@ -208,6 +208,9 @@ func (u *MasterUpdater) Update(ctx context.Context) (string, error) {
 	if m.Rules != nil {
 		msg += fmt.Sprintf(", %s: %d rows", RuleTable, len(m.Rules))
 	}
+	if m.Patches != nil {
+		msg += fmt.Sprintf(", %s: %d rows", PatchTable, len(m.Patches))
+	}
 	return msg, nil
 }
 
@@ -282,7 +285,104 @@ func ParseMaster(d DB, tables map[string][][]string) (*Master, error) {
 	if err := checkRuleIDs(d, m); err != nil {
 		return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
 	}
+	if table, ok := tables[PatchTable]; ok {
+		if m.Patches, err = ParsePatches(table); err != nil {
+			return nil, fmt.Errorf("%s: %w", PatchTable, err)
+		}
+		if m.Patches == nil {
+			m.Patches = []*MPatch{}
+		}
+	}
+	if err := checkPatchNames(d, m); err != nil {
+		return nil, fmt.Errorf("%s: %w", LobbySettingTable, err)
+	}
 	return m, nil
+}
+
+// checkPatchNames checks that each patch of m_lobby_setting is in m_patch for the lobby's
+// platform: the sheet's when it has the table, else the DB's.
+func checkPatchNames(d DB, m *Master) error {
+	if m.LobbySettings == nil && m.Patches == nil {
+		return nil
+	}
+	settings := m.LobbySettings
+	if settings == nil {
+		var err error
+		if settings, err = d.GetLobbySettings(); err != nil {
+			return err
+		}
+	}
+	var errs []error
+	for _, s := range settings {
+		var seen []string
+		for _, name := range strings.Split(s.Patches, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if slices.Contains(seen, name) {
+				errs = append(errs, fmt.Errorf("lobby %s %d: patch %q appears twice", s.Platform, s.No, name))
+				continue
+			}
+			seen = append(seen, name)
+			found := false
+			if m.Patches != nil {
+				found = slices.ContainsFunc(m.Patches, func(p *MPatch) bool { return p.Platform == s.Platform && p.Name == name })
+			} else {
+				p, err := d.GetPatch(s.Platform, name)
+				if err != nil {
+					return err
+				}
+				found = p != nil
+			}
+			if !found {
+				errs = append(errs, fmt.Errorf("lobby %s %d: patch %q is not in %s", s.Platform, s.No, name, PatchTable))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// ParsePatches checks the m_patch table (header first): platform, name and codes are
+// required, game and write_once (TRUE / FALSE, empty: FALSE) optional.
+func ParsePatches(table [][]string) ([]*MPatch, error) {
+	col, errs := columns(table, []string{"platform", "name", "codes"}, []string{"game", "write_once"})
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	var patches []*MPatch
+	seen := map[string]int{}
+	for n, row := range table[1:] {
+		line := n + 1
+		cell := cellFunc(col, row)
+		p := &MPatch{Platform: cell("platform"), Game: cell("game"), Name: cell("name"), Codes: cell("codes")}
+		if p.Platform != PlatformConsole && p.Platform != PlatformEmu {
+			errs = append(errs, fmt.Errorf("row %d: platform %q is not %s or %s", line, p.Platform, PlatformConsole, PlatformEmu))
+		}
+		if p.Name == "" || strings.Contains(p.Name, ",") {
+			errs = append(errs, fmt.Errorf("row %d: name %q is empty or has a comma", line, p.Name))
+		}
+		key := p.Platform + " " + p.Name
+		if prev, ok := seen[key]; ok {
+			errs = append(errs, fmt.Errorf("row %d: patch %s is also on row %d", line, key, prev))
+		}
+		seen[key] = line
+		switch w := strings.ToUpper(cell("write_once")); w {
+		case "", "FALSE":
+		case "TRUE":
+			p.WriteOnce = true
+		default:
+			errs = append(errs, fmt.Errorf("row %d: write_once %q is not TRUE or FALSE", line, w))
+		}
+		if _, err := ParsePatchCodes(p.Codes); err != nil {
+			errs = append(errs, fmt.Errorf("row %d: codes: %w", line, err))
+		}
+		patches = append(patches, p)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return patches, nil
 }
 
 // ParseServerSettings checks the m_server_setting table (header first): columns key and value.
@@ -418,6 +518,9 @@ const LobbySettingTable = "m_lobby_setting"
 // RuleTable is the spreadsheet table that becomes m_rule, when the sheet has it.
 const RuleTable = "m_rule"
 
+// PatchTable is the spreadsheet table that becomes m_patch, when the sheet has it.
+const PatchTable = "m_patch"
+
 var lobbyStarts = []string{Start2v2, Start1v1, StartSolo}
 
 var lobbyHacks = []string{HackNone, HackPadDelay, HackWideScreen, HackZproxyTest, HackChatCommand}
@@ -448,10 +551,11 @@ func parseLobbyHack(cell string) (string, error) {
 }
 
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
-// and no (lobby number) are required; start, explain, rule_id and hack optional.
+// and no (lobby number) are required; start, explain, rule_id, hack and patches (m_patch names,
+// comma separated) optional.
 // An empty cell keeps the lobby's default.
 func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
-	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack"})
+	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack", "patches"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -460,7 +564,7 @@ func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
 	for n, row := range table[1:] {
 		line := n + 1
 		cell := cellFunc(col, row)
-		s := &MLobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain"), RuleID: cell("rule_id"), Hack: cell("hack")}
+		s := &MLobbySetting{Platform: cell("platform"), Start: cell("start"), Explain: cell("explain"), RuleID: cell("rule_id"), Hack: cell("hack"), Patches: cell("patches")}
 		if s.Platform != PlatformConsole && s.Platform != PlatformEmu {
 			errs = append(errs, fmt.Errorf("row %d: platform %q is not %s or %s", line, s.Platform, PlatformConsole, PlatformEmu))
 		}

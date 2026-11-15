@@ -747,3 +747,110 @@ func TestBattleGetUserByPosOutOfRange(t *testing.T) {
 		t.Errorf("GetUserByPos(2) = %v", u)
 	}
 }
+
+// A lobby's patches reach every emulator player of its battles, bridge or not, before the
+// battle info; console players never get them.
+func TestGamePatchNotice(t *testing.T) {
+	conn := UseTestDB(t)
+	for _, q := range []string{
+		`INSERT INTO m_lobby_setting (platform, no, start, patches) VALUES ('emu', 2, '1v1', 'once, frame'), ('console', 2, '1v1', 'once')`,
+		`INSERT INTO m_patch (platform, game, name, write_once, codes) VALUES
+			('emu', 'SLPS-25419', 'once', 1, '# test' || char(10) || '32,0x003080a0,0x24020001,0x24020002' || char(10) || '8,1f0003,0,255'),
+			('emu', 'SLPS-25419', 'frame', 0, '16,00400000,0x1234,0xabcd'),
+			('console', 'SLPS-25419', 'once', 1, '32,003080a0,0,1')`,
+	} {
+		if _, err := conn.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addr := startLobby(t, NewMcs())
+	const lobbyID = 2
+	battle := func(infos []string) []*testClient {
+		var cs []*testClient
+		for i, info := range infos {
+			c := dialLobby(t, addr)
+			if info != "" {
+				n := NewClientNotice(0x9950)
+				n.Writer().Write([]byte(info))
+				c.send(n)
+			}
+			c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
+			if a := c.ask(0x6305, u16(lobbyID)); a.Status != StatusSuccess {
+				t.Fatalf("EnterLobby status %x", a.Status)
+			}
+			cs = append(cs, c)
+		}
+		for i, c := range cs {
+			c.ask(0x640E, []byte{[]byte{EntryAeug, EntryTitans}[i]})
+		}
+		for _, c := range cs {
+			c.expect(0x6910, CategoryNotice)
+			c.ask(0x6916, nil)
+		}
+		return cs
+	}
+	notices := func(c *testClient) []uint16 {
+		var got []uint16
+		for _, m := range c.queue {
+			if m.Category == CategoryCustom {
+				got = append(got, m.Command)
+			}
+		}
+		return got
+	}
+
+	emu := battle([]string{
+		"emulator=pcsx2\nudp=1\nudp_addr=192.0.2.10:30000\nsync=0123456789abcdef\n",
+		"emulator=pcsx2\nsync=0123456789abcdef\n",
+	})
+	if got := notices(emu[0]); !reflect.DeepEqual(got, []uint16{0x9953, 0x9951}) {
+		t.Errorf("bridge emulator custom notices %x", got)
+	}
+	if got := notices(emu[1]); !reflect.DeepEqual(got, []uint16{0x9953}) {
+		t.Errorf("emulator custom notices %x", got)
+	}
+	n := emu[1].expect(0x9953, CategoryCustom)
+	if !bytes.Equal(n.Body, emu[0].expect(0x9953, CategoryCustom).Body) {
+		t.Errorf("players got different patches")
+	}
+	wireFixture(t, "game_patches.json", n.Body)
+	var p GamePatches
+	if err := json.Unmarshal(n.Body, &p); err != nil {
+		t.Fatal(err)
+	}
+	want := GamePatches{Patches: []GamePatch{
+		{Name: "once", Game: "SLPS-25419", WriteOnce: true, Codes: []GamePatchCode{{32, 0x3080a0, 0x24020001, 0x24020002}, {8, 0x1f0003, 0, 255}}},
+		{Name: "frame", Game: "SLPS-25419", Codes: []GamePatchCode{{16, 0x400000, 0x1234, 0xabcd}}},
+	}}
+	if !reflect.DeepEqual(p, want) {
+		t.Errorf("patches %+v want %+v", p, want)
+	}
+
+	for i, c := range battle([]string{"", ""}) {
+		if got := notices(c); len(got) != 0 {
+			t.Errorf("console player %d custom notices %x", i, got)
+		}
+	}
+}
+
+func TestParsePatchCodes(t *testing.T) {
+	for _, c := range []struct {
+		codes string
+		ok    bool
+	}{
+		{"32,003080a0,0x24020001,0x24020002", true},
+		{"# only a comment", false},
+		{"", false},
+		{"24,003080a0,0,1", false},
+		{"32,003080a2,0,1", false},
+		{"16,00400000,0,0x10000", false},
+		{"8,00400001,0,256", false},
+		{"32,zz,0,1", false},
+		{"32,003080a0,0,1,2", false},
+		{"32,0x100000000,0,1", false},
+	} {
+		if _, err := ParsePatchCodes(c.codes); (err == nil) != c.ok {
+			t.Errorf("%q: error %v", c.codes, err)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"math"
 	"net"
@@ -38,6 +39,8 @@ type LbsBattle struct {
 	// The battle info reads it: a player leaves the lobby when it gets the battle
 	// server address, before the others ask for theirs.
 	PlatformInfo map[string]map[string]string
+	// Patches: the lobby's game patches when the battle was made, sent to every emulator player.
+	Patches []GamePatch
 }
 
 func NewBattle(platform string, lobbyID uint16) *LbsBattle {
@@ -469,4 +472,96 @@ func liveUsers(b *LbsBattle) []*ReplayUser {
 		})
 	}
 	return users
+}
+
+// GamePatches is the lobby -> emulator custom notice 0x9953, as JSON: the game patches the
+// emulator applies during the battle. Sent before the battle info.
+type GamePatches struct {
+	Patches []GamePatch `json:"patches"`
+}
+
+type GamePatch struct {
+	Name      string          `json:"name"`
+	Game      string          `json:"game"`
+	WriteOnce bool            `json:"write_once,omitempty"` // false: written every frame
+	Codes     []GamePatchCode `json:"codes"`
+}
+
+type GamePatchCode struct {
+	Size     int    `json:"size"` // bits: 8, 16, 32
+	Address  uint32 `json:"address"`
+	Original uint32 `json:"original"`
+	Changed  uint32 `json:"changed"`
+}
+
+// ParsePatchCodes reads MPatch.Codes: address in hex ("0x" optional), values in decimal or
+// "0x" hex. Blank lines are skipped.
+func ParsePatchCodes(codes string) ([]GamePatchCode, error) {
+	var out []GamePatchCode
+	for n, line := range strings.Split(codes, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, ",")
+		if len(f) != 4 {
+			return nil, fmt.Errorf("line %d: %q is not size,address,original,changed", n+1, line)
+		}
+		for i := range f {
+			f[i] = strings.TrimSpace(f[i])
+		}
+		size, err := strconv.Atoi(f[0])
+		if err != nil || (size != 8 && size != 16 && size != 32) {
+			return nil, fmt.Errorf("line %d: size %q is not 8, 16 or 32", n+1, f[0])
+		}
+		addr, err := strconv.ParseUint(strings.TrimPrefix(f[1], "0x"), 16, 32)
+		if err != nil || addr%uint64(size/8) != 0 {
+			return nil, fmt.Errorf("line %d: address %q is not a hex address aligned to the size", n+1, f[1])
+		}
+		c := GamePatchCode{Size: size, Address: uint32(addr)}
+		for i, v := range []*uint32{&c.Original, &c.Changed} {
+			x, err := strconv.ParseUint(f[2+i], 0, size)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: value %q does not fit %d bits", n+1, f[2+i], size)
+			}
+			*v = uint32(x)
+		}
+		out = append(out, c)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no code")
+	}
+	return out, nil
+}
+
+// lobbyPatches is the GamePatch list of a lobby setting's patches; a missing or bad one is skipped.
+func lobbyPatches(s *MLobbySetting) []GamePatch {
+	var patches []GamePatch
+	for _, name := range strings.Split(s.Patches, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		p, err := DefaultDB.GetPatch(s.Platform, name)
+		if err != nil || p == nil {
+			logger.Warn("m_lobby_setting patch", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("patch", name), zap.Error(err))
+			continue
+		}
+		codes, err := ParsePatchCodes(p.Codes)
+		if err != nil {
+			logger.Warn("m_patch codes", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Error(err))
+			continue
+		}
+		patches = append(patches, GamePatch{Name: p.Name, Game: p.Game, WriteOnce: p.WriteOnce, Codes: codes})
+	}
+	return patches
+}
+
+// OnGetGamePatches returns the battle's patches for an emulator player, nil for none.
+func (a *Lbs) OnGetGamePatches(p *LbsPeer) *GamePatches {
+	b := p.Battle
+	if b == nil || p.Platform != PlatformEmu || len(b.Patches) == 0 {
+		return nil
+	}
+	return &GamePatches{Patches: b.Patches}
 }

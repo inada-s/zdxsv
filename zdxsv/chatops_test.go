@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -178,7 +179,7 @@ func banSheets(rows ...[]string) map[string][][]string {
 	}
 	return map[string][][]string{
 		"memo":       {{"free text"}},
-		"other game": {{"@m_patch"}, {"anything"}, {"1"}},
+		"other game": {{"@m_other"}, {"anything"}, {"1"}},
 		"ban":        append(table, []string{}, []string{"", "trailing rows are not part of the table"}),
 	}
 }
@@ -428,6 +429,69 @@ func TestReloadLobbySetting(t *testing.T) {
 	r.sheets.sheets = sheets([][]string{ruleHeader}, [][]string{lobbyHeader})
 	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 0 rows, m_rule: 0 rows" || lobby("emu", 5) != nil || rule("tai") != nil {
 		t.Fatalf("empty table: %q", msg)
+	}
+}
+
+func TestReloadPatch(t *testing.T) {
+	r := newChatopsRig(t)
+	patch := func(platform, name string) *MPatch {
+		t.Helper()
+		p, err := DefaultDB.GetPatch(platform, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	patchHeader := []string{"platform", "game", "name", "write_once", "codes"}
+	lobbyHeader := []string{"platform", "no", "patches"}
+	sheets := func(patches, lobbies [][]string) map[string][][]string {
+		s := banSheets()
+		if patches != nil {
+			s["patch"] = append([][]string{{"@m_patch"}}, patches...)
+		}
+		if lobbies != nil {
+			s["lobby"] = append([][]string{{"@m_lobby_setting"}}, lobbies...)
+		}
+		return s
+	}
+	const codes = "# rematch\n32,003080a0,0x24020001,0x24020002"
+
+	r.sheets.sheets = sheets(
+		[][]string{patchHeader, {"emu", "SLPS-25419", "once", "TRUE", codes}, {"emu", "SLPS-25419", "frame", "", "16,00400000,0,1"}},
+		[][]string{lobbyHeader, {"emu", "2", "once,frame"}, {"emu", "3", ""}})
+	if msg := r.run("ops-user"); msg != "m_ban updated: 0 rows, m_lobby_setting: 2 rows, m_patch: 2 rows" {
+		t.Fatalf("message %q", msg)
+	}
+	if p := patch("emu", "once"); p == nil || !reflect.DeepEqual(*p, MPatch{Platform: "emu", Game: "SLPS-25419", Name: "once", WriteOnce: true, Codes: codes}) {
+		t.Fatalf("once: %+v", p)
+	}
+	if p := patch("emu", "frame"); p == nil || p.WriteOnce {
+		t.Fatalf("frame: %+v", p)
+	}
+	if s, err := DefaultDB.GetLobbySetting("emu", 2); err != nil || s == nil || s.Patches != "once,frame" {
+		t.Fatalf("lobby emu 2: %+v %v", s, err)
+	}
+
+	for _, c := range []struct {
+		patches, lobbies [][]string
+		want             string
+	}{
+		{[][]string{patchHeader, {"emu", "", "bad", "", "24,003080a0,0,1"}}, nil, `row 1: codes: line 1: size "24" is not 8, 16 or 32`},
+		{[][]string{patchHeader, {"emu", "", "a,b", "", codes}}, nil, `row 1: name "a,b" is empty or has a comma`},
+		{[][]string{patchHeader, {"emu", "", "x", "yes", codes}}, nil, `row 1: write_once "YES" is not TRUE or FALSE`},
+		{[][]string{patchHeader, {"emu", "", "x", "", codes}, {"emu", "", "x", "", codes}}, nil, `row 2: patch emu x is also on row 1`},
+		{nil, [][]string{lobbyHeader, {"emu", "4", "nosuch"}}, `lobby emu 4: patch "nosuch" is not in m_patch`},
+		{nil, [][]string{lobbyHeader, {"console", "4", "once"}}, `lobby console 4: patch "once" is not in m_patch`},
+		{nil, [][]string{lobbyHeader, {"emu", "4", "once, once"}}, `lobby emu 4: patch "once" appears twice`},
+		{[][]string{patchHeader, {"emu", "", "frame", "", codes}}, nil, `lobby emu 2: patch "once" is not in m_patch`},
+	} {
+		r.sheets.sheets = sheets(c.patches, c.lobbies)
+		if msg := r.run("ops-user"); !strings.Contains(msg, c.want) {
+			t.Errorf("want %q, got %q", c.want, msg)
+		}
+	}
+	if patch("emu", "once") == nil || patch("emu", "frame") == nil {
+		t.Fatalf("a refused sheet changed m_patch")
 	}
 }
 

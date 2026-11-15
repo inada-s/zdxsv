@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS m_lobby_setting (
 	explain text default '',
 	rule_id text default '',
 	hack text default '',
+	patches text default '',
 	PRIMARY KEY (platform, no)
 );
 CREATE TABLE IF NOT EXISTS m_rule (
@@ -146,6 +147,14 @@ CREATE TABLE IF NOT EXISTS m_rule (
 	awake_type integer not null,
 	awake_inc_ratio integer not null,
 	awake_dec_ratio integer not null
+);
+CREATE TABLE IF NOT EXISTS m_patch (
+	platform text,
+	game text default '',
+	name text,
+	write_once integer default 0,
+	codes text default '',
+	PRIMARY KEY (platform, name)
 );
 CREATE TABLE IF NOT EXISTS m_ban (
 	key text,
@@ -173,7 +182,7 @@ func (db SQLiteDB) Init() error {
 
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
-	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_rule", "m_ban", "auth_identity", "auth_token"}
+	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_rule", "m_patch", "m_ban", "auth_identity", "auth_token"}
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
 	if err != nil {
@@ -361,7 +370,7 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			return err
 		}
 		for _, s := range m.LobbySettings {
-			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES (:platform, :no, :start, :explain, :rule_id, :hack)`, s)
+			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack, patches) VALUES (:platform, :no, :start, :explain, :rule_id, :hack, :patches)`, s)
 			if err != nil {
 				return err
 			}
@@ -379,7 +388,30 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			}
 		}
 	}
+	if m.Patches != nil {
+		if _, err := tx.Exec(`DELETE FROM m_patch`); err != nil {
+			return err
+		}
+		for _, p := range m.Patches {
+			_, err := tx.NamedExec(`INSERT INTO m_patch (platform, game, name, write_once, codes) VALUES (:platform, :game, :name, :write_once, :codes)`, p)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return tx.Commit()
+}
+
+func (db SQLiteDB) GetPatch(platform, name string) (*MPatch, error) {
+	p := &MPatch{}
+	err := db.QueryRowx(`SELECT * FROM m_patch WHERE platform = ? AND name = ?`, platform, name).StructScan(p)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func (db SQLiteDB) GetRule(id string) (*MRule, error) {

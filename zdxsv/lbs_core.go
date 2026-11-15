@@ -422,6 +422,7 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 	}
 
 	b := NewBattle(platform, lobbyID)
+	b.Patches = lobbyPatches(lobbySetting(platform, lobbyID))
 	if rule != nil {
 		b.Rule = rule
 	}
