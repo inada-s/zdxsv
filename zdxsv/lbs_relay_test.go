@@ -308,6 +308,23 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
+// relayLobby serves a lobby for regional relays on a loopback TCP port, with secret as
+// ZDXSV_RELAY_SECRET, and returns its address.
+func relayLobby(t *testing.T, secret string) string {
+	t.Helper()
+	prev := Conf.Lobby.RelaySecret
+	Conf.Lobby.RelaySecret = Secret(secret)
+	t.Cleanup(func() { Conf.Lobby.RelaySecret = prev })
+	lobby, _ := startLobbyApp(t, NewMcs())
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go lobby.sv.Serve(l)
+	return l.Addr().String()
+}
+
 func startRegionalRelay(t *testing.T, ctx context.Context, lobbyAddr, secret string) (*net.UDPAddr, chan error) {
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
@@ -323,18 +340,16 @@ func startRegionalRelay(t *testing.T, ctx context.Context, lobbyAddr, secret str
 }
 
 func TestRegionalRelayRegistersAndRelays(t *testing.T) {
-	l, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	go ServeRelayControl(l, "s3cret")
+	lobbyAddr := relayLobby(t, "s3cret")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, wrongDone := startRegionalRelay(t, ctx, l.Addr().String(), "wrong")
-	relay, done := startRegionalRelay(t, ctx, l.Addr().String(), "s3cret")
+	wrong, wrongDone := startRegionalRelay(t, ctx, lobbyAddr, "wrong")
+	relay, done := startRegionalRelay(t, ctx, lobbyAddr, "s3cret")
 	waitFor(t, "registration", func() bool { return registeredRelay(relay.String()) != nil })
+	if registeredRelay(wrong.String()) != nil {
+		t.Fatal("a relay with a wrong secret registered")
+	}
 
 	infoA := map[string]string{"asia-northeast1": "20"}
 	infoB := map[string]string{"asia-northeast1": "30"}
@@ -392,7 +407,9 @@ func TestRegionalRelayShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	conn.Write([]byte(`{"shutdown":true}` + "\n"))
+	ctl := NewServerNotice(lbsRelayControl)
+	ctl.Writer().Write([]byte(`{"shutdown":true}`))
+	conn.Write(ctl.Serialize())
 	select {
 	case err := <-done:
 		if err != nil {
@@ -503,15 +520,10 @@ func addRelayUser(a *Lbs, id string, info map[string]string) {
 }
 
 func TestRelayProvisioning(t *testing.T) {
-	l, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	go ServeRelayControl(l, "s3cret")
+	lobbyAddr := relayLobby(t, "s3cret")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	starter := &relayStarter{t: t, ctx: ctx, lobbyAddr: l.Addr().String(), addrs: map[string]string{}, done: map[string]chan error{}}
+	starter := &relayStarter{t: t, ctx: ctx, lobbyAddr: lobbyAddr, addrs: map[string]string{}, done: map[string]chan error{}}
 
 	a := NewLbs()
 	a.SetRelayProvisioning([]string{"asia-northeast1", "us-west2"}, starter)

@@ -215,8 +215,8 @@ func prepareLogin() http.Handler {
 // serveLbs runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
 func serveLbs(app *Lbs) {
 	if c := Conf.Lobby; c.RelayRegions != "" {
-		if c.RelayControlAddr == "" || c.RelayStartCommand == "" {
-			logger.Fatal("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_LOBBY_RELAY_CONTROL_ADDR and ZDXSV_LOBBY_RELAY_START_COMMAND")
+		if !GceAllocEnabled() || c.RelaySecret == "" {
+			logger.Fatal("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_GCE_ONDEMAND, ZDXSV_GCP_PROJECT_ID and ZDXSV_RELAY_SECRET")
 		}
 		var regions []string
 		for _, r := range strings.Split(c.RelayRegions, ",") {
@@ -224,7 +224,7 @@ func serveLbs(app *Lbs) {
 				regions = append(regions, r)
 			}
 		}
-		app.SetRelayProvisioning(regions, CommandProvisioner{Command: c.RelayStartCommand})
+		app.SetRelayProvisioning(regions, GceRelayProvisioner{})
 	}
 	authServer := newAuthServer()
 	discord := newDiscord()
@@ -250,19 +250,6 @@ func serveLbs(app *Lbs) {
 			if err := ServeRelay(c.RelayAddr, public, c.RelayPublicAddr6); err != nil {
 				logger.Error("relay failure", zap.Error(err))
 			}
-		}()
-	}
-	if c := Conf.Lobby; c.RelayControlAddr != "" {
-		if c.RelaySecret == "" {
-			logger.Fatal("ZDXSV_LOBBY_RELAY_CONTROL_ADDR needs ZDXSV_RELAY_SECRET")
-		}
-		l, err := net.Listen("tcp", c.RelayControlAddr)
-		if err != nil {
-			logger.Fatal("relay control listen failed", zap.Error(err))
-		}
-		logger.Info("start relay control", zap.Any("addr", c.RelayControlAddr))
-		go func() {
-			logger.Error("relay control stopped", zap.Error(ServeRelayControl(l, string(c.RelaySecret))))
 		}()
 	}
 	// The HTTP API binds the host given in its address,
@@ -354,8 +341,8 @@ func mainRelayTest(args []string) {
 // until SIGINT/SIGTERM or the lobby shuts it down.
 func mainRelay() {
 	c := Conf.Relay
-	if c.Region == "" || c.PublicAddr == "" || c.LobbyAddr == "" || Conf.Lobby.RelaySecret == "" {
-		logger.Fatal("zdxsv relay needs ZDXSV_RELAY_REGION, ZDXSV_RELAY_PUBLIC_ADDR, ZDXSV_RELAY_LOBBY_ADDR and ZDXSV_RELAY_SECRET")
+	if c.Region == "" || c.PublicAddr == "" || Conf.Lobby.PublicAddr == "" || Conf.Lobby.RelaySecret == "" {
+		logger.Fatal("zdxsv relay needs ZDXSV_RELAY_REGION, ZDXSV_RELAY_PUBLIC_ADDR, ZDXSV_LOBBY_PUBLIC_ADDR and ZDXSV_RELAY_SECRET")
 	}
 	udpAddr, err := net.ResolveUDPAddr("udp", c.Addr)
 	if err != nil {
@@ -368,7 +355,7 @@ func mainRelay() {
 	defer conn.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
-	err = RunRegionalRelay(ctx, conn, c.LobbyAddr, RelayStatus{
+	err = RunRegionalRelay(ctx, conn, Conf.Lobby.PublicAddr, RelayStatus{
 		Region: c.Region, PublicAddr: c.PublicAddr, PublicAddr6: c.PublicAddr6, Secret: string(Conf.Lobby.RelaySecret),
 	})
 	logger.Info("relay stopped", zap.Error(err))

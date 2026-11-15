@@ -6,9 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/netip"
-	"os/exec"
 	"sort"
 	"strconv"
 	"sync"
@@ -424,18 +424,20 @@ func battleRelays(users []string, info func(userID string) map[string]string) []
 	return relays
 }
 
-// A regional relay (`zdxsv relay`) keeps a TCP connection to the lobby's relay control
-// address: it sends a RelayStatus every relayStatusInterval, the lobby pushes it a
-// RelayControl with each battle session's token as the battle is offered the relay. The
-// relay is offered while the connection lives.
+// A regional relay (`zdxsv relay`) keeps a TCP connection to the lobby's public address: it
+// sends a RelayStatus notice (lbsRelayStatus) every relayStatusInterval, the lobby pushes it a
+// RelayControl notice (lbsRelayControl) with each battle session's token as the battle is
+// offered the relay. The relay is offered while the connection lives.
 const (
-	relayStatusInterval  = 10 * time.Second
-	relayStatusTimeout   = 3 * relayStatusInterval
-	relayReconnectDelay  = 5 * time.Second
-	relayControlQueueLen = 256
+	lbsRelayStatus  = 0x9901
+	lbsRelayControl = 0x9902
+
+	relayStatusInterval   = 10 * time.Second
+	relayReconnectDelay   = 10 * time.Second
+	relayLobbyLostTimeout = 15 * time.Minute
 )
 
-// RelayStatus is a relay's line to the lobby. Secret is ZDXSV_RELAY_SECRET: anyone can
+// RelayStatus is a relay's notice to the lobby. Secret is ZDXSV_RELAY_SECRET: anyone can
 // reach the lobby, and the lobby hands its relays to players.
 type RelayStatus struct {
 	Region      string `json:"region,omitempty"`
@@ -455,11 +457,11 @@ type RelayControlSession struct {
 	Token     uint64 `json:"token"`
 }
 
-// remoteRelaySessions makes the tokens of a connected relay's sessions and queues them to it.
+// remoteRelaySessions makes the tokens of a connected relay's sessions and sends them to it.
 type remoteRelaySessions struct {
 	mtx    sync.Mutex
 	tokens map[uint32]remoteRelayToken
-	out    chan RelayControl
+	send   func(RelayControl)
 	now    func() time.Time
 }
 
@@ -468,10 +470,10 @@ type remoteRelayToken struct {
 	created time.Time
 }
 
-func newRemoteRelaySessions() *remoteRelaySessions {
+func newRemoteRelaySessions(send func(RelayControl)) *remoteRelaySessions {
 	return &remoteRelaySessions{
 		tokens: map[uint32]remoteRelayToken{},
-		out:    make(chan RelayControl, relayControlQueueLen),
+		send:   send,
 		now:    time.Now,
 	}
 }
@@ -492,82 +494,57 @@ func (s *remoteRelaySessions) SessionToken(id uint32) uint64 {
 	_, _ = rand.Read(b[:])
 	token := binary.LittleEndian.Uint64(b[:])
 	s.tokens[id] = remoteRelayToken{token, now}
-	select {
-	case s.out <- RelayControl{Sessions: []RelayControlSession{{SessionID: id, Token: token}}}:
-	default:
-		logger.Error("relay control queue full, session dropped", zap.Any("session_id", id))
-	}
+	s.send(RelayControl{Sessions: []RelayControlSession{{SessionID: id, Token: token}}})
 	return token
 }
 
-// ServeRelayControl accepts regional relays on l until it is closed; relays must send secret.
-func ServeRelayControl(l net.Listener, secret string) error {
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			return err
-		}
-		go serveRelayControlConn(conn, secret)
+func sendRelayControl(p *LbsPeer, ctl RelayControl) {
+	body, err := json.Marshal(ctl)
+	if err != nil {
+		logger.Error("relay control", zap.Error(err))
+		return
 	}
+	n := NewServerNotice(lbsRelayControl)
+	n.Writer().Write(body)
+	p.SendMessage(n)
 }
 
-func serveRelayControlConn(conn net.Conn, secret string) {
-	defer conn.Close()
-	sessions := newRemoteRelaySessions()
-	var registered *RegionalRelay
-	defer func() {
-		if registered != nil {
-			unregisterRelayIf(registered)
-			logger.Info("relay unregistered", zap.String("region", registered.Region), zap.String("public", registered.PublicAddr))
-		}
-	}()
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		enc := json.NewEncoder(conn)
-		for {
-			select {
-			case ctl := <-sessions.out:
-				conn.SetWriteDeadline(time.Now().Add(relayStatusInterval))
-				if err := enc.Encode(ctl); err != nil {
-					conn.Close()
-					return
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
-	dec := json.NewDecoder(conn)
-	for {
-		conn.SetReadDeadline(time.Now().Add(relayStatusTimeout))
-		var st RelayStatus
-		if err := dec.Decode(&st); err != nil {
-			return
-		}
-		if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
-			logger.Warn("relay status with a wrong secret", zap.Stringer("addr", conn.RemoteAddr()), zap.String("public", st.PublicAddr))
-			return
-		}
-		if registered == nil {
-			if st.PublicAddr == "" {
-				return
-			}
-			registered = &RegionalRelay{Region: st.Region, PublicAddr: st.PublicAddr, PublicAddr6: st.PublicAddr6, Sessions: sessions}
-			registered.shutdown = func() {
-				select {
-				case sessions.out <- RelayControl{Shutdown: true}:
-				default:
-					logger.Error("relay control queue full, shutdown dropped", zap.String("public", st.PublicAddr))
-				}
-			}
-			RegisterRelay(registered)
-			logger.Info("relay registered", zap.String("region", st.Region), zap.String("public", st.PublicAddr), zap.String("public6", st.PublicAddr6), zap.Stringer("addr", conn.RemoteAddr()))
-		}
-		regionalRelays.Lock()
-		registered.activeSessions = st.Sessions
-		regionalRelays.Unlock()
+func (a *Lbs) OnRelayStatus(p *LbsPeer, body []byte) {
+	var st RelayStatus
+	if err := json.Unmarshal(body, &st); err != nil {
+		logger.Warn("invalid relay status", zap.Any("addr", p.conn.Address()), zap.Error(err))
+		return
 	}
+	secret := string(Conf.Lobby.RelaySecret)
+	if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
+		logger.Warn("relay status with a wrong secret", zap.Any("addr", p.conn.Address()), zap.String("public", st.PublicAddr))
+		return
+	}
+	r := a.relayPeers[p]
+	if r == nil {
+		if st.PublicAddr == "" {
+			return
+		}
+		r = &RegionalRelay{Region: st.Region, PublicAddr: st.PublicAddr, PublicAddr6: st.PublicAddr6,
+			Sessions: newRemoteRelaySessions(func(ctl RelayControl) { sendRelayControl(p, ctl) })}
+		r.shutdown = func() { sendRelayControl(p, RelayControl{Shutdown: true}) }
+		a.relayPeers[p] = r
+		RegisterRelay(r)
+		logger.Info("relay registered", zap.String("region", st.Region), zap.String("public", st.PublicAddr), zap.String("public6", st.PublicAddr6), zap.Any("addr", p.conn.Address()))
+	}
+	regionalRelays.Lock()
+	r.activeSessions = st.Sessions
+	regionalRelays.Unlock()
+}
+
+func (a *Lbs) closeRelayPeer(p *LbsPeer) {
+	r := a.relayPeers[p]
+	if r == nil {
+		return
+	}
+	delete(a.relayPeers, p)
+	unregisterRelayIf(r)
+	logger.Info("relay unregistered", zap.String("region", r.Region), zap.String("public", r.PublicAddr))
 }
 
 // unregisterRelayIf removes r unless another relay with its address replaced it.
@@ -599,19 +576,23 @@ func (r *Relay) sessionCount() int {
 	return len(r.sessions)
 }
 
-// RunRegionalRelay relays on conn and keeps it registered with the lobby's relay control
-// address, reconnecting until ctx ends or the lobby asks it to shut down.
+// RunRegionalRelay relays on conn and keeps it registered with the lobby at lobbyAddr, reconnecting
+// until ctx ends, the lobby asks it to shut down, or it has had no lobby for relayLobbyLostTimeout.
 func RunRegionalRelay(ctx context.Context, conn *net.UDPConn, lobbyAddr string, status RelayStatus) error {
 	r := NewRelay()
 	go r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
 	logger.Info("start regional relay", zap.Stringer("addr", conn.LocalAddr()), zap.String("region", status.Region), zap.String("public", status.PublicAddr), zap.String("public6", status.PublicAddr6), zap.Any("lobby", lobbyAddr))
+	lastConnected := time.Now()
 	for {
-		shutdown, err := r.controlSession(ctx, lobbyAddr, status)
+		shutdown, err := r.controlSession(ctx, lobbyAddr, status, &lastConnected)
 		if shutdown {
 			logger.Info("relay shutdown by the lobby")
 			return nil
 		}
-		logger.Warn("relay control failure", zap.Error(err))
+		logger.Warn("relay lost the lobby", zap.Error(err))
+		if relayLobbyLostTimeout < time.Since(lastConnected) {
+			return errors.New("no lobby for a while")
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -620,7 +601,7 @@ func RunRegionalRelay(ctx context.Context, conn *net.UDPConn, lobbyAddr string, 
 	}
 }
 
-func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status RelayStatus) (bool, error) {
+func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status RelayStatus, lastConnected *time.Time) (bool, error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", lobbyAddr)
 	if err != nil {
@@ -629,13 +610,19 @@ func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status Rel
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
+	logger.Info("relay connected to the lobby", zap.String("lobby", lobbyAddr))
+
+	*lastConnected = time.Now()
+	defer func() { *lastConnected = time.Now() }()
 	sendErr := make(chan error, 1)
 	go func() {
-		enc := json.NewEncoder(conn)
 		for {
 			status.Sessions = r.sessionCount()
+			body, _ := json.Marshal(status)
+			m := NewClientNotice(lbsRelayStatus)
+			m.Writer().Write(body)
 			conn.SetWriteDeadline(time.Now().Add(relayStatusInterval))
-			if err := enc.Encode(status); err != nil {
+			if _, err := conn.Write(m.Serialize()); err != nil {
 				sendErr <- err
 				conn.Close()
 				return
@@ -647,10 +634,12 @@ func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status Rel
 			}
 		}
 	}()
-	dec := json.NewDecoder(conn)
+
+	buf := make([]byte, 4096)
+	var data []byte
 	for {
-		var ctl RelayControl
-		if err := dec.Decode(&ctl); err != nil {
+		n, err := conn.Read(buf)
+		if err != nil {
 			select {
 			case e := <-sendErr:
 				return false, e
@@ -658,11 +647,27 @@ func (r *Relay) controlSession(ctx context.Context, lobbyAddr string, status Rel
 				return false, err
 			}
 		}
-		for _, s := range ctl.Sessions {
-			r.SetSessionToken(s.SessionID, s.Token)
-		}
-		if ctl.Shutdown {
-			return true, nil
+		data = append(data, buf[:n]...)
+		for len(data) >= HeaderSize {
+			n, msg := Deserialize(data)
+			if n == 0 {
+				break
+			}
+			data = data[n:]
+			if msg.Command != lbsRelayControl {
+				continue
+			}
+			var ctl RelayControl
+			if err := json.Unmarshal(msg.Body, &ctl); err != nil {
+				logger.Error("invalid relay control", zap.Error(err))
+				continue
+			}
+			for _, s := range ctl.Sessions {
+				r.SetSessionToken(s.SessionID, s.Token)
+			}
+			if ctl.Shutdown {
+				return true, nil
+			}
 		}
 	}
 }
@@ -671,8 +676,7 @@ const (
 	relayMinUsers     = 4
 	relayIdleShutdown = 30 * time.Minute
 	// relayStartRetry is how long a started region may take to register before it is started again.
-	relayStartRetry   = 10 * time.Minute
-	relayStartTimeout = 5 * time.Minute
+	relayStartRetry = 10 * time.Minute
 )
 
 // relayRegionGroup is the area of each "<region>=<ms>" key players report; players whose best
@@ -697,24 +701,6 @@ var relayRegionGroup = map[string]string{
 // registers through the relay control address. StartRelay must not block the lobby.
 type RelayProvisioner interface {
 	StartRelay(region string)
-}
-
-// CommandProvisioner runs Command with the region as its only argument.
-type CommandProvisioner struct {
-	Command string
-}
-
-func (c CommandProvisioner) StartRelay(region string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), relayStartTimeout)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, c.Command, region).CombinedOutput()
-		if err != nil {
-			logger.Error("relay start failed", zap.Any("region", region), zap.Error(err), zap.String("output", string(out)))
-			return
-		}
-		logger.Info("relay start", zap.Any("region", region), zap.String("output", string(out)))
-	}()
 }
 
 type relayProvisioning struct {

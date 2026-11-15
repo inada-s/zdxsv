@@ -101,6 +101,7 @@ type Lbs struct {
 
 	aliveCheckInterval time.Duration
 	relayProv          *relayProvisioning
+	relayPeers         map[*LbsPeer]*RegionalRelay
 	carryCode          func(loginKey string) string
 }
 
@@ -116,6 +117,7 @@ func NewLbs() *Lbs {
 		lobbys:             make(map[string]map[uint16]*LbsLobby),
 		battles:            make(map[string]*LbsBattle),
 		peers:              make(map[string]*LbsPeer),
+		relayPeers:         make(map[*LbsPeer]*RegionalRelay),
 		chEvent:            make(chan interface{}, 64),
 		chQuit:             make(chan interface{}),
 		aliveCheckInterval: 10 * time.Second,
