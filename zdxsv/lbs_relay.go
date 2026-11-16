@@ -722,13 +722,13 @@ func (a *Lbs) SetRelayProvisioning(regions []string, prov RelayProvisioner) {
 	}
 }
 
-// relayNeeded reports whether a battle's worth of relay-capable players is online from at
+// relayNeeded reports whether a battle's worth of GGPO players is online from at
 // least two region groups.
 func (a *Lbs) relayNeeded() bool {
 	users := 0
 	first, mixed := "", false
 	for _, p := range a.users {
-		if p.PlatformInfo["relay_server"] != "1" {
+		if ggpoPort(p.PlatformInfo) == 0 {
 			continue
 		}
 		users++

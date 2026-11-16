@@ -388,11 +388,11 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 	r := NewRelay()
 	LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = r, "192.168.1.8:8203", "[2001:db8::8]:8204"
 	defer func() { LobbyRelay, RelayPublicAddr, RelayPublicAddr6 = nil, "", "" }()
-	emu := map[string]string{"emulator": "pcsx2", "relay_server": "1"}
+	emu := map[string]string{"emulator": "pcsx2", "ggpo": "7002"}
 	p := newUDPTestPeer(emu, false)
 	p.Battle.BattleCode = "1696492800000"
 	p.Battle.GgpoSession = 1462212142
-	other := map[string]string{"udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1"}
+	other := map[string]string{"udp_addr": "203.0.113.5:40001", "ggpo": "7001"}
 	info := func(id string) map[string]string { return other }
 
 	// the relay token is derived from the battle's ggpo_session
@@ -405,15 +405,15 @@ func TestBattleInfoNoticeRelay(t *testing.T) {
 		t.Fatalf("relay sessions %d, want 1", len(r.sessions))
 	}
 
-	// a player without relay support: no relay for the battle
-	delete(other, "relay_server")
+	// a player without GGPO: no relay for the battle
+	delete(other, "ggpo")
 	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 0 {
-		t.Fatalf("relay offered to a battle with a player without relay_server=1: %v", got)
+		t.Fatalf("relay offered to a battle with a player without GGPO: %v", got)
 	}
-	other["relay_server"] = "1"
+	other["ggpo"] = "7001"
 	p.PlatformInfo = map[string]string{"emulator": "pcsx2"}
 	if got := battleInfo(t, testBattleInfoNotice(p, info)).Relays; len(got) != 0 {
-		t.Fatalf("relay offered to a client without relay_server=1: %v", got)
+		t.Fatalf("relay offered to a client without GGPO: %v", got)
 	}
 }
 
