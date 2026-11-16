@@ -236,9 +236,9 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 		RegisterRelay(&RegionalRelay{Region: r.region, PublicAddr: r.addr, PublicAddr6: r.addr6, Sessions: relays[r.addr]})
 		defer UnregisterRelay(r.addr)
 	}
-	infoA := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.5:40001", "ggpo": "7001", "relay_server": "1",
+	infoA := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.5:40001", "ggpo": "7001",
 		"asia-northeast1": "20", "asia-northeast2": "40", "asia-east1": "60", "us-west1": "100"}
-	infoB := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.6:40001", "ggpo": "7002", "relay_server": "1",
+	infoB := map[string]string{"emulator": "pcsx2", "udp_addr": "203.0.113.6:40001", "ggpo": "7002",
 		"asia-northeast1": "30", "asia-northeast2": "80", "us-west1": "100"}
 	p := newUDPTestPeer(infoB, false)
 	p.Battle.BattleCode = "1696492800000"
@@ -286,10 +286,10 @@ func TestBattleInfoNoticeRegionalRelays(t *testing.T) {
 		t.Fatalf("relays without a lobby relay %v, want 2", got)
 	}
 
-	// a player without relay support: none
-	delete(infoA, "relay_server")
+	// a player without GGPO: none
+	delete(infoA, "ggpo")
 	if got := battleInfo(t, testBattleInfoNotice(p, lookup)).Relays; len(got) != 0 {
-		t.Fatalf("relays offered to a battle with a player without relay_server=1: %v", got)
+		t.Fatalf("relays offered to a battle with a player without GGPO: %v", got)
 	}
 }
 
@@ -529,9 +529,9 @@ func TestRelayProvisioning(t *testing.T) {
 	a.SetRelayProvisioning([]string{"asia-northeast1", "us-west2"}, starter)
 	t0 := time.Now()
 
-	tokyo := map[string]string{"relay_server": "1", "asia-northeast1": "10", "us-west2": "120"}
-	osaka := map[string]string{"relay_server": "1", "asia-northeast2": "9", "us-west2": "130"}
-	la := map[string]string{"relay_server": "1", "asia-northeast1": "110", "us-west2": "15"}
+	tokyo := map[string]string{"ggpo": "7001", "asia-northeast1": "10", "us-west2": "120"}
+	osaka := map[string]string{"ggpo": "7001", "asia-northeast2": "9", "us-west2": "130"}
+	la := map[string]string{"ggpo": "7001", "asia-northeast1": "110", "us-west2": "15"}
 	laNoRelay := map[string]string{"asia-northeast1": "110", "us-west2": "15"}
 	addRelayUser(a, "AAAAAA", tokyo)
 	addRelayUser(a, "BBBBBB", osaka)

@@ -273,13 +273,13 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMat
 			m.Candidates = append(m.Candidates, PlayerAddress{
 				UserID: id, PeerID: i, IP: ip, Port: port})
 		}
-		if port, err := strconv.Atoi(pi["ggpo"]); err == nil && 0 < port && port < 65536 {
+		if port := ggpoPort(pi); port > 0 {
 			m.Users[i].GgpoPort = port
 			ggpo = true
 		}
 	}
 	alone := len(users) == 1
-	if port, err := strconv.Atoi(p.PlatformInfo["ggpo"]); alone && err == nil && 0 < port && port < 65536 {
+	if alone && ggpoPort(p.PlatformInfo) > 0 {
 		ggpo = true
 	}
 	if ggpo {
@@ -352,7 +352,7 @@ func liveUplink(p *LbsPeer, users []string, info func(userID string) map[string]
 			}
 			pi = info(id)
 		}
-		if port, err := strconv.Atoi(pi["ggpo"]); err != nil || port <= 0 || 65536 <= port {
+		if ggpoPort(pi) == 0 {
 			continue
 		}
 		rtt, err := strconv.Atoi(pi["udp_rtt"])
@@ -367,14 +367,14 @@ func liveUplink(p *LbsPeer, users []string, info func(userID string) map[string]
 }
 
 // relayServers offers the relays of battleRelays to a GGPO battle, only
-// when every player reports relay_server=1 (platform info). The relay session is the
+// when every player has GGPO (platform info ggpo). The relay session is the
 // battle's ggpo_session, so every player gets the same token.
 func relayServers(p *LbsPeer, users []string, info func(userID string) map[string]string, session uint32) []RelayServer {
-	if info == nil || p.PlatformInfo["relay_server"] != "1" {
+	if info == nil || ggpoPort(p.PlatformInfo) == 0 {
 		return nil
 	}
 	for _, id := range users {
-		if id != p.UserID && info(id)["relay_server"] != "1" {
+		if id != p.UserID && ggpoPort(info(id)) == 0 {
 			return nil
 		}
 	}
@@ -585,4 +585,12 @@ func (a *Lbs) OnGetGamePatches(p *LbsPeer) *GamePatches {
 		return nil
 	}
 	return &GamePatches{Patches: b.Patches}
+}
+
+func ggpoPort(pi map[string]string) int {
+	port, err := strconv.Atoi(pi["ggpo"])
+	if err != nil || port <= 0 || 65536 <= port {
+		return 0
+	}
+	return port
 }
