@@ -35,6 +35,10 @@ type LbsBattle struct {
 	// Ended: a player came back to the battle after room. The players end a battle together, so
 	// the ones not back yet left it (a closed client) or are on their way; none is in it.
 	Ended bool
+	// Uplink: the session of the player that streams the battle live; its upload ends when the
+	// player's client leaves the battle, and the session is then in Left.
+	Uplink string
+	Left   map[string]bool
 	// GgpoSession: the GGPO and live uplink session id (battle info ggpo_session), random per
 	// battle so that only its players know it (the battle code is public).
 	GgpoSession uint32
@@ -292,6 +296,7 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMat
 		Spectators.Open(b.BattleCode, b.GgpoSession, liveUsers(b), time.Now())
 		if liveUplink(p, users, info) == p.UserID {
 			m.SpectatorUplink = true
+			b.Uplink = p.SessionID
 		}
 		m.Relays = relayServers(p, users, info, b.GgpoSession)
 	}
@@ -430,6 +435,23 @@ func pilotName(bin string) string {
 		return ""
 	}
 	return battleInfoName(s)
+}
+
+// InBattle reports whether the player of sessionID is still in b.
+func (b *LbsBattle) InBattle(sessionID string) bool {
+	return !b.Ended && !b.Left[sessionID]
+}
+
+// LiveUploadEnded takes the live uplink of the battle out of it.
+func (a *Lbs) LiveUploadEnded(battleCode string) {
+	for _, b := range a.battles {
+		if b.BattleCode == battleCode && b.Uplink != "" {
+			if b.Left == nil {
+				b.Left = map[string]bool{}
+			}
+			b.Left[b.Uplink] = true
+		}
+	}
 }
 
 // OnP2PMatchingReport logs a report body as received; the server reads nothing from it.

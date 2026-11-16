@@ -363,6 +363,9 @@ func (h *APIHandler) serveLiveUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reg.endUpload(b, why, time.Now())
+	if h.LiveUploadEnded != nil {
+		h.LiveUploadEnded(b.code)
+	}
 	if why == "eof" {
 		w.WriteHeader(http.StatusNoContent)
 	} else {

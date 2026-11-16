@@ -168,6 +168,10 @@ func (app *Lbs) status() *StatusResponse {
 		battle.AeugIDs = append(battle.AeugIDs, b.AeugIDs...)
 		battle.TitansIDs = append(battle.TitansIDs, b.TitansIDs...)
 		for _, u := range b.Users {
+			checked[u.SessionID] = true
+			if b.Left[u.SessionID] {
+				continue
+			}
 			_, isUDP := b.UDPUsers[u.UserID]
 			battle.Users = append(battle.Users, ZproxyUser{
 				UserID:   u.UserID,
@@ -176,7 +180,6 @@ func (app *Lbs) status() *StatusResponse {
 				UDP:      isUDP,
 				Platform: b.Platform,
 			})
-			checked[u.SessionID] = true
 		}
 		res.Battles = append(res.Battles, battle)
 	}
