@@ -258,6 +258,7 @@ func serveLbs(app *Lbs) {
 		go func() {
 			logger.Info("start public api", zap.Any("addr", c.APIAddr))
 			api := &APIHandler{Status: app.Status, RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}
+			api.LiveUploadEnded = func(code string) { app.Locked(func(a *Lbs) { a.LiveUploadEnded(code) }) }
 			if authServer != nil {
 				api.Auth = authServer
 			}

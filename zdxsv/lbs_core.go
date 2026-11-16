@@ -524,8 +524,8 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 
 func (a *Lbs) countBattles(platform string) int {
 	count := 0
-	for _, battle := range a.battles {
-		if battle.Platform == platform && !battle.Ended {
+	for sid, battle := range a.battles {
+		if battle.Platform == platform && battle.InBattle(sid) {
 			count++
 		}
 	}
@@ -603,8 +603,8 @@ func (a *Lbs) OnExitLobby(p *LbsPeer) {
 
 func (a *Lbs) lobbyBattleCount(platform string, lobbyID uint16) uint16 {
 	n := uint16(0)
-	for _, battle := range a.battles {
-		if battle.Platform == platform && battle.LobbyID == lobbyID && !battle.Ended {
+	for sid, battle := range a.battles {
+		if battle.Platform == platform && battle.LobbyID == lobbyID && battle.InBattle(sid) {
 			n++
 		}
 	}

@@ -51,6 +51,8 @@ type APIHandler struct {
 	ReplayStore ReplayStore
 	// SetReplayURL records an uploaded replay (db.DefaultDB.SetReplayURL when nil).
 	SetReplayURL func(battleCode, url string) error
+	// LiveUploadEnded is told the battle code of each live upload that ended (nothing when nil).
+	LiveUploadEnded func(battleCode string)
 	// ReplayPlayed counts a play (db.DefaultDB.IncrementReplayPlayCount when nil).
 	ReplayPlayed func(battleCode string) error
 	// Auth serves /auth/ (emulator sign-in, auth.Server), off when nil.

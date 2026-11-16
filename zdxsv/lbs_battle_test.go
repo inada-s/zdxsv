@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -654,6 +655,53 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("still in the lobby: %+v", s)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// An emulator alone in a battle streams it live and closes during it: when its upload ends,
+// /lbs/status lists nobody in a battle.
+func TestStatusAfterAloneClientClosedInBattle(t *testing.T) {
+	conn := UseTestDB(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 1, 'solo', '', '', '')`); err != nil {
+		t.Fatal(err)
+	}
+	addr, app := startLobbyApp(t, NewMcs())
+	c := dialLobby(t, addr)
+	c.sendCustom(0x9950, platformInfo(0))
+	c.login(registerAccount(t), "******", "pilot")
+	c.ask(0x6305, u16(1))
+	c.ask(0x640E, []byte{EntryAeug})
+	c.expect(0x6910, CategoryNotice)
+	code := c.ask(0x6915, nil).Reader().ReadString()
+	c.ask(0x6916, nil)
+	m := battleInfo(t, c.expect(0x9951, CategoryCustom))
+	if !m.SpectatorUplink || m.SessionID == 0 {
+		t.Fatalf("battle info %+v", m)
+	}
+	c.ask(0x6002, nil)
+	c.conn.Close()
+	if s := MakeStatus(app.Status(), time.Now()); s.BattleUserCount != 1 {
+		t.Fatalf("in the battle: %+v", s)
+	}
+
+	sv := httptest.NewServer(&APIHandler{LiveUploadEnded: func(code string) {
+		app.Locked(func(a *Lbs) { a.LiveUploadEnded(code) })
+	}})
+	t.Cleanup(sv.Close)
+	u := startUpload(t, sv.URL, code, fmt.Sprint(m.SessionID))
+	u.w.Write([]byte("frames"))
+	u.w.CloseWithError(errors.New("closed"))
+	<-u.done
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s := MakeStatus(app.Status(), time.Now())
+		if s.BattleUserCount == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after the upload ended: %+v", s)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
