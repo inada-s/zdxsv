@@ -186,8 +186,7 @@ type RelayServer struct {
 	Port6 int    `json:"port6,omitempty"`
 }
 
-// OnGetBattleInfo returns the P2PMatching for an emulator that runs
-// the zproxy bridge itself (platform info "udp=1"), else nil.
+// OnGetBattleInfo returns the P2PMatching for an emulator in a lobby battle, else nil.
 func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *P2PMatching {
 	b := p.Battle
 	if b == nil {
@@ -211,7 +210,7 @@ var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMatching {
 	b := p.Battle
-	if b == nil || b.TestBattle || p.Platform == PlatformConsole || p.PlatformInfo["udp"] != "1" {
+	if b == nil || b.TestBattle || p.Platform == PlatformConsole {
 		return nil
 	}
 	if b.ServerIP == nil || b.ServerIP.To4() == nil || b.ServerPort == 0 {
@@ -260,9 +259,6 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMat
 			continue
 		}
 		pi := info(id)
-		if pi["udp"] != "1" {
-			continue
-		}
 		var addrs []string
 		for _, k := range []string{"udp_addr", "udp_local", "udp_addr6"} {
 			if _, _, ok := splitUDPAddr(pi[k]); ok {

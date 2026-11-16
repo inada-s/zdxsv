@@ -155,7 +155,7 @@ func (c *testClient) sendCustom(command uint16, body []byte) {
 
 // platformInfo is the 0x9950 body the emulator of player i sends on connect.
 func platformInfo(i int) []byte {
-	return []byte(fmt.Sprintf("emulator=pcsx2\nsync=0123456789abcdef\nudp=1\nudp_addr=203.0.113.%d:40000\nggpo=%d\n", i+1, 7000+i))
+	return []byte(fmt.Sprintf("emulator=pcsx2\nsync=0123456789abcdef\nudp_addr=203.0.113.%d:40000\nggpo=%d\n", i+1, 7000+i))
 }
 
 // ask sends a client question and returns the server answer.
