@@ -525,7 +525,7 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 func (a *Lbs) countBattles(platform string) int {
 	count := 0
 	for _, battle := range a.battles {
-		if battle.Platform == platform {
+		if battle.Platform == platform && !battle.Ended {
 			count++
 		}
 	}
@@ -604,7 +604,7 @@ func (a *Lbs) OnExitLobby(p *LbsPeer) {
 func (a *Lbs) lobbyBattleCount(platform string, lobbyID uint16) uint16 {
 	n := uint16(0)
 	for _, battle := range a.battles {
-		if battle.Platform == platform && battle.LobbyID == lobbyID {
+		if battle.Platform == platform && battle.LobbyID == lobbyID && !battle.Ended {
 			n++
 		}
 	}
@@ -744,6 +744,7 @@ func (a *Lbs) OnEnterBattleAfterRoom(p *LbsPeer) {
 		return
 	}
 	delete(a.battles, p.SessionID)
+	battle.Ended = true
 	if battle.LobbyID != 0 {
 		a.noticeLobbyUserCountAll(battle.Platform, battle.LobbyID)
 	}
