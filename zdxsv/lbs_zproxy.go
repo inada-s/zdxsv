@@ -161,7 +161,7 @@ func (app *Lbs) status() *StatusResponse {
 
 	checked := map[string]bool{}
 	for sid, b := range app.battles {
-		if _, ok := checked[sid]; ok {
+		if _, ok := checked[sid]; ok || b.Ended {
 			continue
 		}
 		battle := ZproxyBattle{Platform: b.Platform}

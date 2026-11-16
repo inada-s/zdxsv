@@ -32,6 +32,9 @@ type LbsBattle struct {
 	Platform   string
 	StartTime  time.Time
 	TestBattle bool
+	// Ended: a player came back to the battle after room. The players end a battle together, so
+	// the ones not back yet left it (a closed client) or are on their way; none is in it.
+	Ended bool
 	// GgpoSession: the GGPO and live uplink session id (battle info ggpo_session), random per
 	// battle so that only its players know it (the battle code is public).
 	GgpoSession uint32

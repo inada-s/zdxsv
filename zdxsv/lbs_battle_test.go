@@ -659,6 +659,72 @@ func TestStatusAfterLeftBattleRelogin(t *testing.T) {
 	}
 }
 
+// Two emulators leave for a lobby battle; one closes during it and never comes back, the other
+// comes back to the battle after room. /lbs/status lists nobody in a battle, the lobby counts no battle.
+func TestStatusAfterClientClosedInBattle(t *testing.T) {
+	conn := UseTestDB(t)
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 2, '1v1', '', '', '')`); err != nil {
+		t.Fatal(err)
+	}
+	addr, app := startLobbyApp(t, NewMcs())
+	var cs []*testClient
+	var acs []*testLogin
+	var ids []string
+	for i, side := range []byte{EntryAeug, EntryTitans} {
+		ac := registerAccount(t)
+		c := dialLobby(t, addr)
+		c.sendCustom(0x9950, platformInfo(i))
+		id, _, _ := c.login(ac, "******", fmt.Sprintf("pilot%d", i))
+		if a := c.ask(0x6305, u16(2)); a.Status != StatusSuccess {
+			t.Fatalf("EnterLobby status %x", a.Status)
+		}
+		c.ask(0x640E, []byte{side})
+		cs, acs, ids = append(cs, c), append(acs, ac), append(ids, id)
+	}
+	for _, c := range cs {
+		c.expect(0x6910, CategoryNotice)
+	}
+	for _, c := range cs {
+		c.ask(0x6002, nil)
+		c.conn.Close()
+	}
+	waitStatus := func(lobby, battle int) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			s := MakeStatus(app.Status(), time.Now())
+			if s.LobbyUserCount == lobby && s.BattleUserCount == battle {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("status %+v, want %d in the lobby, %d in a battle", s, lobby, battle)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitStatus(0, 2)
+
+	c := dialLobby(t, addr)
+	c.sendCustom(0x9950, platformInfo(0))
+	if id, _, _ := c.login(acs[0], ids[0], "pilot0"); id != ids[0] {
+		t.Fatalf("back as %q", id)
+	}
+	c.ask(0x6210, nil)
+	waitStatus(1, 0)
+	r := c.ask(0x6205, u16(1)).Reader()
+	r.Read16()
+	r.Read16()
+	if n := r.Read16(); n != 0 {
+		t.Errorf("plaza battle user count %d", n)
+	}
+	r = c.ask(0x6303, u16(2)).Reader()
+	r.Read16()
+	r.Read16()
+	if n := r.Read16(); n != 0 {
+		t.Errorf("lobby battle count %d", n)
+	}
+}
+
 // The replay upload's used_ms sets every player's used_ms once the replay is stored;
 // /lbs/replay?used_ms= finds it. A second upload (409), a malformed or a missing field saves nothing.
 func TestReplayUploadUsedMsSearch(t *testing.T) {
