@@ -228,7 +228,17 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 }
 
 func (r *authRig) carry(token, code string) (accountList, int) {
-	resp, err := http.PostForm(r.site.URL+"/auth/accounts/carry", url.Values{"token": {token}, "code": {code}})
+	return r.carryFrom(token, code, "")
+}
+
+func (r *authRig) carryFrom(token, code, forwardedFor string) (accountList, int) {
+	req, _ := http.NewRequest(http.MethodPost, r.site.URL+"/auth/accounts/carry",
+		strings.NewReader(url.Values{"token": {token}, "code": {code}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if forwardedFor != "" {
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -390,6 +400,59 @@ func TestCarryOverMissesLock(t *testing.T) {
 	}
 	if _, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != http.StatusTooManyRequests {
 		t.Fatal("good code accepted after the miss limit", st)
+	}
+}
+
+func TestCarryOverMissesPerClient(t *testing.T) {
+	r := newAuthRig(t)
+	a, _ := DefaultDB.RegisterAccount("198.51.100.8")
+	token := r.tokenFor("5555")
+	for i := 0; i < carryMaxMisses; i++ {
+		r.carryFrom(token, "WRONGCOD", "203.0.113.1")
+	}
+	if _, st := r.carryFrom(token, "WRONGCOD", "203.0.113.1"); st != http.StatusTooManyRequests {
+		t.Fatal("client not locked", st)
+	}
+	if _, st := r.carryFrom(r.tokenFor("6666"), r.auth.IssueCarryCode(a.LoginKey), "203.0.113.2"); st != http.StatusOK {
+		t.Fatal("another client locked", st)
+	}
+}
+
+func TestCarryOverMissesExpire(t *testing.T) {
+	r := newAuthRig(t)
+	now := time.Now()
+	r.auth.Now = func() time.Time { return now }
+	a, _ := DefaultDB.RegisterAccount("198.51.100.8")
+	token := r.tokenFor("5555")
+	for i := 0; i < carryMaxMisses; i++ {
+		r.carry(token, "WRONGCOD")
+	}
+	now = now.Add(carryMissWindow - time.Second)
+	if _, st := r.carry(token, "WRONGCOD"); st != http.StatusTooManyRequests {
+		t.Fatal("lock ended early", st)
+	}
+	now = now.Add(2 * time.Second)
+	if _, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != http.StatusOK {
+		t.Fatal("lock did not end", st)
+	}
+}
+
+func TestNewAccountCreatedIPFromProxy(t *testing.T) {
+	r := newAuthRig(t)
+	token := r.tokenFor("7777")
+	req, _ := http.NewRequest(http.MethodPost, r.site.URL+"/lbs/login",
+		strings.NewReader(url.Values{"token": {token}, "account": {"new"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Forwarded-For", "203.0.113.7")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	key, _ := DefaultDB.IdentityLoginKey("discord", "7777")
+	a, err := DefaultDB.GetAccountByLoginKey(key)
+	if err != nil || a.CreatedIP != "203.0.113.7" {
+		t.Fatal(resp.StatusCode, a, err)
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"mime"
-	"net"
 	"net/http"
 	"path"
 	"strconv"
@@ -257,7 +256,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := requestIP(r)
 		a, e := DefaultDB.AddTokenAccount(token, ip)
 		if errors.Is(e, ErrIdentityFull) {
 			http.Error(w, "too many accounts", http.StatusConflict)
@@ -310,7 +309,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
-	a, err := DefaultDB.RegisterAccount(r.RemoteAddr)
+	a, err := DefaultDB.RegisterAccount(requestIP(r))
 	if err != nil {
 		logger.Error("login page failed", zap.Error(err))
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
