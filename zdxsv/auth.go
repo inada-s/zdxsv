@@ -84,7 +84,10 @@ type Store interface {
 	FindBan(loginKey string) (*MasterBan, error)
 }
 
+const maxPendingPerIP = 32
+
 type flow struct {
+	ip        string
 	port      int
 	state     string
 	challenge string
@@ -247,12 +250,13 @@ func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	if s.flows == nil {
 		s.flows = map[string]*flow{}
 	}
-	if len(s.flows) >= maxPending {
+	ip := requestIP(r)
+	if !s.makeFlowRoom(ip) {
 		s.mu.Unlock()
-		http.Error(w, "busy", http.StatusServiceUnavailable)
+		http.Error(w, "busy", http.StatusTooManyRequests)
 		return
 	}
-	s.flows[id] = &flow{port: port, state: state, challenge: challenge, expires: s.now().Add(flowTTL)}
+	s.flows[id] = &flow{ip: ip, port: port, state: state, challenge: challenge, expires: s.now().Add(flowTTL)}
 	s.mu.Unlock()
 
 	v := url.Values{
@@ -276,6 +280,28 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// makeFlowRoom: false when ip has maxPendingPerIP flows; at maxPending it drops the oldest flow,
+// so a flood cannot keep everyone else out for flowTTL.
+func (s *AuthServer) makeFlowRoom(ip string) bool {
+	n := 0
+	var oldest string
+	for k, f := range s.flows {
+		if f.ip == ip {
+			n++
+		}
+		if oldest == "" || f.expires.Before(s.flows[oldest].expires) {
+			oldest = k
+		}
+	}
+	if n >= maxPendingPerIP {
+		return false
+	}
+	if len(s.flows) >= maxPending {
+		delete(s.flows, oldest)
+	}
+	return true
 }
 
 func (s *AuthServer) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
