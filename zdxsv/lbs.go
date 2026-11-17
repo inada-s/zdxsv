@@ -181,6 +181,7 @@ func (a *Lbs) SetBattleServer(b *Mcs) {
 func (a *Lbs) Serve() {
 	aliveCheck := time.NewTicker(a.aliveCheckInterval)
 	defer aliveCheck.Stop()
+	defer a.restartOnPanic()
 
 	for {
 		select {
@@ -211,13 +212,24 @@ func (a *Lbs) Serve() {
 				a.OnClose(args.peer)
 				delete(a.peers, args.peer.conn.Address())
 			case eventFunc:
-				args.f(a)
-				args.c <- struct{}{}
+				func() {
+					defer func() { args.c <- struct{}{} }()
+					args.f(a)
+				}()
 			}
 		case now := <-aliveCheck.C:
 			a.checkAlive(now)
 			a.updateRelays(now)
 		}
+	}
+}
+
+// restartOnPanic, deferred by Serve, keeps the lobby and its state running
+// when one event panics.
+func (a *Lbs) restartOnPanic() {
+	if r := recover(); r != nil {
+		logger.Error("panic recovered", zap.String("where", "lobby"), zap.Any("panic", r))
+		go a.Serve()
 	}
 }
 

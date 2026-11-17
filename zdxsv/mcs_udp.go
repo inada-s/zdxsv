@@ -111,7 +111,15 @@ func (s *McsUDPServer) Serve(conn *net.UDPConn) error {
 	s.conn = conn
 	s.conn.SetReadBuffer(16 * 1024 * 1024)
 	s.conn.SetWriteBuffer(16 * 1024 * 1024)
-	return s.readLoop()
+	for {
+		err := func() error {
+			defer recoverPanic("battle udp")
+			return s.readLoop()
+		}()
+		if err != nil {
+			return err
+		}
+	}
 }
 
 type McsUDPPeer struct {
@@ -156,6 +164,7 @@ func (u *McsUDPPeer) SetUserID(id string) {
 }
 
 func (u *McsUDPPeer) Serve(mcs *Mcs) {
+	defer recoverPanic("battle udp peer")
 	logger.Info("udp serve start", zap.Any("addr", u.Address()))
 	defer logger.Info("udp serve end", zap.Any("addr", u.Address()))
 	ctx, cancel := context.WithCancel(context.Background())

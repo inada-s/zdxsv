@@ -231,7 +231,7 @@ func (s *DnasServer) ListenAndServe(addr string) error {
 
 func (s *DnasServer) Serve(ln net.Listener) error {
 	for {
-		c, err := ln.Accept()
+		c, err := accept(ln, "dnas")
 		if err != nil {
 			return err
 		}
@@ -244,6 +244,7 @@ func (s *DnasServer) ServeConn(c net.Conn) { s.serveConn(c) }
 
 func (s *DnasServer) serveConn(c net.Conn) {
 	defer c.Close()
+	defer recoverPanic("dnas conn")
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	tc := &tlsConn{Conn: c, cfg: s.tls}
 	if err := tc.handshake(); err != nil {

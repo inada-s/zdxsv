@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"errors"
 	"io"
 	"net"
 	"sync"
@@ -32,12 +31,9 @@ func (s *McsTCPServer) ListenAndServe(addr string) error {
 // Serve accepts connections on l until l is closed.
 func (s *McsTCPServer) Serve(l net.Listener) error {
 	for {
-		conn, err := l.Accept()
-		if errors.Is(err, net.ErrClosed) {
-			return err
-		}
+		conn, err := accept(l, "battle tcp")
 		if err != nil {
-			continue
+			return err
 		}
 		peer := NewTCPPeer(conn)
 		go peer.Serve(s.mcs)
@@ -67,9 +63,13 @@ func (u *McsTCPPeer) Close() error {
 func (u *McsTCPPeer) Serve(mcs *Mcs) {
 	logger.Info("tcp serve start", zap.Any("addr", u.Address()))
 	defer logger.Info("tcp serve end", zap.Any("addr", u.Address()))
+	defer u.conn.Close()
 	data, _ := hex.DecodeString("280110310000000100ffffff")
 	u.AddSendData(data)
-	u.readLoop(mcs)
+	func() {
+		defer recoverPanic("battle tcp conn")
+		u.readLoop(mcs)
+	}()
 	if u.room != nil {
 		u.room.Leave(u)
 		u.room = nil
