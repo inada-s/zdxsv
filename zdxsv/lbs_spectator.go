@@ -1,12 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,15 +26,16 @@ import (
 // skip=<code>,<code> the newest running one not in skip (auto-next). The answer names the
 // battle in X-Battle-Code. 404: none.
 //
-// One goroutine (Run) writes to every spectator in turn, liveTick apart, each write
-// bounded by liveWriteWait: a spectator whose socket is full is skipped until its next
-// turn and dropped after liveStall without progress.
+// Each spectator has its own writer goroutine, waking liveTick apart; one that takes no
+// liveWriteChunk for liveStall is dropped. All streams together hold at most
+// liveMaxTotalBytes; an upload past it ends.
 const (
 	liveTick              = time.Second / 3
-	liveWriteWait         = 5 * time.Millisecond
+	liveWriteChunk        = 32 << 10
 	liveStall             = 30 * time.Second
 	liveUploadIdle        = 10 * time.Second // the uplink sends at least every liveTick
 	liveMaxBytes          = 32 << 20
+	liveMaxTotalBytes     = 512 << 20
 	liveRetention         = 10 * time.Minute // after the upload ended
 	liveIdle              = 10 * time.Minute // opened, no upload
 	liveMaxSpectators     = 4096
@@ -51,6 +50,8 @@ type SpectatorRegistry struct {
 	mu        sync.Mutex
 	battles   map[string]*liveBattle
 	nwatchers int
+	watching  map[*liveWatcher]bool
+	bytes     int
 	join      chan *liveWatcher
 }
 
@@ -66,17 +67,16 @@ type liveBattle struct {
 	users     []*ReplayUser // for the /lbs/live list
 }
 
-// liveWatcher is owned by Run once joined.
+// liveWatcher is owned by its writer goroutine once joined.
 type liveWatcher struct {
-	b        *liveBattle
-	conn     net.Conn
-	pre      []byte // the response header not written yet
-	pos      int
-	progress time.Time
+	b    *liveBattle
+	conn net.Conn
+	pre  []byte // the response header not written yet
+	pos  int
 }
 
 func NewSpectatorRegistry() *SpectatorRegistry {
-	return &SpectatorRegistry{battles: map[string]*liveBattle{}, join: make(chan *liveWatcher, 64)}
+	return &SpectatorRegistry{battles: map[string]*liveBattle{}, watching: map[*liveWatcher]bool{}, join: make(chan *liveWatcher, 64)}
 }
 
 // Open starts accepting the battle's upload (session = its ggpo_session; users for List). Idempotent.
@@ -90,87 +90,68 @@ func (r *SpectatorRegistry) Open(code string, session uint32, users []*ReplayUse
 	logger.Info("live open", zap.Any("battle_code", code))
 }
 
-// Run writes to the spectators until stop is closed (nil: forever).
+// Run drops stale battles until stop is closed (nil: forever), then closes every spectator.
 func (r *SpectatorRegistry) Run(stop <-chan struct{}) {
 	t := time.NewTicker(liveTick)
 	defer t.Stop()
-	var ws []*liveWatcher
-	turn := 0
 	for {
 		select {
 		case <-stop:
-			for _, w := range ws {
-				r.drop(w)
+			r.mu.Lock()
+			for w := range r.watching {
+				w.conn.Close()
 			}
+			r.mu.Unlock()
 			return
 		case w := <-r.join:
-			ws = append(ws, w)
+			r.mu.Lock()
+			r.watching[w] = true
+			r.mu.Unlock()
+			go r.serve(w, stop)
 		case now := <-t.C:
-			ws = r.deliver(ws, turn, now)
-			turn++
 			r.Tick(now)
 		}
 	}
 }
 
-func (r *SpectatorRegistry) deliver(ws []*liveWatcher, turn int, now time.Time) []*liveWatcher {
-	if len(ws) == 0 {
-		return ws
-	}
-	type view struct {
-		buf  []byte
-		done bool
-	}
-	views := map[*liveBattle]view{}
-	r.mu.Lock()
-	for _, w := range ws {
-		views[w.b] = view{w.b.buf, !w.b.done.IsZero()}
-	}
-	r.mu.Unlock()
-	end := now.Add(liveTick / 2)
-	keep := ws[:0]
-	n := len(ws)
-	order := make([]*liveWatcher, n)
-	for i := range ws {
-		order[i] = ws[(i+turn)%n]
-	}
-	for _, w := range order {
-		v := views[w.b]
-		if !r.write(w, v.buf, end) || (v.done && len(w.pre) == 0 && w.pos == len(v.buf)) || now.Sub(w.progress) > liveStall {
-			r.drop(w)
-			continue
+func (r *SpectatorRegistry) serve(w *liveWatcher, stop <-chan struct{}) {
+	defer r.drop(w)
+	t := time.NewTicker(liveTick)
+	defer t.Stop()
+	for {
+		r.mu.Lock()
+		buf, done := w.b.buf, !w.b.done.IsZero()
+		r.mu.Unlock()
+		if !liveWrite(w, buf) || (done && w.pos == len(buf)) {
+			return
 		}
-		keep = append(keep, w)
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
 	}
-	for i := len(keep); i < n; i++ {
-		ws[i] = nil
-	}
-	return keep
 }
 
-// write sends what w has not got; false: the connection failed.
-func (r *SpectatorRegistry) write(w *liveWatcher, buf []byte, end time.Time) bool {
+// liveWrite sends what w has not got; false: the connection failed or took no chunk for liveStall.
+func liveWrite(w *liveWatcher, buf []byte) bool {
 	for len(w.pre) > 0 || w.pos < len(buf) {
-		dl := time.Now().Add(liveWriteWait)
-		if dl.After(end) {
-			dl = end
-		}
-		w.conn.SetWriteDeadline(dl)
 		data := w.pre
 		if len(data) == 0 {
 			data = buf[w.pos:]
 		}
+		if len(data) > liveWriteChunk {
+			data = data[:liveWriteChunk]
+		}
+		w.conn.SetWriteDeadline(time.Now().Add(liveStall))
 		n, err := w.conn.Write(data)
-		if n > 0 {
-			w.progress = time.Now()
-			if len(w.pre) > 0 {
-				w.pre = w.pre[n:]
-			} else {
-				w.pos += n
-			}
+		if len(w.pre) > 0 {
+			w.pre = w.pre[n:]
+		} else {
+			w.pos += n
 		}
 		if err != nil {
-			return errors.Is(err, os.ErrDeadlineExceeded)
+			return false
 		}
 	}
 	return true
@@ -179,6 +160,7 @@ func (r *SpectatorRegistry) write(w *liveWatcher, buf []byte, end time.Time) boo
 func (r *SpectatorRegistry) drop(w *liveWatcher) {
 	w.conn.Close()
 	r.mu.Lock()
+	delete(r.watching, w)
 	w.b.watchers--
 	r.nwatchers--
 	r.mu.Unlock()
@@ -191,6 +173,7 @@ func (r *SpectatorRegistry) Tick(now time.Time) {
 	for code, b := range r.battles {
 		if (!b.done.IsZero() && now.Sub(b.done) > liveRetention) || (!b.uploaded && now.Sub(b.opened) > liveIdle) {
 			delete(r.battles, code)
+			r.bytes -= len(b.buf)
 			logger.Info("live drop", zap.Any("battle_code", code))
 		}
 	}
@@ -211,14 +194,15 @@ func (r *SpectatorRegistry) startUpload(code string, session int32) (*liveBattle
 	return b, 0
 }
 
-// add appends to b's stream; false past liveMaxBytes.
+// add appends to b's stream; false past liveMaxBytes or liveMaxTotalBytes.
 func (r *SpectatorRegistry) add(b *liveBattle, data []byte) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(b.buf)+len(data) > liveMaxBytes {
+	if len(b.buf)+len(data) > liveMaxBytes || r.bytes+len(data) > liveMaxTotalBytes {
 		return false
 	}
 	b.buf = append(b.buf, data...)
+	r.bytes += len(data)
 	return true
 }
 
@@ -400,7 +384,7 @@ func (h *APIHandler) serveLiveWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pre := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nCache-Control: no-store\r\nX-Battle-Code: %s\r\nConnection: close\r\n\r\n", b.code)
-	reg.join <- &liveWatcher{b: b, conn: conn, pre: []byte(pre), progress: time.Now()}
+	reg.join <- &liveWatcher{b: b, conn: conn, pre: []byte(pre)}
 }
 
 func (h *APIHandler) live() *SpectatorRegistry {
