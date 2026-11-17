@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"log"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -91,15 +94,65 @@ func (c *UDPClient) SendPacket(pkt StunPacket, addr *net.UDPAddr) {
 	c.Send(MarshalStun(pkt), addr)
 }
 
-func (c *UDPClient) SendPing(userID string, addr string) {
+func (c *UDPClient) SendPing(userID string, token int64, addr string) {
 	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		log.Println("udp:", err)
 		return
 	}
-	c.SendPacket(StunPacket{Type: StunPing, Timestamp: time.Now().UnixNano(), UserID: userID}, udpAddr)
+	c.SendPacket(StunPacket{Type: StunPing, Timestamp: token, UserID: userID}, udpAddr)
 }
 
 func (c *UDPClient) SendPong(ping StunPacket, userID string, addr *net.UDPAddr) {
 	c.SendPacket(StunPacket{Type: StunPong, Timestamp: ping.Timestamp, UserID: userID}, addr)
+}
+
+// pingTTL is how long a Ping waits for its Pong.
+const pingTTL = 10 * time.Second
+
+// Pinger gives each Ping a random token in its Timestamp, which a Pong echoes.
+// A Pong counts only if it echoes a pending token given for the user it names.
+type Pinger struct {
+	mtx     sync.Mutex
+	pending map[int64]sentPing
+}
+
+type sentPing struct {
+	userID string
+	at     time.Time
+}
+
+func NewPinger() *Pinger {
+	return &Pinger{pending: map[int64]sentPing{}}
+}
+
+// Token returns a new token for a Ping to userID.
+func (p *Pinger) Token(userID string) int64 {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	token := int64(binary.BigEndian.Uint64(b[:]) & math.MaxInt64)
+	now := time.Now()
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	for t, s := range p.pending {
+		if now.Sub(s.at) > pingTTL {
+			delete(p.pending, t)
+		}
+	}
+	p.pending[token] = sentPing{userID, now}
+	return token
+}
+
+// Answer takes the token pong echoes and returns the round trip time.
+func (p *Pinger) Answer(pong StunPacket) (time.Duration, bool) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	s, ok := p.pending[pong.Timestamp]
+	if !ok || pong.Type != StunPong || s.userID != pong.UserID || time.Since(s.at) > pingTTL {
+		return 0, false
+	}
+	delete(p.pending, pong.Timestamp)
+	return time.Since(s.at), true
 }
