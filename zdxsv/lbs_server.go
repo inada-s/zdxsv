@@ -21,14 +21,47 @@ type LbsConnPeer interface {
 	OnClose()
 }
 
+var (
+	lbsMaxConns      = 4096
+	lbsMaxConnsPerIP = 16
+	lbsMaxOutbuf     = 1 << 20
+	lbsMsgBurst      = 64
+	lbsMsgInterval   = 50 * time.Millisecond
+)
+
 type LbsServer struct {
 	conn net.Conn
 	pf   LbsPeerFactory
+
+	mConns  sync.Mutex
+	nConns  int
+	ipConns map[string]int
 }
 
 func NewLbsServer(pf LbsPeerFactory) *LbsServer {
 	return &LbsServer{
-		pf: pf,
+		pf:      pf,
+		ipConns: make(map[string]int),
+	}
+}
+
+func (s *LbsServer) acquireConn(ip string) bool {
+	s.mConns.Lock()
+	defer s.mConns.Unlock()
+	if s.nConns >= lbsMaxConns || s.ipConns[ip] >= lbsMaxConnsPerIP {
+		return false
+	}
+	s.nConns++
+	s.ipConns[ip]++
+	return true
+}
+
+func (s *LbsServer) releaseConn(ip string) {
+	s.mConns.Lock()
+	defer s.mConns.Unlock()
+	s.nConns--
+	if s.ipConns[ip]--; s.ipConns[ip] <= 0 {
+		delete(s.ipConns, ip)
 	}
 }
 
@@ -55,8 +88,17 @@ func (s *LbsServer) Serve(l net.Listener) error {
 			logger.Error("accept failed", zap.Error(err))
 			continue
 		}
+		ip, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
+		if !s.acquireConn(ip) {
+			logger.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
+			tcpConn.Close()
+			continue
+		}
 		logger.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
-		go s.ServeConn(tcpConn)
+		go func() {
+			defer s.releaseConn(ip)
+			s.ServeConn(tcpConn)
+		}()
 	}
 }
 
@@ -76,8 +118,9 @@ type LbsConn struct {
 	chDispatch chan bool
 	chQuit     chan interface{}
 
-	mOutbuf sync.Mutex
-	outbuf  []byte
+	mOutbuf    sync.Mutex
+	outbuf     []byte
+	outbufFull bool
 
 	mInbuf sync.Mutex
 	inbuf  []byte
@@ -111,6 +154,16 @@ func (c *LbsConn) serve() {
 func (c *LbsConn) SendMessage(msg *LbsMessage) {
 	logger.Debug("send", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 	c.mOutbuf.Lock()
+	if c.outbufFull || len(c.outbuf) >= lbsMaxOutbuf {
+		full := c.outbufFull
+		c.outbufFull = true
+		c.mOutbuf.Unlock()
+		if !full {
+			logger.Warn("send buffer full: closing", zap.Any("addr", c.Address()))
+			c.conn.Close()
+		}
+		return
+	}
 	c.outbuf = append(c.outbuf, msg.Serialize()...)
 	c.mOutbuf.Unlock()
 	select {
@@ -199,8 +252,35 @@ func (c *LbsConn) Close() {
 	}
 }
 
+// dispatchLoop hands each message to the peer at most lbsMsgBurst at once and then one per
+// lbsMsgInterval: all peers share one lobby event loop. It waits holding mInbuf, so readLoop
+// stops reading and TCP pushes back on the client.
 func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 	defer cancel()
+
+	tokens := lbsMsgBurst
+	last := time.Now()
+	pace := func() bool {
+		for {
+			now := time.Now()
+			if gained := int(now.Sub(last) / lbsMsgInterval); gained > 0 {
+				tokens = min(lbsMsgBurst, tokens+gained)
+				last = last.Add(time.Duration(gained) * lbsMsgInterval)
+			}
+			if tokens >= lbsMsgBurst {
+				last = now
+			}
+			if tokens > 0 {
+				tokens--
+				return true
+			}
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(last.Add(lbsMsgInterval).Sub(now)):
+			}
+		}
+	}
 
 	for {
 		select {
@@ -214,6 +294,10 @@ func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 					break // the body is still arriving
 				}
 				c.inbuf = c.inbuf[n:]
+				if !pace() {
+					c.mInbuf.Unlock()
+					return
+				}
 				logger.Debug("recv", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 				c.peer.OnMessage(msg)
 			}
