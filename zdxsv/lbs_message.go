@@ -72,8 +72,7 @@ func (m *LbsMessage) String() string {
 
 	fmt.Fprintf(b, " ID:0x%X", m.Command)
 	fmt.Fprintf(b, " Seq:%v", m.Seq)
-	if m.Direction == ClientToServer && (m.Command == 0x6406 || m.Command == 0x660A) {
-		// carries a room password
+	if m.hidesBody() {
 		fmt.Fprintf(b, " Body(%d bytes): hidden\n", len(m.Body))
 		return b.String()
 	}
@@ -586,4 +585,19 @@ var symbolList = []symbol{
 	{0xE5, 0x01, 0x02, 0x630A, 0x0034cbd0, "_cnet_RecvFromLbs_AnswerLobbyMember"},
 	{0xE6, 0x01, 0x10, 0x6410, 0x0034cd70, "_cnet_RecvFromLbs_NoticeLobbyLeaver"},
 	{0xE7, 0x01, 0x10, 0x6411, 0x0034cd80, "_cnet_RecvFromLbs_NoticeLobbyCommer"},
+}
+
+// hidesBody tells the messages whose body carries a room password, the login key,
+// chat or mail.
+func (m *LbsMessage) hidesBody() bool {
+	switch m.Direction {
+	case ClientToServer:
+		switch m.Command {
+		case 0x6406, 0x660A, 0x6101, 0x6701, 0x6704:
+			return true
+		}
+	case ServerToClient:
+		return m.Command == 0x6702
+	}
+	return false
 }

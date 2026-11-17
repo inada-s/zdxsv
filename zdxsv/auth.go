@@ -516,7 +516,7 @@ func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token 
 		http.Error(w, "", http.StatusForbidden)
 		return ""
 	}
-	logger.Info("auth: carried account", zap.String("login_key", c.loginKey))
+	logger.Info("auth: carried account", zap.String("login_key", maskKey(c.loginKey)))
 	return c.loginKey
 }
 

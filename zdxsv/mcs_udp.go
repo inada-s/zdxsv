@@ -52,7 +52,7 @@ func (s *McsUDPServer) readLoop() error {
 
 		pkt, err := ParsePacket(buf[:n])
 		if err != nil {
-			logger.Error("bad udp packet", zap.Any("addr", key), zap.Error(err), zap.Binary("data", buf[:n]))
+			logger.Error("bad udp packet", zap.Any("addr", key), zap.Error(err), zap.Int("bytes", n), zap.Binary("head", logHead(buf[:n])))
 			continue
 		}
 

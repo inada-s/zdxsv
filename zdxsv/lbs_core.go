@@ -79,12 +79,12 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 		logger.Error("FindBan failure", zap.Error(err))
 	}
 	if ban != nil {
-		logger.Info("banned login refused", zap.Any("login_key", ac.LoginKey), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
+		logger.Info("banned login refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
 		SendBanned(p)
 		return
 	}
 	if pcsx2NeedsUpdate(p.PlatformInfo, ac.LoginKey, machineID) {
-		logger.Info("outdated client refused", zap.Any("login_key", ac.LoginKey), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
+		logger.Info("outdated client refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
 		SendPleaseUpdate(p)
 		return
 	}
@@ -104,7 +104,7 @@ func (a *Lbs) OnFirstData(p *LbsPeer) {
 		for _, u := range battle.Users {
 			if u.SessionID == p.SessionID {
 				if u.LoginKey != p.LoginKey {
-					logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
+					logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 					return
 				}
 				p.LbsUser = u
@@ -155,7 +155,7 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 			return false
 		}
 		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
+			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 			return false
 		}
 		p.LbsUser.DBUser = *u
@@ -167,7 +167,7 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 			return false
 		}
 		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
+			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 			return false
 		}
 		p.LbsUser.DBUser = *u
@@ -1334,17 +1334,17 @@ func lobbyChatCarry(p *LbsPeer, str string) bool {
 	}
 	ban, err := DefaultDB.FindBan(p.LoginKey)
 	if err != nil || ban != nil {
-		logger.Info("carry code refused", zap.String("login_key", p.LoginKey), zap.Error(err))
+		logger.Info("carry code refused", zap.String("login_key", maskKey(p.LoginKey)), zap.Error(err))
 		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードを発行できません")
 		return true
 	}
 	if n, err := DefaultDB.AccountBattleCount(p.LoginKey); err != nil || n < CarryMinBattles {
-		logger.Info("carry code refused: battles", zap.String("login_key", p.LoginKey), zap.Any("battles", n), zap.Error(err))
+		logger.Info("carry code refused: battles", zap.String("login_key", maskKey(p.LoginKey)), zap.Any("battles", n), zap.Error(err))
 		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードは１００戦以上で発行できます")
 		return true
 	}
 	code := p.app.carryCode(p.LoginKey)
-	logger.Info("carry code issued", zap.String("login_key", p.LoginKey))
+	logger.Info("carry code issued", zap.String("login_key", maskKey(p.LoginKey)))
 	NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコード "+code)
 	NoticeChatMessage(p, "SERVER", "＞", "３分以内に一度だけ使えます")
 	NoticeChatMessage(p, "SERVER", "＞", "他人に教えないでください")

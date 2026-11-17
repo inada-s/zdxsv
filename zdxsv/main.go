@@ -431,13 +431,20 @@ func setupLogger(o LogOptions) error {
 	if err != nil {
 		return err
 	}
-	core := zapcore.NewCore(enc, sink, level)
-	l := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel), zap.ErrorOutput(zapcore.Lock(os.Stderr)))
+	core := zapcore.NewSamplerWithOptions(zapcore.NewCore(enc, sink, level), time.Second, logSampleFirst, logSampleThereafter)
+	l := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zap.DPanicLevel), zap.ErrorOutput(zapcore.Lock(os.Stderr)))
 	if len(o.Fields) != 0 {
 		l = l.With(o.Fields...)
 	}
 	logger = l
 	return nil
 }
+
+// Per message and level each second: the first logSampleFirst lines, then every
+// logSampleThereafter-th, so junk packets from the network cannot flood the log.
+const (
+	logSampleFirst      = 100
+	logSampleThereafter = 100
+)
 
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
