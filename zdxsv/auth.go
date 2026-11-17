@@ -235,6 +235,28 @@ func (s *AuthServer) redirectURI() string {
 	return strings.TrimSuffix(s.PublicURL, "/") + "/auth/" + s.Provider.Name + "/callback"
 }
 
+// makeFlowRoom: false when ip has maxPendingPerIP flows; at maxPending it drops the oldest flow,
+// so a flood cannot keep everyone else out for flowTTL.
+func (s *AuthServer) makeFlowRoom(ip string) bool {
+	n := 0
+	var oldest string
+	for k, f := range s.flows {
+		if f.ip == ip {
+			n++
+		}
+		if oldest == "" || f.expires.Before(s.flows[oldest].expires) {
+			oldest = k
+		}
+	}
+	if n >= maxPendingPerIP {
+		return false
+	}
+	if len(s.flows) >= maxPending {
+		delete(s.flows, oldest)
+	}
+	return true
+}
+
 func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	port, err := strconv.Atoi(q.Get("redirect_port"))
@@ -280,28 +302,6 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-// makeFlowRoom: false when ip has maxPendingPerIP flows; at maxPending it drops the oldest flow,
-// so a flood cannot keep everyone else out for flowTTL.
-func (s *AuthServer) makeFlowRoom(ip string) bool {
-	n := 0
-	var oldest string
-	for k, f := range s.flows {
-		if f.ip == ip {
-			n++
-		}
-		if oldest == "" || f.expires.Before(s.flows[oldest].expires) {
-			oldest = k
-		}
-	}
-	if n >= maxPendingPerIP {
-		return false
-	}
-	if len(s.flows) >= maxPending {
-		delete(s.flows, oldest)
-	}
-	return true
 }
 
 func (s *AuthServer) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
