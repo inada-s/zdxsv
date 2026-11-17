@@ -491,13 +491,14 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 			b.PlatformInfo[u.UserID] = battlePlatformInfo(peer)
 			peer.Battle = b
 			err = DefaultDB.AddBattleRecord(&BattleRecord{
-				BattleCode: b.BattleCode,
-				Aggregate:  1,
-				UserID:     u.UserID,
-				PilotName:  pilotName(u.Bin),
-				Players:    len(users),
-				Pos:        int(b.GetPosition(u.UserID)),
-				Side:       int(u.Entry),
+				BattleCode:  b.BattleCode,
+				Aggregate:   1,
+				UserID:      u.UserID,
+				PilotName:   pilotName(u.Bin),
+				Players:     len(users),
+				Pos:         int(b.GetPosition(u.UserID)),
+				Side:        int(u.Entry),
+				GgpoSession: b.GgpoSession,
 			})
 			if err != nil {
 				logger.Info("failed to add battle record", zap.Error(err))

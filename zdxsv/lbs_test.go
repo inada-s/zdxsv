@@ -414,6 +414,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 	}
 
 	var battleCode string
+	var session uint32
 	for i, p := range players {
 		if n := p.c.ask(0x6911, nil).Reader().Read8(); int(n) != len(players) {
 			t.Errorf("user count %d", n)
@@ -462,6 +463,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 			break
 		}
 		m := battleInfo(t, p.c.expect(0x9951, CategoryCustom))
+		session = m.SessionID
 		if len(m.Users) != len(players) {
 			t.Fatalf("player %d: battle info users %v", i, m.Users)
 		}
@@ -539,7 +541,8 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		ms, _ := json.Marshal(usedMs)
 		h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
 		w := httptest.NewRecorder()
-		h.ServeHTTP(w, replayUploadRequest(t, battleCode+".pb", []byte("replay"), "used_ms", string(ms)))
+		query := fmt.Sprintf("battle_code=%s&session_id=%d", battleCode, session)
+		h.ServeHTTP(w, replayUploadRequest(t, query, battleCode+".pb", []byte("replay"), "used_ms", string(ms)))
 		if w.Code != 200 {
 			t.Fatalf("replay upload code %d body %s", w.Code, w.Body.String())
 		}

@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	replay_url  text default '',
 	used_ms_mask integer default 0,
 	used_ms_list text default '',
+	ggpo_session integer default 0,
 	play_count  integer default 0,
 	created     timestamp,
 	updated     timestamp,
@@ -553,9 +554,9 @@ func (db SQLiteDB) AddBattleRecord(battleRecord *BattleRecord) error {
 	battleRecord.Created = now
 	_, err := db.NamedExec(`
 INSERT INTO battle_record
-	(battle_code, user_id, user_name, pilot_name, players, aggregate, pos, side, created, updated, system)
+	(battle_code, user_id, user_name, pilot_name, players, aggregate, pos, side, ggpo_session, created, updated, system)
 VALUES
-	(:battle_code, :user_id, :user_name, :pilot_name, :players, :aggregate, :pos, :side, :created, :updated, :system)`,
+	(:battle_code, :user_id, :user_name, :pilot_name, :players, :aggregate, :pos, :side, :ggpo_session, :created, :updated, :system)`,
 		battleRecord)
 	return err
 }
