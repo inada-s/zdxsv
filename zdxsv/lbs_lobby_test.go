@@ -394,7 +394,7 @@ func TestUserInOneLobbyAndRoom(t *testing.T) {
 		r.Read16()
 		return [2]uint16{r.Read16(), r.Read16()}
 	}
-	createRoom := func(roomID uint16) {
+	createRoom := func(c *testClient, roomID uint16) {
 		if a := c.ask(0x6407, u16(roomID)); a.Status != StatusSuccess {
 			t.Fatalf("RequestCreateRoom %d status %x", roomID, a.Status)
 		}
@@ -411,15 +411,28 @@ func TestUserInOneLobbyAndRoom(t *testing.T) {
 		t.Errorf("entry count after entering twice %v, want [1 0]", got)
 	}
 
-	createRoom(1)
-	createRoom(2)
+	createRoom(c, 1)
+	createRoom(c, 2)
 	if s := roomStatus(watcher, 1); s != RoomStateEmpty {
 		t.Errorf("room 1 status %d after its owner created room 2", s)
 	}
+	roomUsers := func(roomID uint16) uint16 {
+		r := watcher.ask(0x6403, u16(roomID)).Reader()
+		r.Read16()
+		return r.Read16()
+	}
+	createRoom(watcher, 3)
+	c.ask(0x6406, append(u16(3), 0, 0, 0, 0))
+	if s := roomStatus(watcher, 2); s != RoomStateEmpty {
+		t.Errorf("room 2 status %d after its owner entered room 3", s)
+	}
+	if n := roomUsers(3); n != 2 {
+		t.Errorf("room 3 users %d, want 2", n)
+	}
 
 	c.ask(0x6305, u16(lobbyID+1))
-	if s := roomStatus(watcher, 2); s != RoomStateEmpty {
-		t.Errorf("room 2 status %d after its owner entered another lobby", s)
+	if n := roomUsers(3); n != 1 {
+		t.Errorf("room 3 users %d after a member entered another lobby, want 1", n)
 	}
 	if got := counts(0x6303); got[0] != 1 {
 		t.Errorf("lobby user count %d after a user entered another lobby, want 1", got[0])
