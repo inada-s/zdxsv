@@ -443,8 +443,8 @@ func setupLogger(o LogOptions) error {
 // Per message and level each second: the first logSampleFirst lines, then every
 // logSampleThereafter-th, so junk packets from the network cannot flood the log.
 const (
-	logSampleFirst      = 100
-	logSampleThereafter = 100
+	logSampleFirst      = 20
+	logSampleThereafter = 1000
 )
 
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
