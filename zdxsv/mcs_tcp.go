@@ -55,7 +55,6 @@ type McsTCPPeer struct {
 	closeOnce sync.Once
 }
 
-// A room broadcast must never wait on one peer: a peer that does not take its data in time is closed.
 var (
 	tcpSendQueueLen = 1024
 	tcpWriteTimeout = 10 * time.Second
