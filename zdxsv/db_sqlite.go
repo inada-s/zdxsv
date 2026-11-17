@@ -1051,6 +1051,12 @@ func (db SQLiteDB) AccountCarried(loginKey string) (bool, error) {
 	return carried, err
 }
 
+func (db SQLiteDB) AccountMadeForIdentity(loginKey string) (bool, error) {
+	var n int
+	err := db.QueryRow("SELECT COUNT(*) FROM auth_identity WHERE login_key = ? AND carried = 0", loginKey).Scan(&n)
+	return n > 0, err
+}
+
 func (db SQLiteDB) AccountBattleCount(loginKey string) (int, error) {
 	var n int
 	err := db.QueryRow("SELECT COALESCE(SUM(battle_count), 0) FROM user WHERE login_key = ?", loginKey).Scan(&n)

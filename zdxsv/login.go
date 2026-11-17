@@ -177,7 +177,9 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	logger.Info("login form", zap.Any("form", r.Form))
 	loginKey := r.FormValue("login_key")
 
-	if loginKey == "" {
+	// An account made for a sign-in identity logs in by token only: no client ever holds its key.
+	identityOnly, err := DefaultDB.AccountMadeForIdentity(loginKey)
+	if loginKey == "" || identityOnly || err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, messageLoginFail)
