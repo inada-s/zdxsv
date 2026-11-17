@@ -151,3 +151,7 @@ func (s Secret) String() string {
 	}
 	return "***"
 }
+
+func (s Secret) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
