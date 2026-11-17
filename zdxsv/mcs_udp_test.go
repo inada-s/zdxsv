@@ -62,6 +62,7 @@ type udpClient struct {
 	userID string
 	sent   []McsMessage
 	recv   map[string]uint32
+	ack    uint32
 }
 
 func newUDPClient(t *testing.T, server *net.UDPAddr, userID string) *udpClient {
@@ -93,9 +94,28 @@ func (c *udpClient) read(timeout time.Duration) *Packet {
 	if err != nil {
 		c.t.Fatal(err)
 	}
+	if pkt.Kind == KindBattle {
+		c.ack = pkt.Seq
+	}
 	return &pkt
 }
 
+// readAll returns the packets that arrive within d.
+func (c *udpClient) readAll(d time.Duration) []*Packet {
+	c.t.Helper()
+	var pkts []*Packet
+	deadline := time.Now().Add(d)
+	for {
+		pkt := c.read(time.Until(deadline))
+		if pkt == nil {
+			return pkts
+		}
+		pkts = append(pkts, pkt)
+	}
+}
+
+// hello greets like zproxy, which then sends battle packets at once and acks
+// the server's seq. The server makes the peer on the first send after it.
 func (c *udpClient) hello(sessionID string) bool {
 	c.t.Helper()
 	c.write(AppendHello(nil, sessionID))
@@ -103,7 +123,14 @@ func (c *udpClient) hello(sessionID string) bool {
 	if pkt == nil || pkt.Kind != KindHelloAnswer || pkt.SessionID != sessionID {
 		c.t.Fatalf("hello reply = %v", pkt)
 	}
-	return pkt.OK
+	if !pkt.OK {
+		return false
+	}
+	c.write(AppendBattle(nil, uint32(len(c.sent)), c.ack, c.sent))
+	if pkt := c.read(2 * time.Second); pkt == nil || pkt.Kind != KindBattle {
+		c.t.Fatalf("battle reply = %v", pkt)
+	}
+	return true
 }
 
 func (c *udpClient) send(bodies ...[]byte) {
@@ -111,7 +138,7 @@ func (c *udpClient) send(bodies ...[]byte) {
 	for _, b := range bodies {
 		c.sent = append(c.sent, McsMessage{UserID: c.userID, Seq: uint32(len(c.sent) + 1), Body: b})
 	}
-	c.write(AppendBattle(nil, uint32(len(c.sent)), 0, c.sent))
+	c.write(AppendBattle(nil, uint32(len(c.sent)), c.ack, c.sent))
 }
 
 // receive collects relayed message bodies not seen before, until it has n or times out.
@@ -166,11 +193,60 @@ func TestUDPHello(t *testing.T) {
 	}
 	// The client repeats its hello: one peer per address.
 	for i := 0; i < 3; i++ {
-		if !c.hello("12345678") {
-			t.Fatal("waiting session rejected")
+		c.write(AppendHello(nil, "12345678"))
+		if pkt := c.read(2 * time.Second); pkt == nil || !pkt.OK {
+			t.Fatalf("hello reply = %v", pkt)
 		}
 	}
+	if !c.hello("12345678") {
+		t.Fatal("waiting session rejected")
+	}
+	if s.peerCount() != 0 {
+		t.Errorf("peer created before the client acked")
+	}
+	c.send()
 	waitPeerCount(t, s, 1)
+}
+
+func TestUDPPeerNeedsServerSeq(t *testing.T) {
+	s, addr := startUDPServer(t)
+	c := newUDPClient(t, addr, "U1")
+	c.write(AppendHello(nil, "12345678"))
+	if pkts := c.readAll(300 * time.Millisecond); len(pkts) != 1 || pkts[0].Kind != KindHelloAnswer {
+		t.Fatalf("hello: got %v, want one answer", pkts)
+	}
+
+	for _, ack := range []uint32{0, 1, 12345678} {
+		c.write(AppendBattle(nil, 0, ack, nil))
+		pkts := c.readAll(300 * time.Millisecond)
+		if len(pkts) != 1 || pkts[0].Kind != KindBattle || len(pkts[0].Messages) != 0 {
+			t.Fatalf("ack %d: got %v, want one empty battle packet", ack, pkts)
+		}
+		if s.peerCount() != 0 {
+			t.Fatalf("ack %d: peer created", ack)
+		}
+	}
+	seq := c.ack
+
+	other := newUDPClient(t, addr, "U1")
+	other.write(AppendBattle(nil, 0, seq, nil))
+	if pkts := other.readAll(300 * time.Millisecond); len(pkts) != 0 {
+		t.Fatalf("other address: got %v, want nothing", pkts)
+	}
+
+	c.send()
+	waitPeerCount(t, s, 1)
+}
+
+func TestUDPHelloAfterWaitExpires(t *testing.T) {
+	s, addr := startUDPServer(t)
+	s.mcs.mtx.Lock()
+	s.mcs.now = func() time.Time { return time.Now().Add(mcsWaitingTTL + time.Second) }
+	s.mcs.mtx.Unlock()
+	c := newUDPClient(t, addr, "U1")
+	if c.hello("12345678") {
+		t.Error("expired session accepted")
+	}
 }
 
 func TestUDPRelay(t *testing.T) {
@@ -214,6 +290,7 @@ func TestUDPBadJoinClosesPeer(t *testing.T) {
 			if !c.hello("12345678") {
 				t.Fatal("hello rejected")
 			}
+			c.send()
 			waitPeerCount(t, s, 1)
 			c.send([]byte(tc.body))
 			waitPeerCount(t, s, 0)

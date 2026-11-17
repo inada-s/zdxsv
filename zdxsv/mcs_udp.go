@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -14,7 +15,8 @@ import (
 
 type McsUDPServer struct {
 	sync.Mutex
-	peers map[string]*McsUDPPeer
+	peers   map[string]*McsUDPPeer
+	pending map[string]*udpPending
 
 	conn *net.UDPConn
 	mcs  *Mcs
@@ -22,8 +24,9 @@ type McsUDPServer struct {
 
 func NewUDPServer(mcs *Mcs) *McsUDPServer {
 	return &McsUDPServer{
-		peers: make(map[string]*McsUDPPeer),
-		mcs:   mcs,
+		peers:   make(map[string]*McsUDPPeer),
+		pending: make(map[string]*udpPending),
+		mcs:     mcs,
 	}
 }
 
@@ -58,40 +61,106 @@ func (s *McsUDPServer) readLoop() error {
 
 		switch pkt.Kind {
 		case KindHello:
-			// 対戦前に正しいUDPパケットを送ってきたクライアントのみ受け付ける
-			// セッションIDが正しいかの検証を行う
-			// UDPのためクライアントは複数回このリクエストを送ってくる
+			// The client repeats its hello until it gets an answer.
 			user, valid := s.mcs.FindWaitingUser(pkt.SessionID)
 			if !found && valid {
-				logger.Info("join udp peer", zap.Any("addr", key))
-				peer := NewUDPPeer(s.conn, addr, user.UserID)
-
-				s.Lock()
-				s.peers[key] = peer
-				s.Unlock()
-
-				go func(key string) {
-					peer.Serve(s.mcs)
-					logger.Info("leave udp peer", zap.Any("addr", key))
-					if peer.room != nil {
-						peer.room.Leave(peer)
-					}
-					s.Lock()
-					delete(s.peers, key)
-					s.Unlock()
-				}(key)
+				s.addPending(key, user.UserID)
 			}
 			s.conn.WriteToUDP(AppendHelloAnswer(nil, pkt.SessionID, valid), addr)
 		case KindBattle:
-			if !found {
-				logger.Error("battle data received but peer not found", zap.Any("addr", key))
+			if found {
+				peer.OnReceive(pkt)
 				continue
 			}
-			peer.OnReceive(pkt)
+			s.onPendingBattle(key, addr, pkt)
 		default:
 			logger.Error("received unexpected packet kind", zap.Any("addr", key), zap.Uint8("kind", pkt.Kind))
 		}
 	}
+}
+
+const (
+	udpPendingMax = 1024
+	udpPendingTTL = 10 * time.Second
+	udpPeerMax    = 4 * MaxRoom
+)
+
+// udpPending is an address that sent a valid hello. It becomes a peer once it
+// acks the cookie, sent to it as the seq of an empty battle packet.
+type udpPending struct {
+	userID  string
+	cookie  uint32
+	expires time.Time
+}
+
+func newCookie() uint32 {
+	var b [4]byte
+	rand.Read(b[:])
+	// Below 1<<31 so that the peer's seq does not wrap.
+	return binary.BigEndian.Uint32(b[:])>>1 | 1
+}
+
+func (s *McsUDPServer) addPending(key, userID string) {
+	s.Lock()
+	defer s.Unlock()
+	now := time.Now()
+	if p, ok := s.pending[key]; ok && p.userID == userID {
+		p.expires = now.Add(udpPendingTTL)
+		return
+	}
+	if len(s.pending) >= udpPendingMax {
+		for k, p := range s.pending {
+			if now.After(p.expires) {
+				delete(s.pending, k)
+			}
+		}
+	}
+	if len(s.pending) >= udpPendingMax {
+		logger.Warn("udp pending full", zap.Any("addr", key))
+		return
+	}
+	s.pending[key] = &udpPending{userID: userID, cookie: newCookie(), expires: now.Add(udpPendingTTL)}
+}
+
+func (s *McsUDPServer) onPendingBattle(key string, addr *net.UDPAddr, pkt Packet) {
+	s.Lock()
+	p, ok := s.pending[key]
+	if ok && time.Now().After(p.expires) {
+		delete(s.pending, key)
+		ok = false
+	}
+	if !ok {
+		s.Unlock()
+		logger.Error("battle data received but peer not found", zap.Any("addr", key))
+		return
+	}
+	if pkt.Ack != p.cookie {
+		s.Unlock()
+		s.conn.WriteToUDP(AppendBattle(nil, p.cookie, 0, nil), addr)
+		return
+	}
+	if len(s.peers) >= udpPeerMax {
+		s.Unlock()
+		logger.Warn("udp peers full", zap.Any("addr", key))
+		return
+	}
+	delete(s.pending, key)
+	peer := NewUDPPeer(s.conn, addr, p.userID, p.cookie)
+	s.peers[key] = peer
+	s.Unlock()
+
+	logger.Info("join udp peer", zap.Any("addr", key))
+	go func() {
+		peer.Serve(s.mcs)
+		logger.Info("leave udp peer", zap.Any("addr", key))
+		if peer.room != nil {
+			peer.room.Leave(peer)
+		}
+		s.Lock()
+		delete(s.peers, key)
+		s.Unlock()
+	}()
+	peer.OnReceive(pkt)
 }
 
 func (s *McsUDPServer) ListenAndServe(addr string) error {
@@ -132,13 +201,13 @@ type McsUDPPeer struct {
 	closeFunc func()
 }
 
-func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string) *McsUDPPeer {
+func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string, firstSeq uint32) *McsUDPPeer {
 	return &McsUDPPeer{
 		addr:    addr,
 		conn:    conn,
 		chFlush: make(chan struct{}, 1),
 		chRecv:  make(chan struct{}, 1),
-		rudp:    NewBattleBuffer(userID),
+		rudp:    newBattleBufferAt(userID, firstSeq),
 		filter:  NewMessageFilter([]string{userID}),
 	}
 }
@@ -380,6 +449,13 @@ type BattleBuffer struct {
 
 func NewBattleBuffer(id string) *BattleBuffer {
 	return &BattleBuffer{id: id, begin: 1, end: 1, ring: make([]McsMessage, ringSize)}
+}
+
+// newBattleBufferAt starts the seq after seq: the peer acked seq already.
+func newBattleBufferAt(id string, seq uint32) *BattleBuffer {
+	b := NewBattleBuffer(id)
+	b.begin, b.end = seq+1, seq+1
+	return b
 }
 
 func (b *BattleBuffer) SetID(id string) {
