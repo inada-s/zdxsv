@@ -234,10 +234,15 @@ func (r *Relay) Serve(conn *net.UDPConn) {
 			return
 		}
 		from = netip.AddrPortFrom(from.Addr().Unmap(), from.Port())
-		if dst, out := r.handle(buf[:n], from); dst.IsValid() {
+		if dst, out := r.handleRecovered(buf[:n], from); dst.IsValid() {
 			_, _ = conn.WriteToUDPAddrPort(out, dst)
 		}
 	}
+}
+
+func (r *Relay) handleRecovered(p []byte, from netip.AddrPort) (dst netip.AddrPort, out []byte) {
+	defer recoverPanic("relay")
+	return r.handle(p, from)
 }
 
 // handle returns where to send the (rewritten in place) packet p from from, or an invalid

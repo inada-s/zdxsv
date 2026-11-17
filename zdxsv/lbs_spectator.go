@@ -94,6 +94,12 @@ func (r *SpectatorRegistry) Open(code string, session uint32, users []*ReplayUse
 func (r *SpectatorRegistry) Run(stop <-chan struct{}) {
 	t := time.NewTicker(liveTick)
 	defer t.Stop()
+	defer func() {
+		if p := recover(); p != nil {
+			logger.Error("panic recovered", zap.String("where", "spectators"), zap.Any("panic", p))
+			go r.Run(stop)
+		}
+	}()
 	var ws []*liveWatcher
 	turn := 0
 	for {
