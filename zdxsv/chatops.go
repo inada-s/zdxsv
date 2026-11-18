@@ -672,6 +672,7 @@ const (
 	discordMessageMax               = 2000
 	updateTimeout                   = 2 * time.Minute
 	interactionBodyMax              = 1 << 20
+	signatureMaxAge                 = 5 * time.Minute
 	defaultDiscordAPIURL            = "https://discord.com/api/v10"
 	discordSignatureHeader          = "X-Signature-Ed25519"
 	discordSignatureTimestampHeader = "X-Signature-Timestamp"
@@ -723,7 +724,7 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	sig, err := hex.DecodeString(r.Header.Get(discordSignatureHeader))
 	ts := r.Header.Get(discordSignatureTimestampHeader)
-	if err != nil || len(d.PublicKey) != ed25519.PublicKeySize || !ed25519.Verify(d.PublicKey, append([]byte(ts), body...), sig) {
+	if err != nil || len(d.PublicKey) != ed25519.PublicKeySize || !ed25519.Verify(d.PublicKey, append([]byte(ts), body...), sig) || !freshTimestamp(ts, time.Now()) {
 		http.Error(w, "invalid request signature", http.StatusUnauthorized)
 		return
 	}
@@ -774,7 +775,10 @@ func (d *Discord) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		d.editOriginal(ctx, &in, msg)
 	}()
-	writeJSON(w, map[string]int{"type": responseDeferredChannelMessage})
+	writeJSON(w, map[string]interface{}{
+		"type": responseDeferredChannelMessage,
+		"data": map[string]interface{}{"flags": messageFlagEphemeral},
+	})
 }
 
 // Wait returns when the commands started so far have finished.
@@ -853,4 +857,13 @@ func reply(w http.ResponseWriter, msg string) {
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+func freshTimestamp(ts string, now time.Time) bool {
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return false
+	}
+	age := now.Sub(time.Unix(sec, 0))
+	return -signatureMaxAge <= age && age <= signatureMaxAge
 }
