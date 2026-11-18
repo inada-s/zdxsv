@@ -227,6 +227,61 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	}
 }
 
+func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
+	r := newAuthRig(t)
+	stale := r.tokenFor("2222")
+	if _, st := r.lbsLogin(stale); st != 200 {
+		t.Fatal("first login", st)
+	}
+	fresh := r.tokenFor("2222")
+	other := r.tokenFor("3333")
+	sqldb := DefaultDB.(SQLiteDB)
+	old := time.Now().Add(-AuthTokenIdleExpiry - time.Hour)
+	if _, err := sqldb.Exec("UPDATE auth_token SET created = ?, last_used = NULL WHERE token_hash = ?", old, hashAuthToken(fresh)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqldb.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", old, hashAuthToken(stale)); err != nil {
+		t.Fatal(err)
+	}
+	if _, st := r.lbsLogin(stale); st != http.StatusForbidden {
+		t.Fatal("idle token logs in", st)
+	}
+	if _, st := r.lbsLogin(fresh); st != http.StatusForbidden {
+		t.Fatal("idle token without last use logs in", st)
+	}
+
+	recent := time.Now().Add(-AuthTokenIdleExpiry + 24*time.Hour)
+	first, second := r.tokenFor("2222"), r.tokenFor("2222")
+	if _, err := sqldb.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", recent, hashAuthToken(first)); err != nil {
+		t.Fatal(err)
+	}
+	if _, st := r.lbsLogin(first); st != 200 {
+		t.Fatal("token used within the expiry", st)
+	}
+	var used time.Time
+	if err := sqldb.QueryRow("SELECT last_used FROM auth_token WHERE token_hash = ?", hashAuthToken(first)).Scan(&used); err != nil || time.Since(used) > time.Minute {
+		t.Fatal("use not recorded", used, err)
+	}
+	resp, err := http.PostForm(r.site.URL+"/auth/revoke", url.Values{"token": {second}, "all": {"1"}})
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatal("revoke all", err, resp.StatusCode)
+	}
+	if _, st := r.lbsLogin(first); st != http.StatusForbidden {
+		t.Fatal("token of the identity survives revoke all", st)
+	}
+	if _, st := r.lbsLogin(second); st != http.StatusForbidden {
+		t.Fatal("revoking token survives revoke all", st)
+	}
+	if _, st := r.lbsLogin(other); st != 200 {
+		t.Fatal("another identity's token revoked", st)
+	}
+	var n int
+	sqldb.QueryRow("SELECT COUNT(*) FROM auth_token WHERE provider = 'discord' AND provider_user_id = '2222'").Scan(&n)
+	if n != 0 {
+		t.Fatal("tokens left for the identity", n)
+	}
+}
+
 func (r *authRig) carry(token, code string) (accountList, int) {
 	return r.carryFrom(token, code, "")
 }

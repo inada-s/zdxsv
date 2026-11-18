@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS auth_token (
 	provider text default '',
 	provider_user_id text default '',
 	created timestamp,
+	last_used timestamp,
 	PRIMARY KEY (token_hash)
 );
 CREATE TABLE IF NOT EXISTS user (
@@ -855,6 +856,11 @@ const (
 // CarryMinBattles is the battle count (over the account's users) a carry-over code needs.
 const CarryMinBattles = 100
 
+// AuthTokenIdleExpiry: a token unused this long is refused and deleted.
+const AuthTokenIdleExpiry = 90 * 24 * time.Hour
+
+const authTokenUseResolution = time.Hour
+
 func hashAuthToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
@@ -901,12 +907,31 @@ func identityKeys(q querier, provider, providerUserID string) ([]string, error) 
 // tokenIdentity returns the token's identity and the account it was issued for ("" for an identity
 // token). A token issued for an account holds no identity: it is the account's link, if any.
 func (db SQLiteDB) tokenIdentity(token string) (provider, uid, key string, err error) {
-	err = db.QueryRow("SELECT provider, provider_user_id, login_key FROM auth_token WHERE token_hash = ?",
-		hashAuthToken(token)).Scan(&provider, &uid, &key)
+	var created, lastUsed sql.NullTime
+	h := hashAuthToken(token)
+	err = db.QueryRow("SELECT provider, provider_user_id, login_key, created, last_used FROM auth_token WHERE token_hash = ?",
+		h).Scan(&provider, &uid, &key, &created, &lastUsed)
 	if err == sql.ErrNoRows {
 		return "", "", "", ErrUnknownToken
 	}
-	if err != nil || provider != "" || key == "" {
+	if err != nil {
+		return "", "", "", err
+	}
+	used := lastUsed.Time
+	if !lastUsed.Valid {
+		used = created.Time
+	}
+	now := time.Now()
+	if now.Sub(used) > AuthTokenIdleExpiry {
+		db.Exec("DELETE FROM auth_token WHERE token_hash = ?", h)
+		return "", "", "", ErrUnknownToken
+	}
+	if now.Sub(used) > authTokenUseResolution {
+		if _, err := db.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", now, h); err != nil {
+			return "", "", "", err
+		}
+	}
+	if provider != "" || key == "" {
 		return provider, uid, key, err
 	}
 	err = db.QueryRow("SELECT provider, provider_user_id FROM auth_identity WHERE login_key = ?", key).Scan(&provider, &uid)
@@ -1029,8 +1054,12 @@ func (db SQLiteDB) IssueAuthToken(provider, providerUserID string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	_, err = db.Exec(`INSERT INTO auth_token (token_hash, provider, provider_user_id, created) VALUES (?, ?, ?, ?)`,
-		hashAuthToken(token), provider, providerUserID, time.Now())
+	now := time.Now()
+	if err := db.pruneAuthTokens(now); err != nil {
+		return "", err
+	}
+	_, err = db.Exec(`INSERT INTO auth_token (token_hash, provider, provider_user_id, created, last_used) VALUES (?, ?, ?, ?, ?)`,
+		hashAuthToken(token), provider, providerUserID, now, now)
 	if err != nil {
 		return "", err
 	}
@@ -1039,6 +1068,28 @@ func (db SQLiteDB) IssueAuthToken(provider, providerUserID string) (string, erro
 
 func (db SQLiteDB) RevokeAuthToken(token string) error {
 	_, err := db.Exec("DELETE FROM auth_token WHERE token_hash = ?", hashAuthToken(token))
+	return err
+}
+
+func (db SQLiteDB) RevokeIdentityTokens(token string) error {
+	provider, uid, _, err := db.tokenIdentity(token)
+	if err == ErrUnknownToken {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if provider == "" {
+		return db.RevokeAuthToken(token)
+	}
+	_, err = db.Exec(`DELETE FROM auth_token WHERE token_hash = ? OR (provider = ? AND provider_user_id = ?)
+		OR login_key IN (SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ?)`,
+		hashAuthToken(token), provider, uid, provider, uid)
+	return err
+}
+
+func (db SQLiteDB) pruneAuthTokens(now time.Time) error {
+	_, err := db.Exec("DELETE FROM auth_token WHERE COALESCE(last_used, created) < ?", now.Add(-AuthTokenIdleExpiry))
 	return err
 }
 
