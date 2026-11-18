@@ -234,13 +234,13 @@ func (a *Lbs) Serve() {
 				}
 				args.peer.lastRecvTime = time.Now()
 				if !a.accepts(args.peer, args.msg.Command) {
-					logger.Warn("command before login ignored", zap.Any("name", symbolMap[args.msg.Command]), zap.Uint16("command", args.msg.Command), zap.Any("addr", args.peer.conn.Address()))
+					floodLog.Warn("command before login ignored", zap.Any("name", symbolMap[args.msg.Command]), zap.Uint16("command", args.msg.Command), zap.Any("addr", args.peer.conn.Address()))
 					continue
 				}
 				if f, ok := a.handlers[args.msg.Command]; ok {
 					f(args.peer, args.msg)
 				} else {
-					logger.Error("handler not found", zap.Any("name", symbolMap[args.msg.Command]), zap.Any("msg", args.msg))
+					floodLog.Error("handler not found", zap.Any("name", symbolMap[args.msg.Command]), zap.Any("msg", args.msg))
 					if args.msg.Category == CategoryQuestion {
 						args.peer.SendMessage(NewServerAnswer(args.msg))
 					}

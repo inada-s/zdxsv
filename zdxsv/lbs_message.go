@@ -234,11 +234,11 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 	chksum := m.Read16()
 	n, err := m.r.Read(buf)
 	if err != nil {
-		logger.Error("read encstr failed", zap.Error(err))
+		floodLog.Error("read encstr failed", zap.Error(err))
 		return ""
 	}
 	if n != int(size-2) {
-		logger.Error("read encstr failed: mismatch read size")
+		floodLog.Error("read encstr failed: mismatch read size")
 		return ""
 	}
 	sum := uint16(0)
@@ -251,13 +251,13 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		sum += uint16(buf[i])
 	}
 	if sum != chksum {
-		logger.Error("decrypt failed: mismatch checksum")
+		floodLog.Error("decrypt failed: mismatch checksum")
 		return ""
 	}
 
 	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
-		logger.Error("decode encstr failed", zap.Error(err))
+		floodLog.Error("decode encstr failed", zap.Error(err))
 	}
 	return string(bytes.Trim(ret, "\x00"))
 }
