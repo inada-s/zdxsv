@@ -54,6 +54,7 @@ type LbsPeer struct {
 	Platform          string
 	PlatformInfo      map[string]string
 
+	proxyHost         net.IP
 	proxyIP           net.IP
 	proxyPort         uint16
 	proxyUDPAddrs     []string

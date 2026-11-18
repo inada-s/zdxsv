@@ -14,9 +14,8 @@ const (
 	requiredVersion = 1008
 )
 
-// RegisterProxy registers the zproxy at ip for the lobby user connected from the same host:
-// the only such user for UserID _AUTO_, else the one with UserID. The lobby host's own
-// addresses count as one host.
+// RegisterProxy registers the zproxy at ip for the lobby user UserID, or for UserID _AUTO_
+// the only lobby user connected from ip. The lobby host's own addresses count as one host.
 func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
 	logger.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
 	res := new(RegisterProxyResponse)
@@ -41,7 +40,7 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		return res
 	}
 
-	udpAddrs := proxyUDPAddrs(req.UDPAddrs, remote, localIP)
+	udpAddrs := proxyUDPAddrs(req.UDPAddrs)
 	if len(udpAddrs) == 0 {
 		res.Result = false
 		res.Message = "UDPアドレスが取得できていません"
@@ -51,10 +50,7 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 	a.Locked(func(app *Lbs) {
 		var found []*LbsPeer
 		for _, peer := range app.users {
-			if !sameHost(net.ParseIP(peer.IP()), remote) {
-				continue
-			}
-			if req.UserID == "_AUTO_" || peer.UserID == req.UserID {
+			if peer.UserID == req.UserID || (req.UserID == "_AUTO_" && sameHost(net.ParseIP(peer.IP()), remote)) {
 				found = append(found, peer)
 			}
 		}
@@ -70,6 +66,7 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		}
 		userPeer := found[0]
 
+		userPeer.proxyHost = remote
 		userPeer.proxyIP = localIP
 		userPeer.proxyPort = req.Port
 		userPeer.proxyRegTime = time.Now()
@@ -85,9 +82,8 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 				Team:   u.Team,
 				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
 			}
-			uHost := net.ParseIP(u.IP())
 			for _, addr := range u.proxyUDPAddrs {
-				if lanIP(udpAddrIP(addr)) && !sameHost(uHost, remote) {
+				if lanIP(udpAddrIP(addr)) && !sameHost(u.proxyHost, remote) {
 					continue
 				}
 				user.UDPAddrs = append(user.UDPAddrs, addr)
@@ -102,12 +98,12 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 
 const maxProxyUDPAddrs = 4
 
-// proxyUDPAddrs keeps the IPv4 addresses at the zproxy's public or local IP.
-func proxyUDPAddrs(addrs []string, public, local net.IP) []string {
+// proxyUDPAddrs keeps the IPv4 host:port addresses. The public one is from STUN and need
+// not be the IP the registration came from.
+func proxyUDPAddrs(addrs []string) []string {
 	var ok []string
 	for _, addr := range addrs {
-		ip := udpAddrIP(addr)
-		if ip == nil || !(ip.Equal(public) || ip.Equal(local)) || slices.Contains(ok, addr) {
+		if udpAddrIP(addr) == nil || slices.Contains(ok, addr) {
 			continue
 		}
 		ok = append(ok, addr)

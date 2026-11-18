@@ -111,8 +111,8 @@ func TestZproxyAPIFlow(t *testing.T) {
 		{"IPv6 local IP", func(r *RegisterProxyRequest) { r.LocalIP = net.ParseIP("fe80::1") }, "無効なローカルIPアドレスです"},
 		{"user not in lobby", func(r *RegisterProxyRequest) { r.UserID = "NOUSER" }, "ロビーにユーザが見つかりません"},
 		{"public local IP", func(r *RegisterProxyRequest) { r.LocalIP = net.IPv4(198, 51, 100, 7) }, "無効なローカルIPアドレスです"},
-		{"UDP addresses of other hosts", func(r *RegisterProxyRequest) {
-			r.UDPAddrs = []string{"198.51.100.7:9000", "192.168.0.11:9000", "127.0.0.1:0", "127.0.0.1"}
+		{"malformed UDP addresses", func(r *RegisterProxyRequest) {
+			r.UDPAddrs = []string{"127.0.0.1:0", "127.0.0.1", "127.0.0.1:65536", "[::1]:9000", "host:9000"}
 		}, "UDPアドレスが取得できていません"},
 	}
 	for _, h := range []struct {
@@ -175,8 +175,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 	far := newZproxyAPI(app)
 	for _, c := range []struct{ ip, userID, msg string }{
 		{"203.0.113.9", "_AUTO_", "ロビーにユーザが見つかりません"},
-		{"203.0.113.9", p0.userID, "ロビーにユーザが見つかりません"},
-		{"192.168.5.5", p0.userID, "ロビーにユーザが見つかりません"},
+		{"203.0.113.9", "NOUSER", "ロビーにユーザが見つかりません"},
 		{"2001:db8::1", "_AUTO_", "無効なグローバルIPアドレスです"},
 	} {
 		far.ip = c.ip
@@ -185,6 +184,17 @@ func TestZproxyAPIFlow(t *testing.T) {
 		if res := far.register(t, &req); res.Result || res.Message != c.msg {
 			t.Errorf("register %s from %s: %+v", c.userID, c.ip, res)
 		}
+	}
+	// A zproxy on another host than its user, behind a NAT whose UDP public IP is not its HTTP one.
+	far.ip = "203.0.113.9"
+	moved := good
+	moved.UDPAddrs = []string{"192.168.0.10:9000", "198.51.100.7:9000"}
+	if res := far.register(t, &moved); !res.Result || res.UserID != p0.userID {
+		t.Fatalf("register from another host: %+v", res)
+	}
+	res = api.register(t, &second)
+	if u := findUser(res.LobbyUsers, p0.userID); !res.Result || u == nil || !reflect.DeepEqual(u.UDPAddrs, []string{"198.51.100.7:9000"}) {
+		t.Errorf("zproxy on another host seen from the lobby host: %+v", res)
 	}
 
 	st := app.Status()
