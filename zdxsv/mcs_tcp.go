@@ -63,13 +63,9 @@ func (u *McsTCPPeer) Close() error {
 func (u *McsTCPPeer) Serve(mcs *Mcs) {
 	logger.Info("tcp serve start", zap.Any("addr", u.Address()))
 	defer logger.Info("tcp serve end", zap.Any("addr", u.Address()))
-	defer u.conn.Close()
 	data, _ := hex.DecodeString("280110310000000100ffffff")
 	u.AddSendData(data)
-	func() {
-		defer recoverPanic("battle tcp conn")
-		u.readLoop(mcs)
-	}()
+	u.readLoop(mcs)
 	if u.room != nil {
 		u.room.Leave(u)
 		u.room = nil

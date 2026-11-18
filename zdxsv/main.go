@@ -443,13 +443,6 @@ func setupLogger(o LogOptions) error {
 
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
 
-// recoverPanic, deferred directly, logs a panic and ends it there.
-func recoverPanic(where string) {
-	if r := recover(); r != nil {
-		logger.Error("panic recovered", zap.String("where", where), zap.Any("panic", r))
-	}
-}
-
 // accept returns the next connection on l. Errors other than a closed
 // listener (such as running out of file descriptors) are retried with backoff.
 func accept(l net.Listener, name string) (net.Conn, error) {

@@ -57,7 +57,6 @@ func (s *LbsServer) Serve(l net.Listener) error {
 
 // ServeConn serves one client connection until it closes.
 func (s *LbsServer) ServeConn(c net.Conn) {
-	defer recoverPanic("lobby conn")
 	conn := NewLbsConn(c)
 	conn.peer = s.pf.NewPeer(conn)
 	conn.serve()
@@ -121,7 +120,6 @@ func (c *LbsConn) Address() string {
 
 func (c *LbsConn) readLoop(ctx context.Context, cancel func()) {
 	defer cancel()
-	defer recoverPanic("lobby conn")
 
 	buf := make([]byte, 4096)
 	for {
@@ -154,7 +152,6 @@ func (c *LbsConn) readLoop(ctx context.Context, cancel func()) {
 
 func (c *LbsConn) writeLoop(ctx context.Context, cancel func()) {
 	defer cancel()
-	defer recoverPanic("lobby conn")
 
 	buf := make([]byte, 0, 128)
 	flush := func() {
@@ -199,7 +196,6 @@ func (c *LbsConn) Close() {
 
 func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 	defer cancel()
-	defer recoverPanic("lobby conn")
 
 	for {
 		select {

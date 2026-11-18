@@ -113,7 +113,6 @@ func (c *RouterConn) internalError(msg string, args ...interface{}) {
 
 func (c *RouterConn) proxy() {
 	defer c.Close()
-	defer recoverPanic("router conn")
 
 	if err := c.SetReadDeadline(time.Now().Add(c.router.helloTimeout())); err != nil {
 		c.internalError("Setting read deadline for ClientHello: %s", err)
