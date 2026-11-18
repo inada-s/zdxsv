@@ -22,8 +22,8 @@ type LbsConnPeer interface {
 }
 
 var (
-	lbsMaxConns      = 4096
-	lbsMaxConnsPerIP = 16
+	lbsMaxConns      = 8192
+	lbsMaxConnsPerIP = 32
 	lbsMaxOutbuf     = 1 << 20
 	lbsMsgBurst      = 64
 	lbsMsgInterval   = 50 * time.Millisecond
