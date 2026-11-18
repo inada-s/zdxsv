@@ -178,6 +178,9 @@ func (d *dnasData) tlsConfig(region string) (*tlsConfig, error) {
 	return &tlsConfig{certs: certs, key: key}, nil
 }
 
+// dnasMaxRequest bounds one request, header and body.
+const dnasMaxRequest = 64 << 10
+
 // DnasServer answers DNAS on the PS2's TLS dialect.
 type DnasServer struct {
 	data *dnasData
@@ -199,7 +202,11 @@ func NewDnasServer(data *dnasData, region string, login http.Handler) (*DnasServ
 }
 
 func (s *DnasServer) handleDNAS(w http.ResponseWriter, r *http.Request) {
-	q, _ := io.ReadAll(r.Body)
+	q, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
 	dir, base := path.Split(r.URL.Path)
 	gw := path.Base(dir)
 	var ans []byte
@@ -258,8 +265,10 @@ func (s *DnasServer) serveConn(c net.Conn) {
 // serveHTTP answers HTTP/1.x requests on c until it closes. Responses are
 // HTTP/1.0 with Content-Length.
 func (s *DnasServer) serveHTTP(c net.Conn) {
-	br := bufio.NewReader(c)
+	lr := &io.LimitedReader{R: c}
+	br := bufio.NewReader(lr)
 	for {
+		lr.N = dnasMaxRequest
 		c.SetReadDeadline(time.Now().Add(60 * time.Second))
 		req, err := http.ReadRequest(br)
 		if err != nil {
@@ -271,7 +280,7 @@ func (s *DnasServer) serveHTTP(c net.Conn) {
 		logger.Info("dnas https request", zap.Stringer("addr", c.RemoteAddr()), zap.String("method", req.Method), zap.Stringer("url", req.URL), zap.String("ua", req.UserAgent()))
 		rw := &respWriter{h: http.Header{}}
 		s.mux.ServeHTTP(rw, req)
-		if _, err := c.Write(rw.bytes()); err != nil || req.Close || req.ProtoMinor == 0 {
+		if _, err := c.Write(rw.bytes()); err != nil || req.Close || req.ProtoMinor == 0 || lr.N <= 0 {
 			return
 		}
 	}

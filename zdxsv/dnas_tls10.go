@@ -28,6 +28,8 @@ const (
 
 	suiteRC4MD5 = 0x0004
 	suiteRC4SHA = 0x0005
+
+	maxHandshakeMsg = 1 << 16
 )
 
 type tlsConfig struct {
@@ -148,6 +150,9 @@ func hsMsg(typ byte, body []byte) []byte {
 func (c *tlsConn) readHandshake(buf *[]byte) (byte, []byte, error) {
 	msgLen := func(b []byte) int { return 4 + (int(b[1])<<16 | int(b[2])<<8 | int(b[3])) }
 	for len(*buf) < 4 || len(*buf) < msgLen(*buf) {
+		if len(*buf) >= 4 && msgLen(*buf) > maxHandshakeMsg {
+			return 0, nil, fmt.Errorf("handshake message of %d bytes", msgLen(*buf))
+		}
 		typ, body, err := c.readRecord()
 		if err != nil {
 			return 0, nil, err
