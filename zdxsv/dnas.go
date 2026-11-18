@@ -231,7 +231,7 @@ func (s *DnasServer) ListenAndServe(addr string) error {
 
 func (s *DnasServer) Serve(ln net.Listener) error {
 	for {
-		c, err := ln.Accept()
+		c, err := accept(ln, "dnas")
 		if err != nil {
 			return err
 		}
