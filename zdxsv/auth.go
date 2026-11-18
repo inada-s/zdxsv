@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -41,11 +40,12 @@ import (
 )
 
 const (
-	flowTTL        = 10 * time.Minute
-	codeTTL        = 2 * time.Minute
-	carryTTL       = 3 * time.Minute
-	carryMaxMisses = 5
-	maxPending     = 10000
+	flowTTL         = 10 * time.Minute
+	codeTTL         = 2 * time.Minute
+	carryTTL        = 3 * time.Minute
+	carryMaxMisses  = 5
+	carryMissWindow = 10 * time.Minute
+	maxPending      = 10000
 )
 
 // Provider is an OAuth2 authorization code provider whose user endpoint answers {"id": ...}.
@@ -97,6 +97,11 @@ type issued struct {
 	expires   time.Time
 }
 
+type carryMiss struct {
+	n     int
+	until time.Time
+}
+
 type carryCode struct {
 	loginKey string
 	expires  time.Time
@@ -114,7 +119,7 @@ type AuthServer struct {
 	flows  map[string]*flow
 	codes  map[string]*issued
 	carry  map[string]*carryCode
-	misses map[string]int
+	misses map[string]*carryMiss
 }
 
 func (s *AuthServer) now() time.Time {
@@ -268,14 +273,6 @@ func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	tplStart.Execute(w, p)
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func (s *AuthServer) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
@@ -480,21 +477,19 @@ func (s *AuthServer) serveAccounts(w http.ResponseWriter, r *http.Request, op ac
 
 // carryAccount returns the carried account's login key, or "" after answering the error.
 func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token string) string {
-	ip := clientIP(r)
+	ip := requestIP(r)
 	code := strings.ToUpper(strings.TrimSpace(r.FormValue("code")))
+	now := s.now()
 	s.mu.Lock()
-	if s.misses[ip] >= carryMaxMisses {
+	if m := s.misses[ip]; m != nil && m.n >= carryMaxMisses && now.Before(m.until) {
 		s.mu.Unlock()
 		http.Error(w, "too many wrong codes", http.StatusTooManyRequests)
 		return ""
 	}
 	c := s.carry[code]
 	delete(s.carry, code)
-	if c == nil || s.now().After(c.expires) {
-		if s.misses == nil {
-			s.misses = map[string]int{}
-		}
-		s.misses[ip]++
+	if c == nil || now.After(c.expires) {
+		s.addMiss(ip, now)
 		s.mu.Unlock()
 		http.Error(w, "wrong or expired code", http.StatusBadRequest)
 		return ""
@@ -571,7 +566,7 @@ func (s *AuthServer) serveDevCarry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	a, err := s.Store.RegisterAccount(clientIP(r))
+	a, err := s.Store.RegisterAccount(requestIP(r))
 	if err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -693,3 +688,22 @@ var tplStart = template.Must(template.New("start").Parse(head +
 <p class="pp"><a href="{{.PrivacyURL}}">{{.Privacy}}</a></p></main></body></html>`))
 
 var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></main></body></html>`))
+
+// addMiss needs s.mu held.
+func (s *AuthServer) addMiss(ip string, now time.Time) {
+	if s.misses == nil {
+		s.misses = map[string]*carryMiss{}
+	}
+	for k, m := range s.misses {
+		if !now.Before(m.until) {
+			delete(s.misses, k)
+		}
+	}
+	m := s.misses[ip]
+	if m == nil {
+		m = &carryMiss{}
+		s.misses[ip] = m
+	}
+	m.n++
+	m.until = now.Add(carryMissWindow)
+}
