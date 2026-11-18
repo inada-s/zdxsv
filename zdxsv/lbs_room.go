@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 const (
 	RoomStateUnavailable = 0
@@ -35,6 +38,9 @@ func NewRoom(lobbyID, roomID uint16) *LbsRoom {
 }
 
 func (r *LbsRoom) Enter(u *LbsUser) {
+	if slices.ContainsFunc(r.Users, func(v *LbsUser) bool { return v.UserID == u.UserID }) {
+		return
+	}
 	if len(r.Users) == 0 {
 		r.Owner = u.UserID
 		r.Deadline = time.Now().Add(30 * time.Minute)
