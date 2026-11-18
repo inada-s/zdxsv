@@ -1079,13 +1079,21 @@ func (db SQLiteDB) RevokeIdentityTokens(token string) error {
 	if err != nil {
 		return err
 	}
-	if provider == "" {
-		return db.RevokeAuthToken(token)
+	if err := db.RevokeAuthToken(token); err != nil || provider == "" {
+		return err
 	}
-	_, err = db.Exec(`DELETE FROM auth_token WHERE token_hash = ? OR (provider = ? AND provider_user_id = ?)
-		OR login_key IN (SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ?)`,
-		hashAuthToken(token), provider, uid, provider, uid)
+	_, err = db.RevokeProviderTokens(provider, uid)
 	return err
+}
+
+func (db SQLiteDB) RevokeProviderTokens(provider, providerUserID string) (int64, error) {
+	r, err := db.Exec(`DELETE FROM auth_token WHERE (provider = ? AND provider_user_id = ?)
+		OR login_key IN (SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ?)`,
+		provider, providerUserID, provider, providerUserID)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
 }
 
 func (db SQLiteDB) pruneAuthTokens(now time.Time) error {

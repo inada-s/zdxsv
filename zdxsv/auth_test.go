@@ -280,6 +280,13 @@ func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
 	if n != 0 {
 		t.Fatal("tokens left for the identity", n)
 	}
+
+	if got, err := DefaultDB.RevokeProviderTokens("discord", "3333"); err != nil || got != 1 {
+		t.Fatal("revoke by identity", got, err)
+	}
+	if _, st := r.lbsLogin(other); st != http.StatusForbidden {
+		t.Fatal("token survives revoke by identity", st)
+	}
 }
 
 func (r *authRig) carry(token, code string) (accountList, int) {

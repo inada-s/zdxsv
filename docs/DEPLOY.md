@@ -111,6 +111,7 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
 zdxsv initdb      # first deploy only: wipes the tables
 zdxsv             # the server
 zdxsv migratedb   # server stopped, when a release changes the schema; exits non-zero on failure
+zdxsv revoketokens discord <user id>   # signs out every emulator of that Discord user; prints the count
 ```
 
 ## Logging
