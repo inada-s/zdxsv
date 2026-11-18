@@ -1312,8 +1312,13 @@ func lobbyHasHack(s *MLobbySetting, hack string) bool {
 }
 
 func platformHasWideScreen(platform string) bool {
-	for i := 0; i < LobbyCount; i++ {
-		if lobbyHasHack(lobbySetting(platform, uint16(i)), HackWideScreen) {
+	settings, err := DefaultDB.GetLobbySettings()
+	if err != nil {
+		logger.Warn("GetLobbySettings failure", zap.Error(err))
+		return false
+	}
+	for _, s := range settings {
+		if s.Platform == platform && 0 <= s.No && s.No < LobbyCount && lobbyHasHack(s, HackWideScreen) {
 			return true
 		}
 	}
