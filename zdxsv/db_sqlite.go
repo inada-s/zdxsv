@@ -172,6 +172,7 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
 CREATE INDEX IF NOT EXISTS ACCOUNT_LAST_LOGIN_MACHINE_ID ON account(last_login_machine_id);
+CREATE INDEX IF NOT EXISTS ACCOUNT_CREATED_IP ON account(created_ip);
 CREATE INDEX IF NOT EXISTS AUTH_IDENTITY_PROVIDER ON auth_identity(provider, provider_user_id);
 CREATE INDEX IF NOT EXISTS AUTH_TOKEN_LOGIN_KEY ON auth_token(login_key);
 `
@@ -287,13 +288,17 @@ func tableColumns(tx *sql.Tx, table string) ([]string, error) {
 func (db SQLiteDB) RegisterAccount(ip string) (*DBAccount, error) {
 	key := GenLoginKey()
 	now := time.Now()
-	_, err := db.Exec(`
+	res, err := db.Exec(`
 INSERT INTO account
 	(login_key, created_ip, created, last_login, system)
-VALUES
-	(?, ?, ?, ?, ?)`, key, ip, now, now, 0)
+SELECT ?, ?, ?, ?, ?
+WHERE (SELECT COUNT(*) FROM account WHERE created_ip = ? AND created > ?) < ?`,
+		key, ip, now, now, 0, ip, now.Add(-AccountsPerIPWindow), AccountsPerIP)
 	if err != nil {
 		return nil, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return nil, ErrTooManyAccounts
 	}
 	a := &DBAccount{
 		LoginKey:  key,

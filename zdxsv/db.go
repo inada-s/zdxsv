@@ -14,6 +14,13 @@ const MaxUsersPerAccount = 3
 
 var ErrUserLimit = errors.New("account already has the maximum number of users")
 
+var ErrTooManyAccounts = errors.New("too many accounts made from this IP")
+
+const (
+	AccountsPerIP       = 5
+	AccountsPerIPWindow = 24 * time.Hour
+)
+
 // randomString draws from crypto/rand: login keys and session ids are credentials.
 func randomString(length int, source string) string {
 	b := make([]byte, length)
@@ -248,6 +255,7 @@ type RankingRecord struct {
 type DB interface {
 	Init() error
 	Migrate() error
+	// RegisterAccount makes an account; ErrTooManyAccounts once ip made AccountsPerIP within AccountsPerIPWindow.
 	RegisterAccount(ip string) (*DBAccount, error)
 
 	GetAccountByLoginKey(key string) (*DBAccount, error)
