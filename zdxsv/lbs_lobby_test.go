@@ -343,3 +343,101 @@ func TestLobbyTeamShuffle(t *testing.T) {
 		}
 	}
 }
+
+func TestLobbyMoveLeavesTheOldLobby(t *testing.T) {
+	conn := UseTestDB(t)
+	addr, app := startLobbyApp(t, NewMcs())
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start) VALUES ('emu', 11, '1v1')`); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	enter := func(lobbyID uint16, side byte) (*testClient, string) {
+		c := dialLobby(t, addr)
+		m := NewClientNotice(0x9950)
+		m.Writer().Write([]byte("emulator=pcsx2\nsync=00000000000000aa\n"))
+		c.send(m)
+		n++
+		id, _, _ := c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", n))
+		c.ask(0x6305, u16(lobbyID))
+		c.ask(0x640E, []byte{side})
+		return c, id
+	}
+
+	moved, id := enter(11, EntryAeug)
+	moved.ask(0x6305, u16(12))
+	moved.conn.Close()
+	waitFor(t, "the lobby to drop "+id, func() (gone bool) {
+		app.Locked(func(a *Lbs) { _, ok := a.users[id]; gone = !ok })
+		return
+	})
+
+	a, _ := enter(11, EntryTitans)
+	b, _ := enter(11, EntryAeug)
+	a.expect(0x6910, CategoryNotice)
+	b.expect(0x6910, CategoryNotice)
+}
+
+func TestUserInOneLobbyAndRoom(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+	const lobbyID = 4
+	var cs []*testClient
+	for i := range 2 {
+		c := dialLobby(t, addr)
+		c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
+		c.ask(0x6305, u16(lobbyID))
+		cs = append(cs, c)
+	}
+	c, watcher := cs[0], cs[1]
+	counts := func(command uint16) [2]uint16 {
+		r := watcher.ask(command, u16(lobbyID)).Reader()
+		r.Read16()
+		return [2]uint16{r.Read16(), r.Read16()}
+	}
+	createRoom := func(c *testClient, roomID uint16) {
+		if a := c.ask(0x6407, u16(roomID)); a.Status != StatusSuccess {
+			t.Fatalf("RequestCreateRoom %d status %x", roomID, a.Status)
+		}
+		q := NewClientQuestion(0x6609)
+		q.Writer().Write(encryptString(q.Seq, "room"))
+		c.send(q)
+		c.expect(0x6609, CategoryAnswer)
+		c.ask(0x660C, nil)
+	}
+
+	c.ask(0x640E, []byte{EntryAeug})
+	c.ask(0x640E, []byte{EntryAeug})
+	if got := counts(0x640F); got != [2]uint16{1, 0} {
+		t.Errorf("entry count after entering twice %v, want [1 0]", got)
+	}
+
+	createRoom(c, 1)
+	createRoom(c, 2)
+	if s := roomStatus(watcher, 1); s != RoomStateEmpty {
+		t.Errorf("room 1 status %d after its owner created room 2", s)
+	}
+	roomUsers := func(roomID uint16) uint16 {
+		r := watcher.ask(0x6403, u16(roomID)).Reader()
+		r.Read16()
+		return r.Read16()
+	}
+	createRoom(watcher, 3)
+	c.ask(0x6406, append(u16(3), 0, 0, 0, 0))
+	if s := roomStatus(watcher, 2); s != RoomStateEmpty {
+		t.Errorf("room 2 status %d after its owner entered room 3", s)
+	}
+	if n := roomUsers(3); n != 2 {
+		t.Errorf("room 3 users %d, want 2", n)
+	}
+
+	c.ask(0x6305, u16(lobbyID+1))
+	if n := roomUsers(3); n != 1 {
+		t.Errorf("room 3 users %d after a member entered another lobby, want 1", n)
+	}
+	if got := counts(0x6303); got[0] != 1 {
+		t.Errorf("lobby user count %d after a user entered another lobby, want 1", got[0])
+	}
+	if got := counts(0x640F); got != [2]uint16{0, 0} {
+		t.Errorf("entry count %v after the entered user went to another lobby", got)
+	}
+}

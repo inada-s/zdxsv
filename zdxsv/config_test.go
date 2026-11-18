@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
+
+	stackdriver "github.com/tommy351/zap-stackdriver"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // unsetZdxsvEnv clears every ZDXSV_ variable for the test and restores it after.
@@ -97,5 +102,39 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	}
 	if Conf != want {
 		t.Errorf("Conf = %+v\nwant   %+v", Conf, want)
+	}
+}
+
+func TestLoadConfigLogMasksSecrets(t *testing.T) {
+	encoders := map[string]zapcore.Encoder{
+		"console":     zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
+		"stackdriver": zapcore.NewJSONEncoder(stackdriver.EncoderConfig),
+	}
+	for name, enc := range encoders {
+		t.Run(name, func(t *testing.T) {
+			unsetZdxsvEnv(t)
+			t.Cleanup(func() { Conf = Config{} })
+			t.Setenv("ZDXSV_RELAY_SECRET", "relay-dummy-value")
+			t.Setenv("ZDXSV_DISCORD_CLIENT_SECRET", "discord-dummy-value")
+			var buf bytes.Buffer
+			saved := logger
+			logger = zap.New(zapcore.NewCore(enc, zapcore.AddSync(&buf), zap.InfoLevel))
+			t.Cleanup(func() { logger = saved })
+
+			LoadConfig()
+
+			out := buf.String()
+			if !strings.Contains(out, "config") {
+				t.Fatalf("no config line: %q", out)
+			}
+			for _, s := range []string{"relay-dummy-value", "discord-dummy-value"} {
+				if strings.Contains(out, s) {
+					t.Errorf("log contains %q: %s", s, out)
+				}
+			}
+			if Conf.Lobby.DiscordClientSecret != "discord-dummy-value" || Conf.Lobby.RelaySecret != "relay-dummy-value" {
+				t.Errorf("secrets not loaded: %+v", Conf.Lobby)
+			}
+		})
 	}
 }

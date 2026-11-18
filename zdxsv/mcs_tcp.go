@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"errors"
 	"io"
 	"net"
 	"sync"
@@ -32,12 +31,9 @@ func (s *McsTCPServer) ListenAndServe(addr string) error {
 // Serve accepts connections on l until l is closed.
 func (s *McsTCPServer) Serve(l net.Listener) error {
 	for {
-		conn, err := l.Accept()
-		if errors.Is(err, net.ErrClosed) {
-			return err
-		}
+		conn, err := accept(l, "battle tcp")
 		if err != nil {
-			continue
+			return err
 		}
 		peer := NewTCPPeer(conn)
 		go peer.Serve(s.mcs)

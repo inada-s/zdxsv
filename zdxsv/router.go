@@ -48,9 +48,9 @@ func (r *Router) ListenAndServe(addr string) error {
 
 func (r *Router) Serve(l net.Listener) error {
 	for {
-		c, err := l.Accept()
+		c, err := accept(l, "router")
 		if err != nil {
-			return fmt.Errorf("accept new conn: %s", err)
+			return fmt.Errorf("accept new conn: %w", err)
 		}
 		conn := &RouterConn{Conn: c, router: r}
 		go conn.proxy()

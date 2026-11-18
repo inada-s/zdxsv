@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand/v2"
+	"slices"
 )
 
 const roomCount = 5
@@ -58,14 +59,8 @@ func (l *LbsLobby) Exit(userID string) {
 
 func (l *LbsLobby) Entry(u *LbsUser, side byte) {
 	u.Entry = side
-	if side == EntryNone {
-		for i, id := range l.EntryUsers {
-			if id == u.UserID {
-				l.EntryUsers = append(l.EntryUsers[:i], l.EntryUsers[i+1:]...)
-				break
-			}
-		}
-	} else {
+	l.EntryUsers = slices.DeleteFunc(l.EntryUsers, func(id string) bool { return id == u.UserID })
+	if side != EntryNone {
 		l.EntryUsers = append(l.EntryUsers, u.UserID)
 	}
 }

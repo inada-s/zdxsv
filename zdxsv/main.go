@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -448,3 +449,18 @@ const (
 )
 
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
+
+// accept returns the next connection on l. Errors other than a closed
+// listener (such as running out of file descriptors) are retried with backoff.
+func accept(l net.Listener, name string) (net.Conn, error) {
+	var delay time.Duration
+	for {
+		c, err := l.Accept()
+		if err == nil || errors.Is(err, net.ErrClosed) {
+			return c, err
+		}
+		delay = min(max(2*delay, 5*time.Millisecond), time.Second)
+		logger.Error("accept failed", zap.String("name", name), zap.Error(err), zap.Duration("retry_in", delay))
+		time.Sleep(delay)
+	}
+}

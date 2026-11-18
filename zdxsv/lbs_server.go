@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"sync"
 	"time"
@@ -47,13 +46,9 @@ func (s *LbsServer) ListenAndServe(addr string) error {
 // Serve accepts connections on l until l is closed.
 func (s *LbsServer) Serve(l net.Listener) error {
 	for {
-		tcpConn, err := l.Accept()
-		if errors.Is(err, net.ErrClosed) {
-			return err
-		}
+		tcpConn, err := accept(l, "lobby")
 		if err != nil {
-			logger.Error("accept failed", zap.Error(err))
-			continue
+			return err
 		}
 		logger.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
 		go s.ServeConn(tcpConn)

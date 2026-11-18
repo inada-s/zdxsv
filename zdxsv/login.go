@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -179,7 +178,9 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	logger.Info("login form", zap.Any("form", logForm(r.Form)))
 	loginKey := r.FormValue("login_key")
 
-	if loginKey == "" {
+	// An account made for a sign-in identity logs in by token only: no client ever holds its key.
+	identityOnly, err := DefaultDB.AccountMadeForIdentity(loginKey)
+	if loginKey == "" || identityOnly || err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, messageLoginFail)
@@ -259,7 +260,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := requestIP(r)
 		a, e := DefaultDB.AddTokenAccount(token, ip)
 		if errors.Is(e, ErrIdentityFull) {
 			http.Error(w, "too many accounts", http.StatusConflict)
@@ -312,7 +313,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
-	a, err := DefaultDB.RegisterAccount(r.RemoteAddr)
+	a, err := DefaultDB.RegisterAccount(requestIP(r))
 	if err != nil {
 		logger.Error("login page failed", zap.Error(err))
 		w.Header().Set("Content-Type", "text/html; charset=cp932")

@@ -562,6 +562,7 @@ func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
+		a.OnExitLobby(p)
 		p.LbsUser.Sync = ""
 		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
 			p.LbsUser.Sync = s
@@ -628,9 +629,20 @@ func (a *Lbs) OnGetLobbyEntryUserCount(p *LbsPeer, lobbyID uint16) (uint16, uint
 	return l.GetEntryUserCount()
 }
 
+// dropGoneLobbyUsers removes lobby members whose logged-in peer is gone or elsewhere:
+// one left behind would make every battle start of the lobby fail.
+func (a *Lbs) dropGoneLobbyUsers(l *LbsLobby) {
+	for id, u := range l.Users {
+		if p, ok := a.users[id]; !ok || p.Lobby != l || &p.LbsUser != u {
+			l.Exit(id)
+		}
+	}
+}
+
 func (a *Lbs) OnEntryLobbyBattle(p *LbsPeer, side byte) {
 	if p.Lobby != nil {
 		lobby := p.Lobby
+		a.dropGoneLobbyUsers(lobby)
 		lobby.Entry(&p.LbsUser, side)
 
 		setting := lobbySetting(lobby.Platform, lobby.ID)
@@ -908,6 +920,9 @@ func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
 	}
 	ok = r.Status == RoomStateEmpty
 	if ok {
+		if p.Room != r {
+			a.OnExitRoom(p)
+		}
 		r.Status = RoomStatePrepare
 		p.Room = r
 
@@ -1081,6 +1096,9 @@ func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID uint16) bool {
 	}
 	if r.Status == RoomStateFull {
 		return false
+	}
+	if p.Room != r {
+		a.OnExitRoom(p)
 	}
 
 	for _, u := range r.Users {
@@ -1312,8 +1330,13 @@ func lobbyHasHack(s *MLobbySetting, hack string) bool {
 }
 
 func platformHasWideScreen(platform string) bool {
-	for i := 0; i < LobbyCount; i++ {
-		if lobbyHasHack(lobbySetting(platform, uint16(i)), HackWideScreen) {
+	settings, err := DefaultDB.GetLobbySettings()
+	if err != nil {
+		logger.Warn("GetLobbySettings failure", zap.Error(err))
+		return false
+	}
+	for _, s := range settings {
+		if s.Platform == platform && 0 <= s.No && s.No < LobbyCount && lobbyHasHack(s, HackWideScreen) {
 			return true
 		}
 	}
