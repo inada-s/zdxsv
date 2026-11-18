@@ -73,7 +73,8 @@ Optional:
 With `ZDXSV_LOBBY_RELAY_REGIONS` set (comma separated regions, e.g. `asia-east2,us-west2`), the lobby
 starts a relay VM in each of them while players from two region groups are online, and stops it once
 unneeded for 30 minutes. One VM per region, named `zdxsv-relay-<region>-latest`: stopped VMs are
-started again, unused ones deleted after 5 days. A VM downloads the latest release, runs `zdxsv relay`
+started again, unused ones deleted after 5 days. A VM downloads the lobby's own release (the lobby must run an unmodified release binary: the VM
+runs `zdxsv` only if its SHA-256 matches the lobby's executable), runs `zdxsv relay`
 on UDP 8223, and registers at `ZDXSV_LOBBY_PUBLIC_ADDR` with `ZDXSV_RELAY_SECRET`.
 
 ```sh
@@ -151,6 +152,12 @@ On the server, stop the service first. `zdxsv dnascheck <host>:443` checks DNAS 
 zproxy (`scripts/zproxy-release-needed.sh`). zproxy is its own Go module (`zproxy/go.mod`) and
 imports no server package. The server tarball's name must never end in
 `<os>_<arch>`: zproxy's self-update would take it (`zproxy/release_test.go`).
+
+zproxy applies a self-update only with a valid `<archive>.sig`, made at release by
+`scripts/releasesign` with the repository secret `ZDXSV_RELEASE_SIGNING_KEY` against
+`zproxy/release_signing.pub`. One key: `go run ./scripts/releasesign genkey <file>` writes a new
+pair; the secret takes the file, commit the public key. A new key only reaches players through a
+zproxy release signed with the old one.
 
 ## Clients
 

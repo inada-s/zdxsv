@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -20,8 +24,9 @@ import (
 // A VM that stayed stopped for gceUnusedVMLifetime is deleted.
 //
 // The VMs are e2-micro in the dual-stack gceRelayNetwork, so they get an external IPv6 address,
-// run as zdxsv-service@<project>.iam.gserviceaccount.com, download the latest zdxsv release and
-// connect back to ZDXSV_LOBBY_PUBLIC_ADDR with ZDXSV_RELAY_SECRET.
+// run as zdxsv-service@<project>.iam.gserviceaccount.com, download the lobby's own release,
+// run its zdxsv only if it hashes like the lobby's executable, and connect back to
+// ZDXSV_LOBBY_PUBLIC_ADDR with ZDXSV_RELAY_SECRET.
 
 const (
 	gceVersion          = "latest"
@@ -41,6 +46,8 @@ var (
 	gceServiceMu     sync.Mutex
 	gceServiceCached gceAPI
 	relaySecretRe    = regexp.MustCompile(`^[A-Za-z0-9_-]{16,}$`)
+	relayTagRe       = regexp.MustCompile(`^v[0-9][0-9A-Za-z.+-]*$`)
+	sha256HexRe      = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 // gcpRegionZones: the zones a VM may be created in, tried in order.
@@ -199,6 +206,8 @@ func GoGceAllocRelay(region string) bool {
 			Region:          region,
 			LobbyPublicAddr: Conf.Lobby.PublicAddr,
 			RelaySecret:     string(Conf.Lobby.RelaySecret),
+			Tag:             "v" + releaseVersion,
+			BinarySHA256:    selfSHA256(),
 		})
 		if err != nil {
 			logger.Error("gce alloc failed", zap.String("region", region), zap.Error(err))
@@ -215,7 +224,26 @@ type gceAllocParams struct {
 	Region          string
 	LobbyPublicAddr string
 	RelaySecret     string
+	Tag             string
+	BinarySHA256    string
 }
+
+var selfSHA256 = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(exe)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+})
 
 func gceVMName(region string) string {
 	return gceRelayNamePrefix + region + "-" + strings.ReplaceAll(gceVersion, ".", "-")
@@ -235,6 +263,9 @@ func gceAlloc(ctx context.Context, api gceAPI, p gceAllocParams) (*compute.Insta
 	}
 	if p.LobbyPublicAddr == "" {
 		return nil, errors.New("ZDXSV_LOBBY_PUBLIC_ADDR is empty")
+	}
+	if !relayTagRe.MatchString(p.Tag) || !sha256HexRe.MatchString(p.BinarySHA256) {
+		return nil, fmt.Errorf("relays run the lobby's own release: not one (tag %q, sha256 %q)", p.Tag, p.BinarySHA256)
 	}
 
 	gceRemoveUnusedVMs(ctx, api)
@@ -365,7 +396,8 @@ func boolPtr(b bool) *bool    { return &b }
 
 func gceStartupScript(p gceAllocParams) string {
 	return strings.NewReplacer(
-		"__VERSION__", gceVersion,
+		"__TAG__", p.Tag,
+		"__BIN_SHA256__", p.BinarySHA256,
 		"__LOBBY_PUBLIC_ADDR__", p.LobbyPublicAddr,
 		"__RELAY_SECRET__", p.RelaySecret,
 	).Replace(gceRelayStartupScript)
@@ -386,14 +418,8 @@ function finish {
 trap finish EXIT
 
 readonly REPO=inada-s/zdxsv
-readonly VERSION=__VERSION__
+readonly TAG_NAME=__TAG__
 curl=(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --max-time 120)
-
-if [[ -z $VERSION || $VERSION == "latest" ]]; then
-  readonly TAG_NAME=$("${curl[@]}" https://api.github.com/repos/$REPO/releases/latest | sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p')
-else
-  readonly TAG_NAME=$VERSION
-fi
 readonly ASSET="zdxsv-server_${TAG_NAME#v}_linux-x86_64.tar.gz"
 readonly URL="https://github.com/$REPO/releases/download/$TAG_NAME"
 
@@ -407,6 +433,7 @@ if [[ ! -x $TAG_NAME/zdxsv ]]; then
     tar --no-same-owner -xzf "$ASSET" && rm "$ASSET"
   popd
 fi
+echo "__BIN_SHA256__  $TAG_NAME/zdxsv" | sha256sum -c -
 
 readonly METADATA=http://metadata.google.internal/computeMetadata/v1/instance
 readonly ZONE=$(basename $(curl -s -H "Metadata-Flavor: Google" $METADATA/zone))

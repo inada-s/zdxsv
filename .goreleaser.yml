@@ -68,6 +68,16 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+# zproxy applies a self-update only with a valid <archive>.sig (zproxy/update.go).
+signs:
+  - id: zproxy
+    ids:
+      - zproxy
+    artifacts: archive
+    signature: "${artifact}.sig"
+    cmd: go
+    args: ["run", "./scripts/releasesign", "sign", "${artifact}", "${signature}"]
+
 release:
   # A tag like v1.2.0-rc1 becomes a prerelease: zproxy's self-update and GitHub's
   # "latest release" both ignore those, so it is a safe end-to-end test of this pipeline.
