@@ -275,7 +275,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			logger.Error("UDPStun read failed", zap.Error(err))
+			floodLog.Error("UDPStun read failed", zap.Error(err))
 			if ne, ok := err.(net.Error); ok && !ne.Timeout() && !ne.Temporary() {
 				return
 			}
@@ -311,7 +311,7 @@ const (
 func udpStunAnswer(b []byte, addr *net.UDPAddr) ([]byte, bool) {
 	var req StunPacket
 	if err := json.Unmarshal(b, &req); err != nil || req.Type != StunPing {
-		logger.Warn("UDPStun unexpected packet", zap.Int("bytes", len(b)), zap.ByteString("head", logHead(b)), zap.Error(err))
+		floodLog.Warn("UDPStun unexpected packet", zap.Int("bytes", len(b)), zap.ByteString("head", logHead(b)), zap.Error(err))
 		return nil, false
 	}
 	data, err := json.Marshal(StunPacket{Type: StunPong, Timestamp: req.Timestamp, UserID: "SERVER", PublicAddr: addr.String()})

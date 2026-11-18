@@ -72,7 +72,8 @@ func (m *LbsMessage) String() string {
 
 	fmt.Fprintf(b, " ID:0x%X", m.Command)
 	fmt.Fprintf(b, " Seq:%v", m.Seq)
-	if m.hidesBody() {
+	if m.Direction == ClientToServer && (m.Command == 0x6406 || m.Command == 0x660A) {
+		// carries a room password
 		fmt.Fprintf(b, " Body(%d bytes): hidden\n", len(m.Body))
 		return b.String()
 	}
@@ -233,11 +234,11 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 	chksum := m.Read16()
 	n, err := m.r.Read(buf)
 	if err != nil {
-		logger.Error("read encstr failed", zap.Error(err))
+		floodLog.Error("read encstr failed", zap.Error(err))
 		return ""
 	}
 	if n != int(size-2) {
-		logger.Error("read encstr failed: mismatch read size")
+		floodLog.Error("read encstr failed: mismatch read size")
 		return ""
 	}
 	sum := uint16(0)
@@ -250,13 +251,13 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		sum += uint16(buf[i])
 	}
 	if sum != chksum {
-		logger.Error("decrypt failed: mismatch checksum")
+		floodLog.Error("decrypt failed: mismatch checksum")
 		return ""
 	}
 
 	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
-		logger.Error("decode encstr failed", zap.Error(err))
+		floodLog.Error("decode encstr failed", zap.Error(err))
 	}
 	return string(bytes.Trim(ret, "\x00"))
 }
@@ -585,19 +586,4 @@ var symbolList = []symbol{
 	{0xE5, 0x01, 0x02, 0x630A, 0x0034cbd0, "_cnet_RecvFromLbs_AnswerLobbyMember"},
 	{0xE6, 0x01, 0x10, 0x6410, 0x0034cd70, "_cnet_RecvFromLbs_NoticeLobbyLeaver"},
 	{0xE7, 0x01, 0x10, 0x6411, 0x0034cd80, "_cnet_RecvFromLbs_NoticeLobbyCommer"},
-}
-
-// hidesBody tells the messages whose body carries a room password, the login key,
-// chat or mail.
-func (m *LbsMessage) hidesBody() bool {
-	switch m.Direction {
-	case ClientToServer:
-		switch m.Command {
-		case 0x6406, 0x660A, 0x6101, 0x6701, 0x6704:
-			return true
-		}
-	case ServerToClient:
-		return m.Command == 0x6702
-	}
-	return false
 }

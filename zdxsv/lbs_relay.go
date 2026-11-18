@@ -512,12 +512,12 @@ func sendRelayControl(p *LbsPeer, ctl RelayControl) {
 func (a *Lbs) OnRelayStatus(p *LbsPeer, body []byte) {
 	var st RelayStatus
 	if err := json.Unmarshal(body, &st); err != nil {
-		logger.Warn("invalid relay status", zap.Any("addr", p.conn.Address()), zap.Error(err))
+		floodLog.Warn("invalid relay status", zap.Any("addr", p.conn.Address()), zap.Error(err))
 		return
 	}
 	secret := string(Conf.Lobby.RelaySecret)
 	if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
-		logger.Warn("relay status with a wrong secret", zap.Any("addr", p.conn.Address()), zap.String("public", st.PublicAddr))
+		floodLog.Warn("relay status with a wrong secret", zap.Any("addr", p.conn.Address()), zap.String("public", st.PublicAddr))
 		return
 	}
 	r := a.relayPeers[p]

@@ -100,7 +100,7 @@ func (l *tlsListener) run(cfg *tls.Config) {
 				return
 			default:
 			}
-			logger.Error("tls accept failed", zap.Error(err))
+			floodLog.Error("tls accept failed", zap.Error(err))
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}

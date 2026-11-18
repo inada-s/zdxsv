@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -432,8 +433,8 @@ func setupLogger(o LogOptions) error {
 	if err != nil {
 		return err
 	}
-	core := zapcore.NewSamplerWithOptions(zapcore.NewCore(enc, sink, level), time.Second, logSampleFirst, logSampleThereafter)
-	l := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zap.DPanicLevel), zap.ErrorOutput(zapcore.Lock(os.Stderr)))
+	core := zapcore.NewCore(enc, sink, level)
+	l := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel), zap.ErrorOutput(zapcore.Lock(os.Stderr)))
 	if len(o.Fields) != 0 {
 		l = l.With(o.Fields...)
 	}
@@ -441,14 +442,66 @@ func setupLogger(o LogOptions) error {
 	return nil
 }
 
-// Per message and level each second: the first logSampleFirst lines, then every
-// logSampleThereafter-th, so junk packets from the network cannot flood the log.
-const (
-	logSampleFirst      = 20
-	logSampleThereafter = 1000
-)
-
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
+
+// floodLog is for log sites a remote peer can hit at line rate: each message
+// gets at most floodLogPerSecond lines a second; the next written line carries
+// how many were dropped.
+var floodLog = &logLimiter{counts: map[string]*logCount{}}
+
+const floodLogPerSecond = 10
+
+type logLimiter struct {
+	mu     sync.Mutex
+	counts map[string]*logCount
+}
+
+type logCount struct {
+	sec     int64
+	n       int
+	dropped int
+}
+
+func (l *logLimiter) Error(msg string, fields ...zap.Field) {
+	l.log(zapcore.ErrorLevel, msg, fields)
+}
+
+func (l *logLimiter) Warn(msg string, fields ...zap.Field) {
+	l.log(zapcore.WarnLevel, msg, fields)
+}
+
+func (l *logLimiter) log(lvl zapcore.Level, msg string, fields []zap.Field) {
+	dropped, ok := l.take(msg, time.Now().Unix())
+	if !ok {
+		return
+	}
+	if dropped > 0 {
+		fields = append(fields, zap.Int("dropped", dropped))
+	}
+	if ce := logger.WithOptions(zap.AddCallerSkip(2)).Check(lvl, msg); ce != nil {
+		ce.Write(fields...)
+	}
+}
+
+func (l *logLimiter) take(msg string, sec int64) (dropped int, ok bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	c := l.counts[msg]
+	if c == nil {
+		c = &logCount{}
+		l.counts[msg] = c
+	}
+	if c.sec != sec {
+		c.sec, c.n = sec, 0
+	}
+	if c.n >= floodLogPerSecond {
+		c.dropped++
+		return 0, false
+	}
+	c.n++
+	dropped, c.dropped = c.dropped, 0
+	return dropped, true
+}
 
 // accept returns the next connection on l. Errors other than a closed
 // listener (such as running out of file descriptors) are retried with backoff.

@@ -57,7 +57,7 @@ func (a *Lbs) removeUser(p *LbsPeer) {
 func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 	accountKey, ok := Sessions.Use(sessionID, loginKey)
 	if !ok {
-		logger.Error("no login session", zap.Any("session_id", sessionID))
+		floodLog.Error("no login session", zap.Any("session_id", sessionID))
 		return
 	}
 	ac, err := DefaultDB.GetAccountByLoginKey(accountKey)
@@ -96,7 +96,7 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 
 func (a *Lbs) OnFirstData(p *LbsPeer) {
 	if p.LoginKey == "" {
-		logger.Error("loginKey not set")
+		floodLog.Error("loginKey not set")
 		return
 	}
 	battle, ok := a.battles[p.SessionID]
@@ -174,7 +174,7 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 		p.Name = name
 		p.SessionID = sessionID
 	} else {
-		logger.Error("undefined user id", zap.Any("user_id", userID), zap.Any("name", name), zap.Any("session_id", sessionID))
+		floodLog.Error("undefined user id", zap.Any("user_id", userID), zap.Any("name", name), zap.Any("session_id", sessionID))
 		return false
 	}
 
@@ -551,7 +551,7 @@ func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 
 func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
-		logger.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
+		floodLog.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
 		return
 	}
 	p.PlatformInfo = info
@@ -963,7 +963,7 @@ func (a *Lbs) OnGetRuleDefaultIndex(p *LbsPeer, roomID uint16, ruleID byte) byte
 	}
 	room, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		logger.Error("room not found")
+		floodLog.Error("room not found")
 		return 0
 	}
 	return room.Rule.Get(ruleID)
@@ -1091,7 +1091,7 @@ func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID uint16) bool {
 	}
 	r, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		logger.Error("not found")
+		floodLog.Error("not found")
 		return false
 	}
 	if r.Status == RoomStateFull {

@@ -38,7 +38,7 @@ func (s *McsUDPServer) readLoop() error {
 			return err
 		}
 		if err != nil {
-			logger.Error("udp read failed", zap.Error(err))
+			floodLog.Error("udp read failed", zap.Error(err))
 			continue
 		}
 		if n == 0 {
@@ -52,7 +52,7 @@ func (s *McsUDPServer) readLoop() error {
 
 		pkt, err := ParsePacket(buf[:n])
 		if err != nil {
-			logger.Error("bad udp packet", zap.Any("addr", key), zap.Error(err), zap.Int("bytes", n), zap.Binary("head", logHead(buf[:n])))
+			floodLog.Error("bad udp packet", zap.Any("addr", key), zap.Error(err), zap.Int("bytes", n), zap.Binary("head", logHead(buf[:n])))
 			continue
 		}
 
@@ -84,12 +84,12 @@ func (s *McsUDPServer) readLoop() error {
 			s.conn.WriteToUDP(AppendHelloAnswer(nil, pkt.SessionID, valid), addr)
 		case KindBattle:
 			if !found {
-				logger.Error("battle data received but peer not found", zap.Any("addr", key))
+				floodLog.Error("battle data received but peer not found", zap.Any("addr", key))
 				continue
 			}
 			peer.OnReceive(pkt)
 		default:
-			logger.Error("received unexpected packet kind", zap.Any("addr", key), zap.Uint8("kind", pkt.Kind))
+			floodLog.Error("received unexpected packet kind", zap.Any("addr", key), zap.Uint8("kind", pkt.Kind))
 		}
 	}
 }
@@ -197,21 +197,21 @@ func (u *McsUDPPeer) Serve(mcs *Mcs) {
 			for _, msg := range u.reading2 {
 				if u.room == nil {
 					if len(msg.Body) != 22 {
-						logger.Error("unexpected length", zap.Any("msg", msg))
+						floodLog.Error("unexpected length", zap.Any("msg", msg))
 						u.Close()
 						break
 					}
 					value := string(msg.Body[12:22])
 					sessionID, err := ParseSessionID(value)
 					if err != nil {
-						logger.Error("udp session id", zap.Error(err))
+						floodLog.Error("udp session id", zap.Error(err))
 						u.Close()
 						break
 					}
 					logger.Info("udp session id", zap.Any("session_id", sessionID))
 					room := mcs.Join(u, sessionID)
 					if room == nil {
-						logger.Error("failed to join room")
+						floodLog.Error("failed to join room")
 						u.Close()
 						break
 					}
