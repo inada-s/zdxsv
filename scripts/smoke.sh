@@ -49,7 +49,7 @@ dns_addr=${ZDXSV_DNS_ADDR:-:53}
 dns_port=${dns_addr##*:}
 printf 'x%.0s' $(seq 1 4096) > smoke.db
 check "migratedb fails on a broken database" sh -c "! \"$bin\" -profile=0 migratedb"
-rm -f smoke.db
+rm -f smoke.db smoke.db-wal smoke.db-shm
 "$bin" initdb > /dev/null 2>&1 || exit 1
 check "migratedb" "$bin" -profile=0 migratedb
 "$bin" > smoke.log 2>&1 &

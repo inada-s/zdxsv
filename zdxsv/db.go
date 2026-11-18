@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -42,8 +43,17 @@ func GenSessionID() string {
 	return randomString(8, "123456789")
 }
 
+var (
+	battleCodeMu   sync.Mutex
+	lastBattleCode int64
+)
+
 func GenBattleCode() string {
-	return fmt.Sprintf("%013d", time.Now().UnixNano()/1000000)
+	battleCodeMu.Lock()
+	defer battleCodeMu.Unlock()
+	ms := max(time.Now().UnixMilli(), lastBattleCode+1)
+	lastBattleCode = ms
+	return fmt.Sprintf("%013d", ms)
 }
 
 type DBAccount struct {

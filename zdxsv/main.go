@@ -82,7 +82,7 @@ func printUsage() {
 }
 
 func prepareDB() {
-	conn, err := sqlx.Open("sqlite3", Conf.DB.Name)
+	conn, err := sqlx.Open("sqlite3", Conf.DB.Name+"?_busy_timeout=5000&_journal_mode=WAL")
 	if err != nil {
 		logger.Fatal("startup failed", zap.Error(err))
 	}
@@ -155,9 +155,13 @@ func main() {
 		}
 		mainTLSCheck(args[1], args[2:])
 	case "initdb":
-		os.Remove(Conf.DB.Name)
+		if _, err := os.Stat(Conf.DB.Name); !errors.Is(err, os.ErrNotExist) {
+			logger.Fatal("initdb: the database file exists; remove it first to start over", zap.String("name", Conf.DB.Name), zap.Error(err))
+		}
 		prepareDB()
-		DefaultDB.Init()
+		if err := DefaultDB.Init(); err != nil {
+			logger.Fatal("initdb failed", zap.Error(err))
+		}
 	case "migratedb":
 		prepareDB()
 		if err := DefaultDB.Migrate(); err != nil {

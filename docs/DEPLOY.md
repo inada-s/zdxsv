@@ -108,7 +108,7 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
 ## Commands
 
 ```sh
-zdxsv initdb      # first deploy only: wipes the tables
+zdxsv initdb      # first deploy only: makes the database; fails if the file exists
 zdxsv             # the server
 zdxsv migratedb   # server stopped, when a release changes the schema; exits non-zero on failure
 ```

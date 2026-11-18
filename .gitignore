@@ -3,6 +3,8 @@
 zdxsv.db
 zdxsv_test.db
 smoke.db
+*.db-wal
+*.db-shm
 smoke.log
 *.swp
 *.swo
