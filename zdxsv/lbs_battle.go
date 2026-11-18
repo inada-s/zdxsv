@@ -261,8 +261,8 @@ func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMat
 		pi := info(id)
 		var addrs []string
 		for _, k := range []string{"udp_addr", "udp_local", "udp_addr6"} {
-			if _, _, ok := splitUDPAddr(pi[k]); ok {
-				addrs = append(addrs, pi[k])
+			if a, ok := reportedUDPAddr(k, pi[k], pi["tcp_ip"]); ok {
+				addrs = append(addrs, a)
 			}
 		}
 		if a := tcpSourceAddr(pi["tcp_ip"], addrs); a != "" {
@@ -593,4 +593,23 @@ func ggpoPort(pi map[string]string) int {
 		return 0
 	}
 	return port
+}
+
+// reportedUDPAddr checks a player's reported address. A public IPv4 is replaced with the
+// lobby connection's source IP, keeping the port; a "local" one must be a LAN address.
+func reportedUDPAddr(key, addr, tcpIP string) (string, bool) {
+	h, port, ok := splitUDPAddr(addr)
+	if !ok {
+		return "", false
+	}
+	ip, t := net.ParseIP(h), net.ParseIP(tcpIP)
+	switch key {
+	case "udp_addr":
+		if t != nil && t.To4() != nil && !ip.Equal(t) {
+			return net.JoinHostPort(tcpIP, strconv.Itoa(port)), true
+		}
+	case "udp_local":
+		return addr, ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+	}
+	return addr, true
 }
