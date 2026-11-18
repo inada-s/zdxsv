@@ -214,6 +214,11 @@ func (a *Lbs) OnGetBattleResult(p *LbsPeer, result *BattleResult) {
 		return
 	}
 
+	if record.Result != "" {
+		logger.Info("battle result already recorded", zap.String("battle_code", result.BattleCode), zap.String("user_id", p.UserID))
+		return
+	}
+
 	record.Round = int(result.BattleCount)
 	record.Win = int(result.WinCount)
 	record.Lose = int(result.LoseCount)

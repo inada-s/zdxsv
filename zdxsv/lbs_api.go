@@ -35,7 +35,7 @@ const (
 //	/auth/*: emulator sign-in (Auth).
 //	POST /discord/interactions: Discord slash commands (Discord).
 //	GET or POST /lbs/replay_played?battle_code=C: an emulator started C's replay; /lbs/replay's
-//	  play_count counts these. 200 even when the count fails, 400 without battle_code.
+//	  play_count counts these, once per client IP and battle a day. 200 even when the count fails, 400 without battle_code.
 //	POST /lbs/zproxy/register, /lbs/zproxy/battle_info: zproxy's calls, JSON in and out
 //	  (lbs_zproxy.go).
 type APIHandler struct {
@@ -68,6 +68,35 @@ type APIHandler struct {
 	statusMu   sync.Mutex
 	statusAt   time.Time
 	statusBody []byte
+
+	playedMu sync.Mutex
+	played   map[string]time.Time
+}
+
+const (
+	replayPlayedWindow = 24 * time.Hour
+	replayPlayedMax    = 100000
+)
+
+func (h *APIHandler) firstPlay(ip, battleCode string, now time.Time) bool {
+	h.playedMu.Lock()
+	defer h.playedMu.Unlock()
+	if h.played == nil || len(h.played) >= replayPlayedMax {
+		for k, at := range h.played {
+			if now.Sub(at) >= replayPlayedWindow {
+				delete(h.played, k)
+			}
+		}
+		if h.played == nil || len(h.played) >= replayPlayedMax {
+			h.played = map[string]time.Time{}
+		}
+	}
+	key := ip + " " + battleCode
+	if at, ok := h.played[key]; ok && now.Sub(at) < replayPlayedWindow {
+		return false
+	}
+	h.played[key] = now
+	return true
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +221,10 @@ func (h *APIHandler) serveReplayPlayed(w http.ResponseWriter, r *http.Request) {
 	battleCode := r.FormValue("battle_code")
 	if battleCode == "" || len(battleCode) > maxReplayFilterBytes {
 		http.Error(w, "invalid battle_code", http.StatusBadRequest)
+		return
+	}
+	if !h.firstPlay(requestIP(r), battleCode, time.Now()) {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	played := h.ReplayPlayed
