@@ -178,6 +178,38 @@ func (a *Lbs) SetBattleServer(b *Mcs) {
 	a.mcs = b
 }
 
+// preLoginCommands are what a peer may send before its user logs in: the login sequence,
+// the emulator and relay reports, and the line keepers.
+var preLoginCommands = map[uint16]bool{
+	0x0001:         true,
+	0x6001:         true,
+	0x6006:         true,
+	0x600E:         true,
+	0x6101:         true,
+	0x6103:         true,
+	0x6132:         true,
+	0x61A0:         true,
+	0x9950:         true,
+	0x9952:         true,
+	lbsRelayStatus: true,
+}
+
+func (a *Lbs) loggedIn(p *LbsPeer) bool {
+	return p.UserID != "" && a.users[p.UserID] == p
+}
+
+// accepts tells whether p may send the command now.
+func (a *Lbs) accepts(p *LbsPeer, command uint16) bool {
+	switch {
+	case a.loggedIn(p):
+		return true
+	case command == 0x6132:
+		return p.LoginKey != ""
+	default:
+		return preLoginCommands[command]
+	}
+}
+
 func (a *Lbs) Serve() {
 	aliveCheck := time.NewTicker(a.aliveCheckInterval)
 	defer aliveCheck.Stop()
@@ -198,6 +230,10 @@ func (a *Lbs) Serve() {
 					continue
 				}
 				args.peer.lastRecvTime = time.Now()
+				if !a.accepts(args.peer, args.msg.Command) {
+					logger.Warn("command before login ignored", zap.Any("name", symbolMap[args.msg.Command]), zap.Uint16("command", args.msg.Command), zap.Any("addr", args.peer.conn.Address()))
+					continue
+				}
 				if f, ok := a.handlers[args.msg.Command]; ok {
 					f(args.peer, args.msg)
 				} else {
