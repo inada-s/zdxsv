@@ -62,6 +62,7 @@ type LbsPeer struct {
 	proxyRegTime time.Time
 	proxyUseTime time.Time
 
+	openTime     time.Time
 	lastRecvTime time.Time
 }
 
@@ -106,8 +107,9 @@ type Lbs struct {
 }
 
 const (
-	peerRecvTimeout = 2 * time.Minute
-	battleTimeout   = time.Hour
+	peerRecvTimeout  = 2 * time.Minute
+	peerLoginTimeout = 5 * time.Minute
+	battleTimeout    = time.Hour
 )
 
 func NewLbs() *Lbs {
@@ -222,7 +224,8 @@ func (a *Lbs) Serve() {
 			switch args := e.(type) {
 			case eventPeerCome:
 				logger.Info("eventPeerCome")
-				args.peer.lastRecvTime = time.Now()
+				args.peer.openTime = time.Now()
+				args.peer.lastRecvTime = args.peer.openTime
 				a.peers[args.peer.conn.Address()] = args.peer
 				a.OnOpen(args.peer)
 			case eventPeerMessage:
@@ -264,6 +267,9 @@ func (a *Lbs) checkAlive(now time.Time) {
 	for _, p := range a.peers {
 		if now.Sub(p.lastRecvTime) >= peerRecvTimeout {
 			logger.Info("recv timeout", zap.String("user_id", p.UserID), zap.Any("addr", p.conn.Address()))
+			p.conn.conn.Close()
+		} else if now.Sub(p.openTime) >= peerLoginTimeout && a.users[p.UserID] != p && a.relayPeers[p] == nil {
+			logger.Info("login timeout", zap.String("user_id", p.UserID), zap.Any("addr", p.conn.Address()))
 			p.conn.conn.Close()
 		} else {
 			RequestLineCheck(p)
