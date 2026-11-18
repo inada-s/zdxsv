@@ -282,6 +282,10 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || (loginKey == "" && len(keys) > 0) {
 		floodLog.Error("token login refused", zap.Error(err))
+		if errors.Is(err, ErrUnknownToken) {
+			http.Error(w, "unknown token", http.StatusUnauthorized)
+			return
+		}
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}

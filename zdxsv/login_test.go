@@ -348,7 +348,7 @@ func TestAPILogin(t *testing.T) {
 		{http.MethodGet, nil, http.StatusMethodNotAllowed},
 		{http.MethodPost, url.Values{}, http.StatusBadRequest},
 		{http.MethodPost, url.Values{"login_key": {registered.LoginKey}}, http.StatusForbidden},
-		{http.MethodPost, url.Values{"token": {"unknown"}}, http.StatusForbidden},
+		{http.MethodPost, url.Values{"token": {"unknown"}}, http.StatusUnauthorized},
 	} {
 		if code := post(c.method, c.form).Code; code != c.code {
 			t.Errorf("%s %v: status %d, want %d", c.method, c.form, code, c.code)

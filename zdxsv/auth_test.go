@@ -219,7 +219,7 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatal("revoke", err, resp.StatusCode)
 	}
-	if _, st := r.lbsLogin(token); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(token); st != http.StatusUnauthorized {
 		t.Fatal("revoked token logs in", st)
 	}
 	if _, st := r.lbsLogin(token2); st != 200 {
@@ -243,10 +243,10 @@ func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
 	if _, err := sqldb.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", old, hashAuthToken(stale)); err != nil {
 		t.Fatal(err)
 	}
-	if _, st := r.lbsLogin(stale); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(stale); st != http.StatusUnauthorized {
 		t.Fatal("idle token logs in", st)
 	}
-	if _, st := r.lbsLogin(fresh); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(fresh); st != http.StatusUnauthorized {
 		t.Fatal("idle token without last use logs in", st)
 	}
 
@@ -266,10 +266,10 @@ func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatal("revoke all", err, resp.StatusCode)
 	}
-	if _, st := r.lbsLogin(first); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(first); st != http.StatusUnauthorized {
 		t.Fatal("token of the identity survives revoke all", st)
 	}
-	if _, st := r.lbsLogin(second); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(second); st != http.StatusUnauthorized {
 		t.Fatal("revoking token survives revoke all", st)
 	}
 	if _, st := r.lbsLogin(other); st != 200 {
@@ -284,7 +284,7 @@ func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
 	if got, err := DefaultDB.RevokeProviderTokens("discord", "3333"); err != nil || got != 1 {
 		t.Fatal("revoke by identity", got, err)
 	}
-	if _, st := r.lbsLogin(other); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(other); st != http.StatusUnauthorized {
 		t.Fatal("token survives revoke by identity", st)
 	}
 }
@@ -338,7 +338,7 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got) != other.LoginKey {
 		t.Fatalf("carried second account %d %+v", st, got)
 	}
-	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusForbidden {
+	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusUnauthorized {
 		t.Fatal("unknown token carried", st)
 	}
 }
@@ -433,7 +433,7 @@ func TestAccountLimits(t *testing.T) {
 			t.Fatal("account", bad, st)
 		}
 	}
-	if _, st := r.accounts("/auth/accounts", "nope"); st != http.StatusForbidden {
+	if _, st := r.accounts("/auth/accounts", "nope"); st != http.StatusUnauthorized {
 		t.Fatal("unknown token listed", st)
 	}
 
