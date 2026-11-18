@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"mime"
 	"net"
 	"net/http"
 	"strconv"
@@ -339,6 +340,15 @@ func serveJSON[T any](w http.ResponseWriter, r *http.Request, answer func(req *T
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+	// Only zproxy calls these: JSON, no browser headers.
+	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
+		http.Error(w, "", http.StatusForbidden)
+		return
+	}
+	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
+		http.Error(w, "", http.StatusUnsupportedMediaType)
 		return
 	}
 	req := new(T)
