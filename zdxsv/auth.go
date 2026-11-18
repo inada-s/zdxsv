@@ -7,7 +7,7 @@
 //	     identity, for /lbs/login. A sign-in creates no account: the identity may hold none.
 //	POST /auth/revoke (form token[, all=1]): deletes the token; all=1: every token of its identity, signing
 //	     out every emulator. A token unused for AuthTokenIdleExpiry is refused and deleted.
-//	     An unknown, revoked or expired token: 401 here and at /lbs/login (sign in again).
+//	     /auth/accounts* and /lbs/login answer 401 to an unknown, revoked or expired token (sign in again).
 //	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...], "carried": B}], "default": N,
 //	     "max_new": A, "max_carried": C},
 //	     the accounts of the token's identity; /lbs/login takes account=N, without it "default", and
