@@ -2,7 +2,9 @@ package main
 
 import (
 	"net"
-	"strings"
+	"slices"
+	"strconv"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -12,8 +14,8 @@ const (
 	requiredVersion = 1008
 )
 
-// RegisterProxy registers the zproxy at ip of a lobby user: the user with that IP for
-// UserID _AUTO_, or from a LAN or the lobby host the user UserID.
+// RegisterProxy registers the zproxy at ip for the lobby user UserID, or for UserID _AUTO_
+// the only lobby user connected from ip. The lobby host's own addresses count as one host.
 func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
 	logger.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
 	res := new(RegisterProxyResponse)
@@ -24,51 +26,52 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		return res
 	}
 
-	if len(req.UDPAddrs) == 0 {
-		res.Result = false
-		res.Message = "UDPアドレスが取得できていません"
-		return res
-	}
-
 	remote := net.ParseIP(ip).To4()
 	if remote == nil {
 		res.Result = false
 		res.Message = "無効なグローバルIPアドレスです"
 		return res
 	}
-	isLANTest := remote.IsLoopback() || strings.HasPrefix(remote.String(), "192.168.")
 
-	if req.LocalIP == nil || req.LocalIP.To4() == nil {
+	localIP := req.LocalIP.To4()
+	if localIP == nil || !lanIP(localIP) {
 		res.Result = false
 		res.Message = "無効なローカルIPアドレスです"
 		return res
 	}
 
+	udpAddrs := proxyUDPAddrs(req.UDPAddrs)
+	if len(udpAddrs) == 0 {
+		res.Result = false
+		res.Message = "UDPアドレスが取得できていません"
+		return res
+	}
+
 	a.Locked(func(app *Lbs) {
-		var userPeer *LbsPeer
-		for userID, peer := range app.users {
-			arr := strings.Split(peer.conn.Address(), ":")
-			if 0 < len(arr) {
-				if arr[0] == remote.String() && req.UserID == "_AUTO_" {
-					userPeer = peer
-					break
-				} else if isLANTest && userID == req.UserID {
-					userPeer = peer
-					break
-				}
+		var found []*LbsPeer
+		for _, peer := range app.users {
+			if peer.UserID == req.UserID || (req.UserID == "_AUTO_" && sameHost(net.ParseIP(peer.IP()), remote)) {
+				found = append(found, peer)
 			}
 		}
-		if userPeer == nil {
+		if len(found) == 0 {
 			res.Result = false
 			res.Message = "ロビーにユーザが見つかりません"
 			return
 		}
+		if len(found) > 1 {
+			res.Result = false
+			res.Message = "同じIPアドレスのユーザが複数います. -userid でユーザIDを指定してください"
+			return
+		}
+		userPeer := found[0]
 
-		userPeer.proxyIP = req.LocalIP
+		userPeer.proxyHost = remote
+		userPeer.proxyIP = localIP
 		userPeer.proxyPort = req.Port
 		userPeer.proxyRegTime = time.Now()
-		userPeer.proxyUDPAddrs = req.UDPAddrs
-		userPeer.proxyP2PConnected = req.P2PConnected
+		userPeer.proxyUDPAddrs = udpAddrs
+		userPeer.proxyP2PConnected = app.p2pUsers(userPeer, req.P2PConnected)
 		res.Result = true
 		res.UserID = userPeer.UserID
 		res.SessionID = userPeer.SessionID
@@ -79,13 +82,88 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 				Team:   u.Team,
 				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
 			}
-			user.UDPAddrs = append(user.UDPAddrs, u.proxyUDPAddrs...)
+			for _, addr := range u.proxyUDPAddrs {
+				if lanIP(udpAddrIP(addr)) && !sameHost(u.proxyHost, remote) {
+					continue
+				}
+				user.UDPAddrs = append(user.UDPAddrs, addr)
+			}
 			res.LobbyUsers = append(res.LobbyUsers, user)
 		}
 		res.Message = "登録成功"
 		logger.Info("register zproxy", zap.String("user_id", userPeer.UserID), zap.Any("session_id", userPeer.SessionID))
 	})
 	return res
+}
+
+const maxProxyUDPAddrs = 4
+
+// proxyUDPAddrs keeps the IPv4 host:port addresses. The public one is from STUN and need
+// not be the IP the registration came from.
+func proxyUDPAddrs(addrs []string) []string {
+	var ok []string
+	for _, addr := range addrs {
+		if udpAddrIP(addr) == nil || slices.Contains(ok, addr) {
+			continue
+		}
+		ok = append(ok, addr)
+		if len(ok) == maxProxyUDPAddrs {
+			break
+		}
+	}
+	return ok
+}
+
+// udpAddrIP is the IPv4 of a host:port with a non-zero port, nil otherwise.
+func udpAddrIP(addr string) net.IP {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil
+	}
+	if n, err := strconv.Atoi(port); err != nil || n <= 0 || 65535 < n {
+		return nil
+	}
+	return net.ParseIP(host).To4()
+}
+
+// p2pUsers is the users among connected (zproxy's ping answers, keyed by the answering
+// address or user ID) other than self.
+func (app *Lbs) p2pUsers(self *LbsPeer, connected map[string]struct{}) map[string]struct{} {
+	users := map[string]struct{}{}
+	for key := range connected {
+		for _, u := range app.users {
+			if u != self && (u.UserID == key || slices.Contains(u.proxyUDPAddrs, key)) {
+				users[u.UserID] = struct{}{}
+			}
+		}
+	}
+	return users
+}
+
+func lanIP(ip net.IP) bool {
+	return ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
+}
+
+var hostIPs = sync.OnceValue(func() []net.IP {
+	var ips []net.IP
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		logger.Warn("interface addresses", zap.Error(err))
+	}
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			ips = append(ips, n.IP)
+		}
+	}
+	return ips
+})
+
+func localHost(ip net.IP) bool {
+	return ip != nil && (ip.IsLoopback() || slices.ContainsFunc(hostIPs(), ip.Equal))
+}
+
+func sameHost(a, b net.IP) bool {
+	return a != nil && (a.Equal(b) || (localHost(a) && localHost(b)))
 }
 
 // BattleInfo is the battle of the zproxy whose user has session req.SessionID.
