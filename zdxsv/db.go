@@ -261,6 +261,8 @@ type DB interface {
 	LinkIdentity(provider, providerUserID, loginKey string) error
 	// AccountCarried tells whether the account was carried over to its identity.
 	AccountCarried(loginKey string) (bool, error)
+	// AccountMadeForIdentity tells whether the account was made for a provider identity (not carried over).
+	AccountMadeForIdentity(loginKey string) (bool, error)
 	// AccountBattleCount is the battle count summed over the account's users.
 	AccountBattleCount(loginKey string) (int, error)
 	// TokenAccounts returns the token's default login key and the keys of its identity in the
