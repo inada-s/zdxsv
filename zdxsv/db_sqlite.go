@@ -181,6 +181,46 @@ func (db SQLiteDB) Init() error {
 	return err
 }
 
+// CheckSchema reports a table or column of the current schema that the database lacks.
+func (db SQLiteDB) CheckSchema() error {
+	want, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		return err
+	}
+	defer want.Close()
+	if _, err := want.Exec(schema); err != nil {
+		return err
+	}
+	cols := func(d *sqlx.DB) (map[string]bool, error) {
+		var rows []string
+		err := d.Select(&rows, `SELECT m.name || '.' || p.name FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table'`)
+		set := map[string]bool{}
+		for _, r := range rows {
+			set[r] = true
+		}
+		return set, err
+	}
+	need, err := cols(want)
+	if err != nil {
+		return err
+	}
+	have, err := cols(db.DB)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for c := range need {
+		if !have[c] {
+			missing = append(missing, c)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("database lacks %s: run initdb for a new database, migratedb for an old one", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 func (db SQLiteDB) Migrate() error {
 	ctx := context.Background()
 	tables := []string{"account", "user", "battle_record", "m_server_setting", "m_lobby_setting", "m_rule", "m_patch", "m_ban", "auth_identity", "auth_token"}

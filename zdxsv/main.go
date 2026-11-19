@@ -182,6 +182,9 @@ func main() {
 // With ZDXSV_TLS_CERT_FILE set, dnas, lobby and battle also serve their TLS ports.
 func mainAll() {
 	prepareDB()
+	if err := DefaultDB.(SQLiteDB).CheckSchema(); err != nil {
+		logger.Fatal("startup failed", zap.Error(err))
+	}
 	login := prepareLogin()
 	dnsServer, err := newDNSServer()
 	if err != nil {
