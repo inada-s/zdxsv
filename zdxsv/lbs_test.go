@@ -262,10 +262,13 @@ type testLogin struct {
 	SessionID string
 }
 
-// registerAccount makes an account and logs it in as the login pages do.
+var testAccountIPs atomic.Uint32
+
+// registerAccount makes an account from its own IP and logs it in as the login pages do.
 func registerAccount(t *testing.T) *testLogin {
 	t.Helper()
-	ac, err := DefaultDB.RegisterAccount("127.0.0.1")
+	n := testAccountIPs.Add(1)
+	ac, err := DefaultDB.RegisterAccount(fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255))
 	if err != nil {
 		t.Fatal(err)
 	}
