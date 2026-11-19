@@ -41,3 +41,8 @@ No fixed sleeps.
 - Self-contained: no session ids, issue numbers, private scripts or
   repositories.
 - Update comments with the code. English.
+
+## Logging
+
+- A log line that outside input (a packet or a message) can trigger
+  each time goes through `floodLog`, not `logger`.

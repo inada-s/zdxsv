@@ -116,7 +116,7 @@ func (s *McsUDPServer) addPending(key, userID string) {
 		}
 	}
 	if len(s.pending) >= udpPendingMax {
-		logger.Warn("udp pending full", zap.Any("addr", key))
+		floodLog.Warn("udp pending full", zap.Any("addr", key))
 		return
 	}
 	s.pending[key] = &udpPending{userID: userID, cookie: newCookie(), expires: now.Add(udpPendingTTL)}
@@ -131,7 +131,7 @@ func (s *McsUDPServer) onPendingBattle(key string, addr *net.UDPAddr, pkt Packet
 	}
 	if !ok {
 		s.Unlock()
-		logger.Error("battle data received but peer not found", zap.Any("addr", key))
+		floodLog.Error("battle data received but peer not found", zap.Any("addr", key))
 		return
 	}
 	if pkt.Ack != p.cookie {
@@ -141,7 +141,7 @@ func (s *McsUDPServer) onPendingBattle(key string, addr *net.UDPAddr, pkt Packet
 	}
 	if len(s.peers) >= udpPeerMax {
 		s.Unlock()
-		logger.Warn("udp peers full", zap.Any("addr", key))
+		floodLog.Warn("udp peers full", zap.Any("addr", key))
 		return
 	}
 	delete(s.pending, key)
