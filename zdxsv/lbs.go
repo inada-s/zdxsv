@@ -224,7 +224,7 @@ func (a *Lbs) Serve() {
 		case e := <-a.chEvent:
 			switch args := e.(type) {
 			case eventPeerCome:
-				logger.Info("eventPeerCome")
+				floodLog.Info("eventPeerCome")
 				args.peer.openTime = time.Now()
 				args.peer.lastRecvTime = args.peer.openTime
 				a.peers[args.peer.conn.Address()] = args.peer
@@ -247,7 +247,7 @@ func (a *Lbs) Serve() {
 					}
 				}
 			case eventPeerLeave:
-				logger.Info("eventPeerLeave")
+				floodLog.Info("eventPeerLeave")
 				a.OnClose(args.peer)
 				delete(a.peers, args.peer.conn.Address())
 			case eventFunc:
