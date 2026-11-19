@@ -356,6 +356,7 @@ func (s *LbsServer) ServeUDPStun(addr string) error {
 // serveUDPStun answers Pings.
 func serveUDPStun(conn, test *net.UDPConn) {
 	buf := make([]byte, 64<<10)
+	limit := stunLimiter{}
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -366,7 +367,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 			continue
 		}
 		data, test2 := udpStunAnswer(buf[:n], addr)
-		if data == nil {
+		if data == nil || !limit.allow(addr.IP, time.Now()) {
 			continue
 		}
 		conn.WriteToUDP(data, addr)
@@ -374,6 +375,31 @@ func serveUDPStun(conn, test *net.UDPConn) {
 			test.WriteToUDP(data, addr)
 		}
 	}
+}
+
+const (
+	stunWindow        = 10 * time.Second
+	stunAnswersPerIP  = 20
+	stunTrackedIPsMax = 100000
+)
+
+type stunLimiter struct {
+	start time.Time
+	count map[string]int
+}
+
+func (l *stunLimiter) allow(ip net.IP, now time.Time) bool {
+	if l.count == nil || now.Sub(l.start) >= stunWindow {
+		l.start = now
+		l.count = map[string]int{}
+	}
+	k := string(ip.To16())
+	c, ok := l.count[k]
+	if c >= stunAnswersPerIP || (!ok && len(l.count) >= stunTrackedIPsMax) {
+		return false
+	}
+	l.count[k] = c + 1
+	return true
 }
 
 // StunPacket is a UDP Ping or Pong of the STUN server, zproxy and emulators, as JSON.
