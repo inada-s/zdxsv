@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,13 @@ var DefaultDB DB
 const MaxUsersPerAccount = 3
 
 var ErrUserLimit = errors.New("account already has the maximum number of users")
+
+var ErrTooManyAccounts = errors.New("too many accounts made from this IP")
+
+const (
+	AccountsPerIP       = 5
+	AccountsPerIPWindow = 24 * time.Hour
+)
 
 // randomString draws from crypto/rand: login keys and session ids are credentials.
 func randomString(length int, source string) string {
@@ -33,7 +41,7 @@ func GenLoginKey() string {
 	return randomString(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 }
 
-func genUserID() string {
+var genUserID = func() string {
 	return randomString(6, "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789")
 }
 
@@ -42,8 +50,17 @@ func GenSessionID() string {
 	return randomString(8, "123456789")
 }
 
+var (
+	battleCodeMu   sync.Mutex
+	lastBattleCode int64
+)
+
 func GenBattleCode() string {
-	return fmt.Sprintf("%013d", time.Now().UnixNano()/1000000)
+	battleCodeMu.Lock()
+	defer battleCodeMu.Unlock()
+	ms := max(time.Now().UnixMilli(), lastBattleCode+1)
+	lastBattleCode = ms
+	return fmt.Sprintf("%013d", ms)
 }
 
 type DBAccount struct {
@@ -189,6 +206,8 @@ type BattleRecord struct {
 	UsedMsList string `db:"used_ms_list" json:"used_ms_list,omitempty"`
 	// PlayCount: how often the replay was played (IncrementReplayPlayCount), the same on every player's record.
 	PlayCount int `db:"play_count" json:"play_count,omitempty"`
+	// GgpoSession: the battle's ggpo_session; its replay upload must name it.
+	GgpoSession uint32 `db:"ggpo_session" json:"-"`
 
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
@@ -248,6 +267,7 @@ type RankingRecord struct {
 type DB interface {
 	Init() error
 	Migrate() error
+	// RegisterAccount makes an account; ErrTooManyAccounts once ip made AccountsPerIP within AccountsPerIPWindow.
 	RegisterAccount(ip string) (*DBAccount, error)
 
 	GetAccountByLoginKey(key string) (*DBAccount, error)
@@ -261,6 +281,8 @@ type DB interface {
 	LinkIdentity(provider, providerUserID, loginKey string) error
 	// AccountCarried tells whether the account was carried over to its identity.
 	AccountCarried(loginKey string) (bool, error)
+	// AccountMadeForIdentity tells whether the account was made for a provider identity (not carried over).
+	AccountMadeForIdentity(loginKey string) (bool, error)
 	// AccountBattleCount is the battle count summed over the account's users.
 	AccountBattleCount(loginKey string) (int, error)
 	// TokenAccounts returns the token's default login key and the keys of its identity in the
@@ -274,13 +296,17 @@ type DB interface {
 	// IssueAuthToken stores a new emulator token for a provider identity and returns it.
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
+	// RevokeIdentityTokens deletes every token of the token's identity (only the token when it has none).
+	RevokeIdentityTokens(token string) error
+	// RevokeProviderTokens deletes every token of a provider identity and returns how many.
+	RevokeProviderTokens(provider, providerUserID string) (int64, error)
 	// LoginAccount records a login of the account at the login pages.
 	LoginAccount(*DBAccount) error
 
 	// SetLoginEndpoint records where the account last logged in to the lobby from.
 	SetLoginEndpoint(loginKey, ip, machineID string) error
 
-	// FindBan returns an unexpired m_ban of a user of the account, nil if none.
+	// FindBan returns an unexpired m_ban of a user of the account or of an account of its identity, nil if none.
 	FindBan(loginKey string) (*MasterBan, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
@@ -300,6 +326,7 @@ type DB interface {
 	RegisterUser(loginKey string) (*DBUser, error)
 	GetUserList(loginKey string) ([]*DBUser, error)
 	GetUser(userID string) (*DBUser, error)
+	GetAccountUser(loginKey, userID string) (*DBUser, error)
 	LoginUser(user *DBUser) error
 	UpdateUser(user *DBUser) error
 

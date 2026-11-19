@@ -5,7 +5,9 @@
 //	GET  /auth/discord/callback: the provider's redirect; ends at http://127.0.0.1:P/callback?code=X&state=S.
 //	POST /auth/token (form code, code_verifier): {"token": T}, the emulator's token of the provider
 //	     identity, for /lbs/login. A sign-in creates no account: the identity may hold none.
-//	POST /auth/revoke (form token): deletes the token.
+//	POST /auth/revoke (form token[, all=1]): deletes the token; all=1: every token of its identity, signing
+//	     out every emulator. A token unused for AuthTokenIdleExpiry is refused and deleted.
+//	     /auth/accounts* and /lbs/login answer 401 to an unknown, revoked or expired token (sign in again).
 //	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...], "carried": B}], "default": N,
 //	     "max_new": A, "max_carried": C},
 //	     the accounts of the token's identity; /lbs/login takes account=N, without it "default", and
@@ -29,7 +31,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -41,11 +42,12 @@ import (
 )
 
 const (
-	flowTTL        = 10 * time.Minute
-	codeTTL        = 2 * time.Minute
-	carryTTL       = 3 * time.Minute
-	carryMaxMisses = 5
-	maxPending     = 10000
+	flowTTL         = 10 * time.Minute
+	codeTTL         = 2 * time.Minute
+	carryTTL        = 3 * time.Minute
+	carryMaxMisses  = 5
+	carryMissWindow = 10 * time.Minute
+	maxPending      = 10000
 )
 
 // Provider is an OAuth2 authorization code provider whose user endpoint answers {"id": ...}.
@@ -76,6 +78,7 @@ func DiscordProvider(clientID, clientSecret string) Provider {
 type Store interface {
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
+	RevokeIdentityTokens(token string) error
 	TokenAccounts(token string) (string, []string, error)
 	CarryTokenAccount(token, loginKey string) error
 	RegisterAccount(ip string) (*DBAccount, error)
@@ -84,7 +87,10 @@ type Store interface {
 	FindBan(loginKey string) (*MasterBan, error)
 }
 
+const maxPendingPerIP = 32
+
 type flow struct {
+	ip        string
 	port      int
 	state     string
 	challenge string
@@ -95,6 +101,11 @@ type issued struct {
 	userID    string
 	challenge string
 	expires   time.Time
+}
+
+type carryMiss struct {
+	n     int
+	until time.Time
 }
 
 type carryCode struct {
@@ -114,7 +125,7 @@ type AuthServer struct {
 	flows  map[string]*flow
 	codes  map[string]*issued
 	carry  map[string]*carryCode
-	misses map[string]int
+	misses map[string]*carryMiss
 }
 
 func (s *AuthServer) now() time.Time {
@@ -232,6 +243,28 @@ func (s *AuthServer) redirectURI() string {
 	return strings.TrimSuffix(s.PublicURL, "/") + "/auth/" + s.Provider.Name + "/callback"
 }
 
+// makeFlowRoom: false when ip has maxPendingPerIP flows; at maxPending it drops the oldest flow,
+// so a flood cannot keep everyone else out for flowTTL.
+func (s *AuthServer) makeFlowRoom(ip string) bool {
+	n := 0
+	var oldest string
+	for k, f := range s.flows {
+		if f.ip == ip {
+			n++
+		}
+		if oldest == "" || f.expires.Before(s.flows[oldest].expires) {
+			oldest = k
+		}
+	}
+	if n >= maxPendingPerIP {
+		return false
+	}
+	if len(s.flows) >= maxPending {
+		delete(s.flows, oldest)
+	}
+	return true
+}
+
 func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	port, err := strconv.Atoi(q.Get("redirect_port"))
@@ -247,12 +280,13 @@ func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	if s.flows == nil {
 		s.flows = map[string]*flow{}
 	}
-	if len(s.flows) >= maxPending {
+	ip := requestIP(r)
+	if !s.makeFlowRoom(ip) {
 		s.mu.Unlock()
-		http.Error(w, "busy", http.StatusServiceUnavailable)
+		http.Error(w, "busy", http.StatusTooManyRequests)
 		return
 	}
-	s.flows[id] = &flow{port: port, state: state, challenge: challenge, expires: s.now().Add(flowTTL)}
+	s.flows[id] = &flow{ip: ip, port: port, state: state, challenge: challenge, expires: s.now().Add(flowTTL)}
 	s.mu.Unlock()
 
 	v := url.Values{
@@ -268,14 +302,6 @@ func (s *AuthServer) serveStart(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	tplStart.Execute(w, p)
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func (s *AuthServer) fail(w http.ResponseWriter, r *http.Request, msg func(*page) string) {
@@ -402,7 +428,11 @@ func (s *AuthServer) serveRevoke(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token required", http.StatusBadRequest)
 		return
 	}
-	if err := s.Store.RevokeAuthToken(token); err != nil {
+	revoke := s.Store.RevokeAuthToken
+	if r.FormValue("all") == "1" {
+		revoke = s.Store.RevokeIdentityTokens
+	}
+	if err := revoke(token); err != nil {
 		logger.Error("auth revoke failure", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -431,7 +461,11 @@ func (s *AuthServer) serveAccounts(w http.ResponseWriter, r *http.Request, op ac
 	token := r.FormValue("token")
 	key, keys, err := s.Store.TokenAccounts(token)
 	if err != nil {
-		http.Error(w, "unknown token", http.StatusForbidden)
+		if errors.Is(err, ErrUnknownToken) {
+			http.Error(w, "unknown token", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	added := ""
@@ -480,21 +514,19 @@ func (s *AuthServer) serveAccounts(w http.ResponseWriter, r *http.Request, op ac
 
 // carryAccount returns the carried account's login key, or "" after answering the error.
 func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token string) string {
-	ip := clientIP(r)
+	ip := requestIP(r)
 	code := strings.ToUpper(strings.TrimSpace(r.FormValue("code")))
+	now := s.now()
 	s.mu.Lock()
-	if s.misses[ip] >= carryMaxMisses {
+	if m := s.misses[ip]; m != nil && m.n >= carryMaxMisses && now.Before(m.until) {
 		s.mu.Unlock()
 		http.Error(w, "too many wrong codes", http.StatusTooManyRequests)
 		return ""
 	}
 	c := s.carry[code]
 	delete(s.carry, code)
-	if c == nil || s.now().After(c.expires) {
-		if s.misses == nil {
-			s.misses = map[string]int{}
-		}
-		s.misses[ip]++
+	if c == nil || now.After(c.expires) {
+		s.addMiss(ip, now)
 		s.mu.Unlock()
 		http.Error(w, "wrong or expired code", http.StatusBadRequest)
 		return ""
@@ -516,7 +548,7 @@ func (s *AuthServer) carryAccount(w http.ResponseWriter, r *http.Request, token 
 		http.Error(w, "", http.StatusForbidden)
 		return ""
 	}
-	logger.Info("auth: carried account", zap.String("login_key", c.loginKey))
+	logger.Info("auth: carried account", zap.String("login_key", maskKey(c.loginKey)))
 	return c.loginKey
 }
 
@@ -571,7 +603,7 @@ func (s *AuthServer) serveDevCarry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	a, err := s.Store.RegisterAccount(clientIP(r))
+	a, err := s.Store.RegisterAccount(requestIP(r))
 	if err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -693,3 +725,22 @@ var tplStart = template.Must(template.New("start").Parse(head +
 <p class="pp"><a href="{{.PrivacyURL}}">{{.Privacy}}</a></p></main></body></html>`))
 
 var tplAuthMessage = template.Must(template.New("message").Parse(head + `<p>{{.Message}}</p></main></body></html>`))
+
+// addMiss needs s.mu held.
+func (s *AuthServer) addMiss(ip string, now time.Time) {
+	if s.misses == nil {
+		s.misses = map[string]*carryMiss{}
+	}
+	for k, m := range s.misses {
+		if !now.Before(m.until) {
+			delete(s.misses, k)
+		}
+	}
+	m := s.misses[ip]
+	if m == nil {
+		m = &carryMiss{}
+		s.misses[ip] = m
+	}
+	m.n++
+	m.until = now.Add(carryMissWindow)
+}

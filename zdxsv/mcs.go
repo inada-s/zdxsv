@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -76,27 +77,40 @@ type BattleInfo struct {
 	Users  []McsUser
 	RoomID int
 
-	room *McsRoom
+	expires time.Time
+	room    *McsRoom
 }
+
+// mcsWaitingTTL bounds the wait for a user who never joins, such as one who
+// plays the battle without the battle server.
+const mcsWaitingTTL = 5 * time.Minute
 
 type Mcs struct {
 	mtx        sync.Mutex
 	nextRoomID int
 	waiting    map[string]*BattleInfo
 	rooms      map[int]*McsRoom
+	now        func() time.Time
 }
 
 func NewMcs() *Mcs {
 	return &Mcs{
 		waiting: make(map[string]*BattleInfo),
 		rooms:   make(map[int]*McsRoom),
+		now:     time.Now,
 	}
 }
 
 // AddBattle takes the users of a battle the lobby started. Each joins by its session id.
 func (m *Mcs) AddBattle(users []McsUser) {
 	m.mtx.Lock()
-	info := &BattleInfo{Users: users, RoomID: m.nextRoomID}
+	now := m.now()
+	for id, info := range m.waiting {
+		if now.After(info.expires) {
+			delete(m.waiting, id)
+		}
+	}
+	info := &BattleInfo{Users: users, RoomID: m.nextRoomID, expires: now.Add(mcsWaitingTTL)}
 	info.room = newMcsRoom(info.RoomID)
 	info.room.onEmpty = m.removeRoom
 	m.nextRoomID++
@@ -110,7 +124,16 @@ func (m *Mcs) AddBattle(users []McsUser) {
 func (m *Mcs) GetBattleInfo(sessionID string) *BattleInfo {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-	return m.waiting[sessionID]
+	return m.waitingInfo(sessionID)
+}
+
+func (m *Mcs) waitingInfo(sessionID string) *BattleInfo {
+	info := m.waiting[sessionID]
+	if info != nil && m.now().After(info.expires) {
+		delete(m.waiting, sessionID)
+		return nil
+	}
+	return info
 }
 
 func (m *Mcs) FindWaitingUser(sessionID string) (*McsUser, bool) {
@@ -133,7 +156,7 @@ func findMcsUser(info *BattleInfo, sessionID string) (*McsUser, bool) {
 
 func (m *Mcs) Join(p McsPeer, sessionID string) *McsRoom {
 	m.mtx.Lock()
-	info := m.waiting[sessionID]
+	info := m.waitingInfo(sessionID)
 	user, ok := findMcsUser(info, sessionID)
 	if !ok {
 		m.mtx.Unlock()

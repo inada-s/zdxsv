@@ -348,10 +348,43 @@ func TestAPILogin(t *testing.T) {
 		{http.MethodGet, nil, http.StatusMethodNotAllowed},
 		{http.MethodPost, url.Values{}, http.StatusBadRequest},
 		{http.MethodPost, url.Values{"login_key": {registered.LoginKey}}, http.StatusForbidden},
-		{http.MethodPost, url.Values{"token": {"unknown"}}, http.StatusForbidden},
+		{http.MethodPost, url.Values{"token": {"unknown"}}, http.StatusUnauthorized},
 	} {
 		if code := post(c.method, c.form).Code; code != c.code {
 			t.Errorf("%s %v: status %d, want %d", c.method, c.form, code, c.code)
 		}
+	}
+}
+
+func TestPageLoginOfSignInAccounts(t *testing.T) {
+	r := newAuthRig(t)
+	ts := startLoginServer(t)
+	token := r.tokenFor("5555")
+	made := mustAccount(t, mustLogin(t)(r.lbsLogin(token)))
+	ps2, err := DefaultDB.RegisterAccount("198.51.100.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, st := r.carry(token, r.auth.IssueCarryCode(ps2.LoginKey)); st != 200 || list.Added != 2 {
+		t.Fatalf("carry %d %+v", st, list)
+	}
+	if body := postLogin(t, ts, made); !strings.Contains(body, "ログインに失敗しました") {
+		t.Errorf("page login of an account made at sign-in: %q", body)
+	}
+	if body := postLogin(t, ts, ps2.LoginKey); strings.Contains(body, "ログインに失敗しました") || !strings.Contains(body, `"OK"`) {
+		t.Errorf("page login of a carried PS2 account: %q", body)
+	}
+	if got, st := r.lbsLogin(token); st != 200 || mustAccount(t, got) != made {
+		t.Errorf("token login %d %+v", st, got)
+	}
+}
+
+func mustLogin(t *testing.T) func(APILoginResponse, int) APILoginResponse {
+	return func(res APILoginResponse, st int) APILoginResponse {
+		t.Helper()
+		if st != 200 {
+			t.Fatalf("token login status %d", st)
+		}
+		return res
 	}
 }

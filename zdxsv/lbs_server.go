@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"sync"
 	"time"
@@ -21,14 +20,47 @@ type LbsConnPeer interface {
 	OnClose()
 }
 
+var (
+	lbsMaxConns      = 8192
+	lbsMaxConnsPerIP = 32
+	lbsMaxOutbuf     = 1 << 20
+	lbsMsgBurst      = 64
+	lbsMsgInterval   = 50 * time.Millisecond
+)
+
 type LbsServer struct {
 	conn net.Conn
 	pf   LbsPeerFactory
+
+	mConns  sync.Mutex
+	nConns  int
+	ipConns map[string]int
 }
 
 func NewLbsServer(pf LbsPeerFactory) *LbsServer {
 	return &LbsServer{
-		pf: pf,
+		pf:      pf,
+		ipConns: make(map[string]int),
+	}
+}
+
+func (s *LbsServer) acquireConn(ip string) bool {
+	s.mConns.Lock()
+	defer s.mConns.Unlock()
+	if s.nConns >= lbsMaxConns || s.ipConns[ip] >= lbsMaxConnsPerIP {
+		return false
+	}
+	s.nConns++
+	s.ipConns[ip]++
+	return true
+}
+
+func (s *LbsServer) releaseConn(ip string) {
+	s.mConns.Lock()
+	defer s.mConns.Unlock()
+	s.nConns--
+	if s.ipConns[ip]--; s.ipConns[ip] <= 0 {
+		delete(s.ipConns, ip)
 	}
 }
 
@@ -47,16 +79,21 @@ func (s *LbsServer) ListenAndServe(addr string) error {
 // Serve accepts connections on l until l is closed.
 func (s *LbsServer) Serve(l net.Listener) error {
 	for {
-		tcpConn, err := l.Accept()
-		if errors.Is(err, net.ErrClosed) {
+		tcpConn, err := accept(l, "lobby")
+		if err != nil {
 			return err
 		}
-		if err != nil {
-			logger.Error("accept failed", zap.Error(err))
+		ip, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
+		if !s.acquireConn(ip) {
+			logger.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
+			tcpConn.Close()
 			continue
 		}
 		logger.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
-		go s.ServeConn(tcpConn)
+		go func() {
+			defer s.releaseConn(ip)
+			s.ServeConn(tcpConn)
+		}()
 	}
 }
 
@@ -76,8 +113,9 @@ type LbsConn struct {
 	chDispatch chan bool
 	chQuit     chan interface{}
 
-	mOutbuf sync.Mutex
-	outbuf  []byte
+	mOutbuf    sync.Mutex
+	outbuf     []byte
+	outbufFull bool
 
 	mInbuf sync.Mutex
 	inbuf  []byte
@@ -111,6 +149,16 @@ func (c *LbsConn) serve() {
 func (c *LbsConn) SendMessage(msg *LbsMessage) {
 	logger.Debug("send", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 	c.mOutbuf.Lock()
+	if c.outbufFull || len(c.outbuf) >= lbsMaxOutbuf {
+		full := c.outbufFull
+		c.outbufFull = true
+		c.mOutbuf.Unlock()
+		if !full {
+			logger.Warn("send buffer full: closing", zap.Any("addr", c.Address()))
+			c.conn.Close()
+		}
+		return
+	}
 	c.outbuf = append(c.outbuf, msg.Serialize()...)
 	c.mOutbuf.Unlock()
 	select {
@@ -199,8 +247,35 @@ func (c *LbsConn) Close() {
 	}
 }
 
+// dispatchLoop hands each message to the peer at most lbsMsgBurst at once and then one per
+// lbsMsgInterval: all peers share one lobby event loop. It waits holding mInbuf, so readLoop
+// stops reading and TCP pushes back on the client.
 func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 	defer cancel()
+
+	tokens := lbsMsgBurst
+	last := time.Now()
+	pace := func() bool {
+		for {
+			now := time.Now()
+			if gained := int(now.Sub(last) / lbsMsgInterval); gained > 0 {
+				tokens = min(lbsMsgBurst, tokens+gained)
+				last = last.Add(time.Duration(gained) * lbsMsgInterval)
+			}
+			if tokens >= lbsMsgBurst {
+				last = now
+			}
+			if tokens > 0 {
+				tokens--
+				return true
+			}
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(last.Add(lbsMsgInterval).Sub(now)):
+			}
+		}
+	}
 
 	for {
 		select {
@@ -214,6 +289,10 @@ func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 					break // the body is still arriving
 				}
 				c.inbuf = c.inbuf[n:]
+				if !pace() {
+					c.mInbuf.Unlock()
+					return
+				}
 				logger.Debug("recv", zap.Any("addr", c.Address()), zap.Any("msg", msg))
 				c.peer.OnMessage(msg)
 			}
@@ -277,17 +356,18 @@ func (s *LbsServer) ServeUDPStun(addr string) error {
 // serveUDPStun answers Pings.
 func serveUDPStun(conn, test *net.UDPConn) {
 	buf := make([]byte, 64<<10)
+	limit := stunLimiter{}
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			logger.Error("UDPStun read failed", zap.Error(err))
+			floodLog.Error("UDPStun read failed", zap.Error(err))
 			if ne, ok := err.(net.Error); ok && !ne.Timeout() && !ne.Temporary() {
 				return
 			}
 			continue
 		}
 		data, test2 := udpStunAnswer(buf[:n], addr)
-		if data == nil {
+		if data == nil || !limit.allow(addr.IP, time.Now()) {
 			continue
 		}
 		conn.WriteToUDP(data, addr)
@@ -295,6 +375,31 @@ func serveUDPStun(conn, test *net.UDPConn) {
 			test.WriteToUDP(data, addr)
 		}
 	}
+}
+
+const (
+	stunWindow        = 10 * time.Second
+	stunAnswersPerIP  = 20
+	stunTrackedIPsMax = 100000
+)
+
+type stunLimiter struct {
+	start time.Time
+	count map[string]int
+}
+
+func (l *stunLimiter) allow(ip net.IP, now time.Time) bool {
+	if l.count == nil || now.Sub(l.start) >= stunWindow {
+		l.start = now
+		l.count = map[string]int{}
+	}
+	k := string(ip.To16())
+	c, ok := l.count[k]
+	if c >= stunAnswersPerIP || (!ok && len(l.count) >= stunTrackedIPsMax) {
+		return false
+	}
+	l.count[k] = c + 1
+	return true
 }
 
 // StunPacket is a UDP Ping or Pong of the STUN server, zproxy and emulators, as JSON.
@@ -316,7 +421,7 @@ const (
 func udpStunAnswer(b []byte, addr *net.UDPAddr) ([]byte, bool) {
 	var req StunPacket
 	if err := json.Unmarshal(b, &req); err != nil || req.Type != StunPing {
-		logger.Warn("UDPStun unexpected packet", zap.ByteString("req", b), zap.Error(err))
+		floodLog.Warn("UDPStun unexpected packet", zap.Int("bytes", len(b)), zap.ByteString("head", logHead(b)), zap.Error(err))
 		return nil, false
 	}
 	data, err := json.Marshal(StunPacket{Type: StunPong, Timestamp: req.Timestamp, UserID: "SERVER", PublicAddr: addr.String()})
@@ -325,4 +430,12 @@ func udpStunAnswer(b []byte, addr *net.UDPAddr) ([]byte, bool) {
 		return nil, false
 	}
 	return data, req.UserID == UDPTestUserID
+}
+
+func logHead(b []byte) []byte {
+	const max = 32
+	if len(b) > max {
+		return b[:max]
+	}
+	return b
 }

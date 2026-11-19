@@ -73,7 +73,8 @@ Optional:
 With `ZDXSV_LOBBY_RELAY_REGIONS` set (comma separated regions, e.g. `asia-east2,us-west2`), the lobby
 starts a relay VM in each of them while players from two region groups are online, and stops it once
 unneeded for 30 minutes. One VM per region, named `zdxsv-relay-<region>-latest`: stopped VMs are
-started again, unused ones deleted after 5 days. A VM downloads the latest release, runs `zdxsv relay`
+started again, unused ones deleted after 5 days. A VM downloads the lobby's own release (the lobby must run an unmodified release binary: the VM
+runs `zdxsv` only if its SHA-256 matches the lobby's executable), runs `zdxsv relay`
 on UDP 8223, and registers at `ZDXSV_LOBBY_PUBLIC_ADDR` with `ZDXSV_RELAY_SECRET`.
 
 ```sh
@@ -108,9 +109,10 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
 ## Commands
 
 ```sh
-zdxsv initdb      # first deploy only: wipes the tables
+zdxsv initdb      # first deploy only: makes the database; fails if the file exists
 zdxsv             # the server
 zdxsv migratedb   # server stopped, when a release changes the schema; exits non-zero on failure
+zdxsv revoketokens discord <user id>   # signs out every emulator of that Discord user; prints the count
 ```
 
 ## Logging
@@ -130,7 +132,7 @@ Each line is a fixed `message` plus fields (`addr`, `user_id`, `battle_code`, `e
 
 Replace the binary, run `zdxsv migratedb` if the release changes the schema, restart.
 Releases before v1.4.0 refuse `-prodlog`: drop it before going back to one.
-Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
+Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`. The database runs in WAL mode: to restore a file, stop the server and delete `<db>-wal` and `<db>-shm` with the old file, or the old WAL is replayed onto the restored one.
 
 A release that changes a wire message (`testdata/wire/`) ships with the pcsx2 release that speaks
 it: set `min_pcsx2_version` in the master data's `m_server_setting` to that release (`zdxsv-X.Y.Z`)

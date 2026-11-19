@@ -219,7 +219,7 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatal("revoke", err, resp.StatusCode)
 	}
-	if _, st := r.lbsLogin(token); st != http.StatusForbidden {
+	if _, st := r.lbsLogin(token); st != http.StatusUnauthorized {
 		t.Fatal("revoked token logs in", st)
 	}
 	if _, st := r.lbsLogin(token2); st != 200 {
@@ -227,8 +227,80 @@ func TestSignInCreatesNoAccount(t *testing.T) {
 	}
 }
 
+func TestAuthTokenIdleExpiryAndRevokeAll(t *testing.T) {
+	r := newAuthRig(t)
+	stale := r.tokenFor("2222")
+	if _, st := r.lbsLogin(stale); st != 200 {
+		t.Fatal("first login", st)
+	}
+	fresh := r.tokenFor("2222")
+	other := r.tokenFor("3333")
+	sqldb := DefaultDB.(SQLiteDB)
+	old := time.Now().Add(-AuthTokenIdleExpiry - time.Hour)
+	if _, err := sqldb.Exec("UPDATE auth_token SET created = ?, last_used = NULL WHERE token_hash = ?", old, hashAuthToken(fresh)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqldb.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", old, hashAuthToken(stale)); err != nil {
+		t.Fatal(err)
+	}
+	if _, st := r.lbsLogin(stale); st != http.StatusUnauthorized {
+		t.Fatal("idle token logs in", st)
+	}
+	if _, st := r.lbsLogin(fresh); st != http.StatusUnauthorized {
+		t.Fatal("idle token without last use logs in", st)
+	}
+
+	recent := time.Now().Add(-AuthTokenIdleExpiry + 24*time.Hour)
+	first, second := r.tokenFor("2222"), r.tokenFor("2222")
+	if _, err := sqldb.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", recent, hashAuthToken(first)); err != nil {
+		t.Fatal(err)
+	}
+	if _, st := r.lbsLogin(first); st != 200 {
+		t.Fatal("token used within the expiry", st)
+	}
+	var used time.Time
+	if err := sqldb.QueryRow("SELECT last_used FROM auth_token WHERE token_hash = ?", hashAuthToken(first)).Scan(&used); err != nil || time.Since(used) > time.Minute {
+		t.Fatal("use not recorded", used, err)
+	}
+	resp, err := http.PostForm(r.site.URL+"/auth/revoke", url.Values{"token": {second}, "all": {"1"}})
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatal("revoke all", err, resp.StatusCode)
+	}
+	if _, st := r.lbsLogin(first); st != http.StatusUnauthorized {
+		t.Fatal("token of the identity survives revoke all", st)
+	}
+	if _, st := r.lbsLogin(second); st != http.StatusUnauthorized {
+		t.Fatal("revoking token survives revoke all", st)
+	}
+	if _, st := r.lbsLogin(other); st != 200 {
+		t.Fatal("another identity's token revoked", st)
+	}
+	var n int
+	sqldb.QueryRow("SELECT COUNT(*) FROM auth_token WHERE provider = 'discord' AND provider_user_id = '2222'").Scan(&n)
+	if n != 0 {
+		t.Fatal("tokens left for the identity", n)
+	}
+
+	if got, err := DefaultDB.RevokeProviderTokens("discord", "3333"); err != nil || got != 1 {
+		t.Fatal("revoke by identity", got, err)
+	}
+	if _, st := r.lbsLogin(other); st != http.StatusUnauthorized {
+		t.Fatal("token survives revoke by identity", st)
+	}
+}
+
 func (r *authRig) carry(token, code string) (accountList, int) {
-	resp, err := http.PostForm(r.site.URL+"/auth/accounts/carry", url.Values{"token": {token}, "code": {code}})
+	return r.carryFrom(token, code, "")
+}
+
+func (r *authRig) carryFrom(token, code, forwardedFor string) (accountList, int) {
+	req, _ := http.NewRequest(http.MethodPost, r.site.URL+"/auth/accounts/carry",
+		strings.NewReader(url.Values{"token": {token}, "code": {code}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if forwardedFor != "" {
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -266,7 +338,7 @@ func TestCarryOverLinksExistingAccount(t *testing.T) {
 	if got, st := r.lbsLoginAs(token, "2"); st != 200 || mustAccount(t, got) != other.LoginKey {
 		t.Fatalf("carried second account %d %+v", st, got)
 	}
-	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusForbidden {
+	if _, st := r.carry("nope", r.auth.IssueCarryCode(other.LoginKey)); st != http.StatusUnauthorized {
 		t.Fatal("unknown token carried", st)
 	}
 }
@@ -361,7 +433,7 @@ func TestAccountLimits(t *testing.T) {
 			t.Fatal("account", bad, st)
 		}
 	}
-	if _, st := r.accounts("/auth/accounts", "nope"); st != http.StatusForbidden {
+	if _, st := r.accounts("/auth/accounts", "nope"); st != http.StatusUnauthorized {
 		t.Fatal("unknown token listed", st)
 	}
 
@@ -390,6 +462,59 @@ func TestCarryOverMissesLock(t *testing.T) {
 	}
 	if _, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != http.StatusTooManyRequests {
 		t.Fatal("good code accepted after the miss limit", st)
+	}
+}
+
+func TestCarryOverMissesPerClient(t *testing.T) {
+	r := newAuthRig(t)
+	a, _ := DefaultDB.RegisterAccount("198.51.100.8")
+	token := r.tokenFor("5555")
+	for i := 0; i < carryMaxMisses; i++ {
+		r.carryFrom(token, "WRONGCOD", "203.0.113.1")
+	}
+	if _, st := r.carryFrom(token, "WRONGCOD", "203.0.113.1"); st != http.StatusTooManyRequests {
+		t.Fatal("client not locked", st)
+	}
+	if _, st := r.carryFrom(r.tokenFor("6666"), r.auth.IssueCarryCode(a.LoginKey), "203.0.113.2"); st != http.StatusOK {
+		t.Fatal("another client locked", st)
+	}
+}
+
+func TestCarryOverMissesExpire(t *testing.T) {
+	r := newAuthRig(t)
+	now := time.Now()
+	r.auth.Now = func() time.Time { return now }
+	a, _ := DefaultDB.RegisterAccount("198.51.100.8")
+	token := r.tokenFor("5555")
+	for i := 0; i < carryMaxMisses; i++ {
+		r.carry(token, "WRONGCOD")
+	}
+	now = now.Add(carryMissWindow - time.Second)
+	if _, st := r.carry(token, "WRONGCOD"); st != http.StatusTooManyRequests {
+		t.Fatal("lock ended early", st)
+	}
+	now = now.Add(2 * time.Second)
+	if _, st := r.carry(token, r.auth.IssueCarryCode(a.LoginKey)); st != http.StatusOK {
+		t.Fatal("lock did not end", st)
+	}
+}
+
+func TestNewAccountCreatedIPFromProxy(t *testing.T) {
+	r := newAuthRig(t)
+	token := r.tokenFor("7777")
+	req, _ := http.NewRequest(http.MethodPost, r.site.URL+"/lbs/login",
+		strings.NewReader(url.Values{"token": {token}, "account": {"new"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Forwarded-For", "203.0.113.7")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	key, _ := DefaultDB.IdentityLoginKey("discord", "7777")
+	a, err := DefaultDB.GetAccountByLoginKey(key)
+	if err != nil || a.CreatedIP != "203.0.113.7" {
+		t.Fatal(resp.StatusCode, a, err)
 	}
 }
 

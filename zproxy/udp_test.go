@@ -47,10 +47,10 @@ func TestUDPClient(t *testing.T) {
 		return recv{}
 	}
 
-	a.SendPing("A", bAddr.String())
+	a.SendPing("A", 42, bAddr.String())
 	r := next()
 	ping, ok := r.pkt.(StunPacket)
-	if !ok || ping.Type != StunPing || ping.UserID != "A" || ping.Timestamp == 0 {
+	if !ok || ping.Type != StunPing || ping.UserID != "A" || ping.Timestamp != 42 {
 		t.Fatalf("ping = %v", r.pkt)
 	}
 	if !isSameAddr(r.addr, aAddr) {
@@ -71,10 +71,10 @@ func TestUDPClient(t *testing.T) {
 		t.Fatalf("battle = %+v", r.pkt)
 	}
 
-	a.SendPing("x", "not an address")
+	a.SendPing("x", 1, "not an address")
 	a.Send([]byte{0xFF, 0xFF, 0xFF}, bAddr)
 	b.Unsubscribe("pb")
-	a.SendPing("after-unsubscribe", bAddr.String())
+	a.SendPing("after-unsubscribe", 1, bAddr.String())
 	select {
 	case r := <-got:
 		t.Errorf("got %+v", r.pkt)

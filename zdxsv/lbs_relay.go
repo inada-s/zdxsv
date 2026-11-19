@@ -512,12 +512,13 @@ func sendRelayControl(p *LbsPeer, ctl RelayControl) {
 func (a *Lbs) OnRelayStatus(p *LbsPeer, body []byte) {
 	var st RelayStatus
 	if err := json.Unmarshal(body, &st); err != nil {
-		logger.Warn("invalid relay status", zap.Any("addr", p.conn.Address()), zap.Error(err))
+		floodLog.Warn("invalid relay status", zap.Any("addr", p.conn.Address()), zap.Error(err))
 		return
 	}
 	secret := string(Conf.Lobby.RelaySecret)
 	if secret == "" || subtle.ConstantTimeCompare([]byte(st.Secret), []byte(secret)) != 1 {
-		logger.Warn("relay status with a wrong secret", zap.Any("addr", p.conn.Address()), zap.String("public", st.PublicAddr))
+		floodLog.Warn("relay status with a wrong secret", zap.Any("addr", p.conn.Address()), zap.String("public", st.PublicAddr))
+		sendRelayControl(p, RelayControl{Shutdown: true})
 		return
 	}
 	r := a.relayPeers[p]
@@ -790,7 +791,11 @@ func (a *Lbs) updateRelays(now time.Time) {
 	defer regionalRelays.Unlock()
 	for _, r := range regionalRelays.byAddr {
 		last, ok := rp.lastNeeded[r.Region]
-		if !ok || now.Sub(last) < relayIdleShutdown || r.activeSessions != 0 || r.shutdown == nil {
+		if !ok {
+			rp.lastNeeded[r.Region] = now
+			continue
+		}
+		if now.Sub(last) < relayIdleShutdown || r.activeSessions != 0 || r.shutdown == nil {
 			continue
 		}
 		logger.Info("relay no longer needed, shutting it down", zap.String("region", r.Region), zap.String("public", r.PublicAddr))

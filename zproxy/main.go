@@ -166,14 +166,14 @@ func (z *Zproxy) Setup() bool {
 	z.udpcl = NewUDPClient(udpConn)
 	go z.udpcl.ReadLoop(context.Background())
 
+	pinger := NewPinger()
 	defer z.udpcl.Unsubscribe("stun")
 	z.udpcl.SubscribePacket("stun", func(pkt StunPacket, addr *net.UDPAddr) {
 		switch pkt.Type {
 		case StunPong:
-			if pkt.UserID == "SERVER" {
-				nanoRtt := time.Now().UnixNano() - pkt.Timestamp
+			if rtt, ok := pinger.Answer(pkt); ok {
 				publicAddr = pkt.PublicAddr
-				log.Println("Server RTT:", nanoRtt/(1000*1000))
+				log.Println("Server RTT:", rtt.Milliseconds())
 				stunok.Store(true)
 			}
 		default:
@@ -189,7 +189,7 @@ func (z *Zproxy) Setup() bool {
 		if stunok.Load().(bool) {
 			break
 		}
-		z.udpcl.SendPacket(StunPacket{Type: StunPing, Timestamp: time.Now().UnixNano()}, svAddr)
+		z.udpcl.SendPacket(StunPacket{Type: StunPing, Timestamp: pinger.Token("SERVER")}, svAddr)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -217,6 +217,7 @@ func (z *Zproxy) PollLobby() error {
 		mtx          sync.Mutex
 		lobbyUsers   []LobbyUser
 		pongReceived = make(map[string]pingResult)
+		pinger       = NewPinger()
 	)
 
 	sendPingToLobbyUsers := func() {
@@ -227,7 +228,7 @@ func (z *Zproxy) PollLobby() error {
 				continue
 			}
 			for _, addr := range user.UDPAddrs {
-				z.udpcl.SendPing(z.userID, addr)
+				z.udpcl.SendPing(z.userID, pinger.Token(user.UserID), addr)
 			}
 		}
 	}
@@ -250,7 +251,11 @@ func (z *Zproxy) PollLobby() error {
 				z.udpcl.SendPong(pkt, myUserID, addr)
 			}
 		case StunPong:
-			rttNano := time.Now().UnixNano() - pkt.Timestamp
+			rtt, ok := pinger.Answer(pkt)
+			if !ok {
+				return
+			}
+			rttNano := rtt.Nanoseconds()
 			userID := pkt.UserID
 			log.Println("Pong received from", userID, "RTT:", rttNano/(1000*1000), "[ms]")
 			if conf.Verbose {
@@ -393,9 +398,10 @@ func (z *Zproxy) PollLobby() error {
 
 func (z *Zproxy) GreetBattleServer() bool {
 	answer := make(chan *net.UDPAddr, 1)
+	sessionID := z.sessionID
 	defer z.udpcl.Unsubscribe("greet")
 	z.udpcl.SubscribeBattle("greet", func(pkt BattlePacket, from *net.UDPAddr) {
-		if pkt.Kind != KindHelloAnswer {
+		if pkt.Kind != KindHelloAnswer || pkt.SessionID != sessionID {
 			return
 		}
 		if !pkt.OK {
@@ -408,7 +414,7 @@ func (z *Zproxy) GreetBattleServer() bool {
 		}
 	})
 
-	hello := AppendHello(nil, z.sessionID)
+	hello := AppendHello(nil, sessionID)
 	for i := 0; i < 10; i++ {
 		z.udpcl.Send(hello, z.svAddr)
 		select {
@@ -421,9 +427,21 @@ func (z *Zproxy) GreetBattleServer() bool {
 	return false
 }
 
+// battlePeer is the battle server, which forwards every user's messages, or
+// another user's zproxy, which sends only that user's (userID).
 type battlePeer struct {
-	addr *net.UDPAddr
-	buf  *BattleBuffer
+	userID string
+	addr   *net.UDPAddr
+	buf    *BattleBuffer
+}
+
+func findPeer(addr *net.UDPAddr, peers []battlePeer) (battlePeer, bool) {
+	for _, p := range peers {
+		if isSameAddr(addr, p.addr) {
+			return p, true
+		}
+	}
+	return battlePeer{}, false
 }
 
 func (z *Zproxy) ServeBattle() error {
@@ -452,10 +470,10 @@ func (z *Zproxy) ServeBattle() error {
 	}
 
 	msgFilter := NewMessageFilter(z.otherIDs)
-	server := battlePeer{z.svAddr, NewBattleBuffer("server")}
+	server := battlePeer{"", z.svAddr, NewBattleBuffer("server")}
 	var p2p []battlePeer
 	for id, addr := range z.p2pAddr {
-		p2p = append(p2p, battlePeer{addr, NewBattleBuffer(id)})
+		p2p = append(p2p, battlePeer{id, addr, NewBattleBuffer(id)})
 	}
 	chFlush := make(chan struct{}, 1)
 	flush := func() {
@@ -470,16 +488,15 @@ func (z *Zproxy) ServeBattle() error {
 		if pkt.Kind != KindBattle {
 			return
 		}
-		if isSameAddr(addr, server.addr) {
-			server.buf.ApplySeqAck(pkt.Seq, pkt.Ack)
-		} else {
-			for _, p := range p2p {
-				if isSameAddr(addr, p.addr) {
-					p.buf.ApplySeqAck(pkt.Seq, pkt.Ack)
-				}
-			}
+		from, ok := findPeer(addr, append([]battlePeer{server}, p2p...))
+		if !ok {
+			return
 		}
+		from.buf.ApplySeqAck(pkt.Seq, pkt.Ack)
 		for _, msg := range pkt.Messages {
+			if from.userID != "" && msg.UserID != from.userID {
+				continue
+			}
 			if msgFilter.Filter(msg) {
 				z.ps2cl.Write(msg.Body)
 			}

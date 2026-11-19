@@ -57,6 +57,20 @@ func TestLobbyBan(t *testing.T) {
 		return
 	})
 	dialLobby(t, addr).login(ac1, u1, "one")
+
+	a1, err := DefaultDB.RegisterIdentityAccount("discord", "7777", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a2, err := DefaultDB.RegisterIdentityAccount("discord", "7777", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := registerAccount(t)
+	u3, _, _ := dialLobby(t, addr).login(loginAgain(a1.LoginKey), "******", "three")
+	ban(&MasterBan{Key: u3, Until: time.Now().Add(time.Hour)})
+	refused(loginAgain(a2.LoginKey))
+	dialLobby(t, addr).login(other, "******", "other")
 }
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {
@@ -430,6 +444,70 @@ func TestTempKeyLobbyLogin(t *testing.T) {
 	if err != nil || len(users) == 0 {
 		t.Fatalf("no user registered under the account: %v %v", users, err)
 	}
+}
+
+// A client whose user has not logged in gets no lobby: without the key pair answer,
+// with a wrong login key, or with the account refused.
+func TestLobbyWaitsForLogin(t *testing.T) {
+	UseTestDB(t)
+	addr, app := startLobbyApp(t, NewMcs())
+	const lobbyID = 4
+	in := dialLobby(t, addr)
+	in.login(registerAccount(t), "******", "inside")
+	in.ask(0x6305, u16(lobbyID))
+
+	refused := registerAccount(t)
+	c := dialLobby(t, addr)
+	refusedID, _, _ := c.login(refused, "******", "refused")
+	c.ask(0x6006, nil)
+	if err := DefaultDB.ReplaceMaster(&Master{Bans: []*MasterBan{{Key: refusedID, Until: time.Now().Add(time.Hour)}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	answerKeyPair := func(c *testClient, ac *testLogin) {
+		kp := c.expect(0x6101, CategoryQuestion)
+		a := NewClientAnswer(kp)
+		a.Writer().WriteString(keyPairKey1(ac.SessionID)).Write(encryptString(a.Seq, ac.LoginKey))
+		c.send(a)
+	}
+	noKeyPair := dialLobby(t, addr)
+	wrongKey := dialLobby(t, addr)
+	answerKeyPair(wrongKey, &testLogin{LoginKey: "wrong", SessionID: registerAccount(t).SessionID})
+	banned := dialLobby(t, addr)
+	answerKeyPair(banned, loginAgain(refused.LoginKey))
+	banned.expect(0x6003, CategoryNotice)
+
+	for name, c := range map[string]*testClient{"no key pair": noKeyPair, "wrong key": wrongKey, "banned": banned} {
+		q := NewClientQuestion(0x6132)
+		q.Writer().Write(append(encryptString(q.Seq, "******"), encryptString(q.Seq, "intruder")...))
+		c.send(q)
+		enter := NewClientQuestion(0x6305)
+		enter.Writer().Write(u16(lobbyID))
+		c.send(enter)
+		c.say(sjis(t, "hello"))
+		c.ask(0x600E, nil)
+		for _, m := range c.queue {
+			if m.Category == CategoryAnswer || m.Command == 0x6104 {
+				t.Errorf("%s: lobby sent 0x%04x category %d", name, m.Command, m.Category)
+			}
+		}
+	}
+	if got := in.heard(); len(got) != 0 {
+		t.Fatalf("lobby member heard %q", got)
+	}
+	if users, err := DefaultDB.GetUserList(""); err != nil || len(users) != 0 {
+		t.Fatalf("users without an account: %v %v", users, err)
+	}
+	app.Locked(func(a *Lbs) {
+		for _, p := range a.peers {
+			if p.Lobby != nil && a.users[p.UserID] != p {
+				t.Errorf("peer of %q in lobby without login", p.UserID)
+			}
+		}
+		if len(a.users) != 1 {
+			t.Errorf("logged in users %d, want 1", len(a.users))
+		}
+	})
 }
 
 // say sends a chat line. The lobby does not answer it.

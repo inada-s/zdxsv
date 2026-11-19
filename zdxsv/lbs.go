@@ -54,6 +54,7 @@ type LbsPeer struct {
 	Platform          string
 	PlatformInfo      map[string]string
 
+	proxyHost         net.IP
 	proxyIP           net.IP
 	proxyPort         uint16
 	proxyUDPAddrs     []string
@@ -62,6 +63,7 @@ type LbsPeer struct {
 	proxyRegTime time.Time
 	proxyUseTime time.Time
 
+	openTime     time.Time
 	lastRecvTime time.Time
 }
 
@@ -106,8 +108,9 @@ type Lbs struct {
 }
 
 const (
-	peerRecvTimeout = 2 * time.Minute
-	battleTimeout   = time.Hour
+	peerRecvTimeout  = 2 * time.Minute
+	peerLoginTimeout = 5 * time.Minute
+	battleTimeout    = time.Hour
 )
 
 func NewLbs() *Lbs {
@@ -178,6 +181,38 @@ func (a *Lbs) SetBattleServer(b *Mcs) {
 	a.mcs = b
 }
 
+// preLoginCommands are what a peer may send before its user logs in: the login sequence,
+// the emulator and relay reports, and the line keepers.
+var preLoginCommands = map[uint16]bool{
+	0x0001:         true,
+	0x6001:         true,
+	0x6006:         true,
+	0x600E:         true,
+	0x6101:         true,
+	0x6103:         true,
+	0x6132:         true,
+	0x61A0:         true,
+	0x9950:         true,
+	0x9952:         true,
+	lbsRelayStatus: true,
+}
+
+func (a *Lbs) loggedIn(p *LbsPeer) bool {
+	return p.UserID != "" && a.users[p.UserID] == p
+}
+
+// accepts tells whether p may send the command now.
+func (a *Lbs) accepts(p *LbsPeer, command uint16) bool {
+	switch {
+	case a.loggedIn(p):
+		return true
+	case command == 0x6132:
+		return p.LoginKey != ""
+	default:
+		return preLoginCommands[command]
+	}
+}
+
 func (a *Lbs) Serve() {
 	aliveCheck := time.NewTicker(a.aliveCheckInterval)
 	defer aliveCheck.Stop()
@@ -190,7 +225,8 @@ func (a *Lbs) Serve() {
 			switch args := e.(type) {
 			case eventPeerCome:
 				logger.Info("eventPeerCome")
-				args.peer.lastRecvTime = time.Now()
+				args.peer.openTime = time.Now()
+				args.peer.lastRecvTime = args.peer.openTime
 				a.peers[args.peer.conn.Address()] = args.peer
 				a.OnOpen(args.peer)
 			case eventPeerMessage:
@@ -198,10 +234,14 @@ func (a *Lbs) Serve() {
 					continue
 				}
 				args.peer.lastRecvTime = time.Now()
+				if !a.accepts(args.peer, args.msg.Command) {
+					floodLog.Warn("command before login ignored", zap.Any("name", symbolMap[args.msg.Command]), zap.Uint16("command", args.msg.Command), zap.Any("addr", args.peer.conn.Address()))
+					continue
+				}
 				if f, ok := a.handlers[args.msg.Command]; ok {
 					f(args.peer, args.msg)
 				} else {
-					logger.Error("handler not found", zap.Any("name", symbolMap[args.msg.Command]), zap.Any("msg", args.msg))
+					floodLog.Error("handler not found", zap.Any("name", symbolMap[args.msg.Command]), zap.Any("msg", args.msg))
 					if args.msg.Category == CategoryQuestion {
 						args.peer.SendMessage(NewServerAnswer(args.msg))
 					}
@@ -228,6 +268,9 @@ func (a *Lbs) checkAlive(now time.Time) {
 	for _, p := range a.peers {
 		if now.Sub(p.lastRecvTime) >= peerRecvTimeout {
 			logger.Info("recv timeout", zap.String("user_id", p.UserID), zap.Any("addr", p.conn.Address()))
+			p.conn.conn.Close()
+		} else if now.Sub(p.openTime) >= peerLoginTimeout && a.users[p.UserID] != p && a.relayPeers[p] == nil {
+			logger.Info("login timeout", zap.String("user_id", p.UserID), zap.Any("addr", p.conn.Address()))
 			p.conn.conn.Close()
 		} else {
 			RequestLineCheck(p)

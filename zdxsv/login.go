@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io/fs"
 	"mime"
-	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -81,7 +82,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 		if r.Method == "POST" {
 			r.ParseForm()
 		}
-		logger.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.String("query", r.URL.RawQuery), zap.Any("form", r.Form), zap.String("ua", r.UserAgent()))
+		logger.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("query", logForm(r.URL.Query())), zap.Any("form", logForm(r.Form)), zap.String("ua", r.UserAgent()))
 
 	}
 }
@@ -174,10 +175,12 @@ func HandleTopPage(w http.ResponseWriter, r *http.Request) {
 func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	p := commonParam{}
 	r.ParseForm()
-	logger.Info("login form", zap.Any("form", r.Form))
+	logger.Info("login form", zap.Any("form", logForm(r.Form)))
 	loginKey := r.FormValue("login_key")
 
-	if loginKey == "" {
+	// An account made for a sign-in identity logs in by token only: no client ever holds its key.
+	identityOnly, err := DefaultDB.AccountMadeForIdentity(loginKey)
+	if loginKey == "" || identityOnly || err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, messageLoginFail)
@@ -257,7 +260,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := requestIP(r)
 		a, e := DefaultDB.AddTokenAccount(token, ip)
 		if errors.Is(e, ErrIdentityFull) {
 			http.Error(w, "too many accounts", http.StatusConflict)
@@ -268,7 +271,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "login failed", http.StatusForbidden)
 			return
 		}
-		logger.Info("token login: new account", zap.String("login_key", a.LoginKey))
+		logger.Info("token login: new account", zap.String("login_key", maskKey(a.LoginKey)))
 		loginKey, keys = a.LoginKey, append(keys, a.LoginKey)
 	} else if err == nil && n != "" {
 		if i, e := strconv.Atoi(n); e == nil && 1 <= i && i <= len(keys) {
@@ -278,7 +281,11 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil || (loginKey == "" && len(keys) > 0) {
-		logger.Error("token login refused", zap.Error(err))
+		floodLog.Error("token login refused", zap.Error(err))
+		if errors.Is(err, ErrUnknownToken) {
+			http.Error(w, "unknown token", http.StatusUnauthorized)
+			return
+		}
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
@@ -310,7 +317,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
-	a, err := DefaultDB.RegisterAccount(r.RemoteAddr)
+	a, err := DefaultDB.RegisterAccount(requestIP(r))
 	if err != nil {
 		logger.Error("login page failed", zap.Error(err))
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
@@ -425,4 +432,27 @@ var assetFiles embed.FS
 // Asset returns the login pages' file at name ("assets/login.png"), served under /assets/.
 func Asset(name string) ([]byte, error) {
 	return fs.ReadFile(assetFiles, name)
+}
+
+func logForm(v url.Values) url.Values {
+	out := make(url.Values, len(v))
+	for k, vs := range v {
+		if k == "login_key" || k == "token" {
+			masked := make([]string, len(vs))
+			for i, s := range vs {
+				masked[i] = maskKey(s)
+			}
+			vs = masked
+		}
+		out[k] = vs
+	}
+	return out
+}
+
+func maskKey(k string) string {
+	const shown = 3
+	if len(k) <= shown {
+		return strings.Repeat("*", len(k))
+	}
+	return k[:shown] + strings.Repeat("*", len(k)-shown)
 }

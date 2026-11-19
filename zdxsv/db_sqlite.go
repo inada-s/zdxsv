@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS auth_token (
 	provider text default '',
 	provider_user_id text default '',
 	created timestamp,
+	last_used timestamp,
 	PRIMARY KEY (token_hash)
 );
 CREATE TABLE IF NOT EXISTS user (
@@ -116,6 +117,7 @@ CREATE TABLE IF NOT EXISTS battle_record (
 	replay_url  text default '',
 	used_ms_mask integer default 0,
 	used_ms_list text default '',
+	ggpo_session integer default 0,
 	play_count  integer default 0,
 	created     timestamp,
 	updated     timestamp,
@@ -172,6 +174,7 @@ CREATE INDEX IF NOT EXISTS BATTLE_RECORD_PLAYERS ON battle_record(players);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_CREATED ON battle_record(created);
 CREATE INDEX IF NOT EXISTS BATTLE_RECORD_AGGRIGATE ON battle_record(aggregate);
 CREATE INDEX IF NOT EXISTS ACCOUNT_LAST_LOGIN_MACHINE_ID ON account(last_login_machine_id);
+CREATE INDEX IF NOT EXISTS ACCOUNT_CREATED_IP ON account(created_ip);
 CREATE INDEX IF NOT EXISTS AUTH_IDENTITY_PROVIDER ON auth_identity(provider, provider_user_id);
 CREATE INDEX IF NOT EXISTS AUTH_TOKEN_LOGIN_KEY ON auth_token(login_key);
 `
@@ -179,6 +182,46 @@ CREATE INDEX IF NOT EXISTS AUTH_TOKEN_LOGIN_KEY ON auth_token(login_key);
 func (db SQLiteDB) Init() error {
 	_, err := db.Exec(schema + indexes)
 	return err
+}
+
+// CheckSchema reports a table or column of the current schema that the database lacks.
+func (db SQLiteDB) CheckSchema() error {
+	want, err := sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		return err
+	}
+	defer want.Close()
+	if _, err := want.Exec(schema); err != nil {
+		return err
+	}
+	cols := func(d *sqlx.DB) (map[string]bool, error) {
+		var rows []string
+		err := d.Select(&rows, `SELECT m.name || '.' || p.name FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table'`)
+		set := map[string]bool{}
+		for _, r := range rows {
+			set[r] = true
+		}
+		return set, err
+	}
+	need, err := cols(want)
+	if err != nil {
+		return err
+	}
+	have, err := cols(db.DB)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for c := range need {
+		if !have[c] {
+			missing = append(missing, c)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("database lacks %s: run initdb for a new database, migratedb for an old one", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func (db SQLiteDB) Migrate() error {
@@ -287,13 +330,17 @@ func tableColumns(tx *sql.Tx, table string) ([]string, error) {
 func (db SQLiteDB) RegisterAccount(ip string) (*DBAccount, error) {
 	key := GenLoginKey()
 	now := time.Now()
-	_, err := db.Exec(`
+	res, err := db.Exec(`
 INSERT INTO account
 	(login_key, created_ip, created, last_login, system)
-VALUES
-	(?, ?, ?, ?, ?)`, key, ip, now, now, 0)
+SELECT ?, ?, ?, ?, ?
+WHERE (SELECT COUNT(*) FROM account WHERE created_ip = ? AND created > ?) < ?`,
+		key, ip, now, now, 0, ip, now.Add(-AccountsPerIPWindow), AccountsPerIP)
 	if err != nil {
 		return nil, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return nil, ErrTooManyAccounts
 	}
 	a := &DBAccount{
 		LoginKey:  key,
@@ -325,7 +372,10 @@ func (db SQLiteDB) SetLoginEndpoint(loginKey, ip, machineID string) error {
 
 func (db SQLiteDB) FindBan(loginKey string) (*MasterBan, error) {
 	bans := []*MasterBan{}
-	err := db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?)`, loginKey)
+	err := db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?
+		OR login_key IN (SELECT o.login_key FROM auth_identity i JOIN auth_identity o
+			ON o.provider = i.provider AND o.provider_user_id = i.provider_user_id
+			WHERE i.login_key = ? AND i.provider_user_id <> ''))`, loginKey, loginKey)
 	if err != nil {
 		return nil, err
 	}
@@ -455,25 +505,30 @@ func (db SQLiteDB) GetServerSetting(key string) (string, error) {
 }
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*DBUser, error) {
-	userID := genUserID()
-	now := time.Now()
-	res, err := db.Exec(`INSERT INTO user (user_id, login_key, created)
-		SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM user WHERE login_key = ?) < ?`,
-		userID, loginKey, now, loginKey, MaxUsersPerAccount)
-	if err != nil {
-		return nil, err
+	for range 10 {
+		userID := genUserID()
+		now := time.Now()
+		res, err := db.Exec(`INSERT INTO user (user_id, login_key, created)
+		SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM user WHERE login_key = ?) < ?
+			AND NOT EXISTS (SELECT 1 FROM user WHERE user_id = ?)`,
+			userID, loginKey, now, loginKey, MaxUsersPerAccount, userID)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return nil, err
+		} else if n == 1 {
+			return &DBUser{LoginKey: loginKey, UserID: userID, Created: now}, nil
+		}
+		var count int
+		if err := db.Get(&count, `SELECT COUNT(*) FROM user WHERE login_key = ?`, loginKey); err != nil {
+			return nil, err
+		}
+		if count >= MaxUsersPerAccount {
+			return nil, ErrUserLimit
+		}
 	}
-	if n, err := res.RowsAffected(); err != nil {
-		return nil, err
-	} else if n == 0 {
-		return nil, ErrUserLimit
-	}
-	u := &DBUser{
-		LoginKey: loginKey,
-		UserID:   userID,
-		Created:  now,
-	}
-	return u, nil
+	return nil, errors.New("no unused user id")
 }
 
 func (db SQLiteDB) GetUserList(loginKey string) ([]*DBUser, error) {
@@ -501,6 +556,12 @@ func (db SQLiteDB) GetUser(userID string) (*DBUser, error) {
 	return u, err
 }
 
+func (db SQLiteDB) GetAccountUser(loginKey, userID string) (*DBUser, error) {
+	u := &DBUser{}
+	err := db.Get(u, `SELECT * FROM user WHERE login_key = ? AND user_id = ?`, loginKey, userID)
+	return u, err
+}
+
 func (db SQLiteDB) LoginUser(user *DBUser) error {
 	a, err := db.GetAccountByLoginKey(user.LoginKey)
 	if err != nil {
@@ -513,7 +574,7 @@ func (db SQLiteDB) LoginUser(user *DBUser) error {
 		return err
 	}
 
-	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ?`, user.SessionID, user.UserID)
+	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ? AND login_key = ?`, user.SessionID, user.UserID, user.LoginKey)
 	return err
 }
 
@@ -543,7 +604,7 @@ SET
 	daily_lose_count = :daily_lose_count,
 	system = :system
 WHERE
-	user_id = :user_id`, user)
+	user_id = :user_id AND login_key = :login_key`, user)
 	return err
 }
 
@@ -553,9 +614,9 @@ func (db SQLiteDB) AddBattleRecord(battleRecord *BattleRecord) error {
 	battleRecord.Created = now
 	_, err := db.NamedExec(`
 INSERT INTO battle_record
-	(battle_code, user_id, user_name, pilot_name, players, aggregate, pos, side, created, updated, system)
+	(battle_code, user_id, user_name, pilot_name, players, aggregate, pos, side, ggpo_session, created, updated, system)
 VALUES
-	(:battle_code, :user_id, :user_name, :pilot_name, :players, :aggregate, :pos, :side, :created, :updated, :system)`,
+	(:battle_code, :user_id, :user_name, :pilot_name, :players, :aggregate, :pos, :side, :ggpo_session, :created, :updated, :system)`,
 		battleRecord)
 	return err
 }
@@ -855,6 +916,11 @@ const (
 // CarryMinBattles is the battle count (over the account's users) a carry-over code needs.
 const CarryMinBattles = 100
 
+// AuthTokenIdleExpiry: a token unused this long is refused and deleted.
+const AuthTokenIdleExpiry = 90 * 24 * time.Hour
+
+const authTokenUseResolution = time.Hour
+
 func hashAuthToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
@@ -901,12 +967,31 @@ func identityKeys(q querier, provider, providerUserID string) ([]string, error) 
 // tokenIdentity returns the token's identity and the account it was issued for ("" for an identity
 // token). A token issued for an account holds no identity: it is the account's link, if any.
 func (db SQLiteDB) tokenIdentity(token string) (provider, uid, key string, err error) {
-	err = db.QueryRow("SELECT provider, provider_user_id, login_key FROM auth_token WHERE token_hash = ?",
-		hashAuthToken(token)).Scan(&provider, &uid, &key)
+	var created, lastUsed sql.NullTime
+	h := hashAuthToken(token)
+	err = db.QueryRow("SELECT provider, provider_user_id, login_key, created, last_used FROM auth_token WHERE token_hash = ?",
+		h).Scan(&provider, &uid, &key, &created, &lastUsed)
 	if err == sql.ErrNoRows {
 		return "", "", "", ErrUnknownToken
 	}
-	if err != nil || provider != "" || key == "" {
+	if err != nil {
+		return "", "", "", err
+	}
+	used := lastUsed.Time
+	if !lastUsed.Valid {
+		used = created.Time
+	}
+	now := time.Now()
+	if now.Sub(used) > AuthTokenIdleExpiry {
+		db.Exec("DELETE FROM auth_token WHERE token_hash = ?", h)
+		return "", "", "", ErrUnknownToken
+	}
+	if now.Sub(used) > authTokenUseResolution {
+		if _, err := db.Exec("UPDATE auth_token SET last_used = ? WHERE token_hash = ?", now, h); err != nil {
+			return "", "", "", err
+		}
+	}
+	if provider != "" || key == "" {
 		return provider, uid, key, err
 	}
 	err = db.QueryRow("SELECT provider, provider_user_id FROM auth_identity WHERE login_key = ?", key).Scan(&provider, &uid)
@@ -1029,8 +1114,12 @@ func (db SQLiteDB) IssueAuthToken(provider, providerUserID string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	_, err = db.Exec(`INSERT INTO auth_token (token_hash, provider, provider_user_id, created) VALUES (?, ?, ?, ?)`,
-		hashAuthToken(token), provider, providerUserID, time.Now())
+	now := time.Now()
+	if err := db.pruneAuthTokens(now); err != nil {
+		return "", err
+	}
+	_, err = db.Exec(`INSERT INTO auth_token (token_hash, provider, provider_user_id, created, last_used) VALUES (?, ?, ?, ?, ?)`,
+		hashAuthToken(token), provider, providerUserID, now, now)
 	if err != nil {
 		return "", err
 	}
@@ -1042,6 +1131,36 @@ func (db SQLiteDB) RevokeAuthToken(token string) error {
 	return err
 }
 
+func (db SQLiteDB) RevokeIdentityTokens(token string) error {
+	provider, uid, _, err := db.tokenIdentity(token)
+	if err == ErrUnknownToken {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := db.RevokeAuthToken(token); err != nil || provider == "" {
+		return err
+	}
+	_, err = db.RevokeProviderTokens(provider, uid)
+	return err
+}
+
+func (db SQLiteDB) RevokeProviderTokens(provider, providerUserID string) (int64, error) {
+	r, err := db.Exec(`DELETE FROM auth_token WHERE (provider = ? AND provider_user_id = ?)
+		OR login_key IN (SELECT login_key FROM auth_identity WHERE provider = ? AND provider_user_id = ?)`,
+		provider, providerUserID, provider, providerUserID)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}
+
+func (db SQLiteDB) pruneAuthTokens(now time.Time) error {
+	_, err := db.Exec("DELETE FROM auth_token WHERE COALESCE(last_used, created) < ?", now.Add(-AuthTokenIdleExpiry))
+	return err
+}
+
 func (db SQLiteDB) AccountCarried(loginKey string) (bool, error) {
 	var carried bool
 	err := db.QueryRow("SELECT carried FROM auth_identity WHERE login_key = ?", loginKey).Scan(&carried)
@@ -1049,6 +1168,12 @@ func (db SQLiteDB) AccountCarried(loginKey string) (bool, error) {
 		return false, nil
 	}
 	return carried, err
+}
+
+func (db SQLiteDB) AccountMadeForIdentity(loginKey string) (bool, error) {
+	var n int
+	err := db.QueryRow("SELECT COUNT(*) FROM auth_identity WHERE login_key = ? AND carried = 0", loginKey).Scan(&n)
+	return n > 0, err
 }
 
 func (db SQLiteDB) AccountBattleCount(loginKey string) (int, error) {

@@ -19,7 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// POST /lbs/replay_upload: an emulator posts a battle's replay as a multipart file
+// POST /lbs/replay_upload?battle_code=&session_id= (session_id = the battle's ggpo_session, else 403;
+// checked before the body is read): an emulator posts a battle's replay as a multipart file
 // named <battle_code>.pb after the battle. It is stored as replays/<battle_code>.pb and its
 // url is recorded on the battle (served by /lbs/replay). 409 when that replay is already there.
 // The form field used_ms (JSON, per round, by position: the MS id + 1, 0: unknown, e.g.
@@ -28,7 +29,8 @@ import (
 const (
 	replayUploadPrefix  = "replays/"
 	replayUploadMaxSize = 64 << 20 // a replay with its start state is ~10 MB
-	replayUploadMemory  = 16 << 20
+	replayUploadMemory  = 1 << 20
+	replayUploadTime    = 5 * time.Minute
 )
 
 var errReplayExists = errors.New("replay already uploaded")
@@ -119,6 +121,12 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "replay upload is disabled", http.StatusServiceUnavailable)
 		return
 	}
+	battleCode := r.URL.Query().Get("battle_code")
+	if code, msg := replayUploadAllowed(battleCode, r.URL.Query().Get("session_id")); code != 0 {
+		http.Error(w, msg, code)
+		return
+	}
+	http.NewResponseController(w).SetReadDeadline(time.Now().Add(replayUploadTime))
 	r.Body = http.MaxBytesReader(w, r.Body, replayUploadMaxSize)
 	if err := r.ParseMultipartForm(replayUploadMemory); err != nil {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
@@ -139,8 +147,7 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No file", http.StatusBadRequest)
 		return
 	}
-	battleCode := strings.TrimSuffix(fh.Filename, ".pb")
-	if battleCode == "" || battleCode == fh.Filename || strings.ContainsAny(battleCode, "/\\") {
+	if fh.Filename != battleCode+".pb" {
 		http.Error(w, "Invalid file name", http.StatusBadRequest)
 		return
 	}
@@ -178,6 +185,30 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Info("replay uploaded", zap.Any("battle_code", battleCode), zap.Int64("size", fh.Size), zap.Any("url", url))
 	fmt.Fprintf(w, "File uploaded: %q (%v bytes)\n", fh.Filename, fh.Size)
+}
+
+func replayUploadAllowed(battleCode, session string) (int, string) {
+	if battleCode == "" || strings.ContainsAny(battleCode, "/\\.") {
+		return http.StatusBadRequest, "Invalid battle_code"
+	}
+	id, err := strconv.ParseInt(session, 10, 64)
+	if err != nil || id == 0 {
+		return http.StatusForbidden, "Invalid session_id"
+	}
+	records, err := DefaultDB.GetBattleRecords(battleCode)
+	if err != nil {
+		logger.Warn("replay_upload: GetBattleRecords failure", zap.Any("battle_code", battleCode), zap.Error(err))
+		return http.StatusInternalServerError, "Failed to find the battle"
+	}
+	if len(records) == 0 || records[0].GgpoSession == 0 || id != int64(records[0].GgpoSession) && id != int64(int32(records[0].GgpoSession)) {
+		return http.StatusForbidden, "Unknown battle or session"
+	}
+	for _, rec := range records {
+		if rec.ReplayURL != "" {
+			return http.StatusConflict, "Already uploaded"
+		}
+	}
+	return 0, ""
 }
 
 func saveUsedMs(battleCode string, rounds [][]int) {

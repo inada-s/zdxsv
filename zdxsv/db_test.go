@@ -128,12 +128,13 @@ func test106GetUserListNone(t *testing.T) {
 
 func test200AddBattleRecord(t *testing.T) {
 	br := &BattleRecord{
-		BattleCode: "battlecode",
-		UserID:     "123456",
-		Players:    4,
-		Pos:        1,
-		Side:       2,
-		System:     123,
+		BattleCode:  "battlecode",
+		UserID:      "123456",
+		Players:     4,
+		Pos:         1,
+		Side:        2,
+		System:      123,
+		GgpoSession: 0xF0000001,
 	}
 	err := testDB.AddBattleRecord(br)
 	must(t, err)
@@ -639,7 +640,7 @@ func assertIndexes(t *testing.T, db SQLiteDB) {
 	t.Helper()
 	var names []string
 	must(t, db.Select(&names, `SELECT name FROM sqlite_master WHERE name LIKE '%_tmp' OR type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name`))
-	assertEq(t, []string{"ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_PROVIDER", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
+	assertEq(t, []string{"ACCOUNT_CREATED_IP", "ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_PROVIDER", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
 }
 
 // UseTestDB points DefaultDB at a new SQLite DB in t.TempDir() until the test ends.

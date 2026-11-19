@@ -113,11 +113,15 @@ func resetGceState() {
 	gceAllocMu.Unlock()
 }
 
+const testSHA256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 var testAllocParams = gceAllocParams{
 	Project:         "proj",
 	Region:          "asia-east2",
 	LobbyPublicAddr: "153.121.44.150:8200",
 	RelaySecret:     "0123456789abcdef_relay",
+	Tag:             "v1.2.3",
+	BinarySHA256:    testSHA256,
 }
 
 func TestGceAllocReusesRunningVM(t *testing.T) {
@@ -172,7 +176,7 @@ func TestGceAllocCreatesVM(t *testing.T) {
 		t.Errorf("sa %v disks %+v", vm.ServiceAccounts, vm.Disks[0])
 	}
 	script := metadataValue(vm.Metadata, "startup-script")
-	for _, want := range []string{"readonly VERSION=latest", "zdxsv-server_${TAG_NAME#v}_linux-x86_64.tar.gz", "sha256sum -c -",
+	for _, want := range []string{"readonly TAG_NAME=v1.2.3", "echo \"" + testSHA256 + "  $TAG_NAME/zdxsv\" | sha256sum -c -", "zdxsv-server_${TAG_NAME#v}_linux-x86_64.tar.gz", "sha256sum -c -",
 		"ZDXSV_RELAY_SECRET=0123456789abcdef_relay", "ZDXSV_LOBBY_PUBLIC_ADDR=153.121.44.150:8200", "ZDXSV_RELAY_ADDR=:8223",
 		"ZDXSV_RELAY_REGION=${ZONE%-*}", "zdxsv -prodlog relay"} {
 		if !strings.Contains(script, want) {
@@ -188,9 +192,12 @@ func TestGceAllocRejectsBadParams(t *testing.T) {
 	resetGceState()
 	f := &gceFake{}
 	for _, p := range []gceAllocParams{
-		{Project: "p", Region: "mars-1", LobbyPublicAddr: "a:1", RelaySecret: "0123456789abcdef_relay"},
-		{Project: "p", Region: "asia-east2", RelaySecret: "0123456789abcdef_relay"},
-		{Project: "p", Region: "asia-east2", LobbyPublicAddr: "a:1", RelaySecret: "short"},
+		{Project: "p", Region: "mars-1", LobbyPublicAddr: "a:1", RelaySecret: "0123456789abcdef_relay", Tag: "v1.2.3", BinarySHA256: testSHA256},
+		{Project: "p", Region: "asia-east2", RelaySecret: "0123456789abcdef_relay", Tag: "v1.2.3", BinarySHA256: testSHA256},
+		{Project: "p", Region: "asia-east2", LobbyPublicAddr: "a:1", RelaySecret: "short", Tag: "v1.2.3", BinarySHA256: testSHA256},
+		{Project: "p", Region: "asia-east2", LobbyPublicAddr: "a:1", RelaySecret: "0123456789abcdef_relay", Tag: "vlocal", BinarySHA256: testSHA256},
+		{Project: "p", Region: "asia-east2", LobbyPublicAddr: "a:1", RelaySecret: "0123456789abcdef_relay", Tag: "v1.2.3; reboot", BinarySHA256: testSHA256},
+		{Project: "p", Region: "asia-east2", LobbyPublicAddr: "a:1", RelaySecret: "0123456789abcdef_relay", Tag: "v1.2.3"},
 	} {
 		if _, err := gceAlloc(context.Background(), f, p); err == nil {
 			t.Errorf("%+v allocated", p)

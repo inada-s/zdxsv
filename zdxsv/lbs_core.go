@@ -57,7 +57,7 @@ func (a *Lbs) removeUser(p *LbsPeer) {
 func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 	accountKey, ok := Sessions.Use(sessionID, loginKey)
 	if !ok {
-		logger.Error("no login session", zap.Any("session_id", sessionID))
+		floodLog.Error("no login session", zap.Any("session_id", sessionID))
 		return
 	}
 	ac, err := DefaultDB.GetAccountByLoginKey(accountKey)
@@ -79,12 +79,12 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 		logger.Error("FindBan failure", zap.Error(err))
 	}
 	if ban != nil {
-		logger.Info("banned login refused", zap.Any("login_key", ac.LoginKey), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
+		logger.Info("banned login refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
 		SendBanned(p)
 		return
 	}
 	if pcsx2NeedsUpdate(p.PlatformInfo, ac.LoginKey, machineID) {
-		logger.Info("outdated client refused", zap.Any("login_key", ac.LoginKey), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
+		logger.Info("outdated client refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
 		SendPleaseUpdate(p)
 		return
 	}
@@ -96,7 +96,7 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 
 func (a *Lbs) OnFirstData(p *LbsPeer) {
 	if p.LoginKey == "" {
-		logger.Error("loginKey not set")
+		floodLog.Error("loginKey not set")
 		return
 	}
 	battle, ok := a.battles[p.SessionID]
@@ -104,7 +104,7 @@ func (a *Lbs) OnFirstData(p *LbsPeer) {
 		for _, u := range battle.Users {
 			if u.SessionID == p.SessionID {
 				if u.LoginKey != p.LoginKey {
-					logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
+					logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 					return
 				}
 				p.LbsUser = u
@@ -149,32 +149,24 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 			logger.Error("login failed", zap.Error(err))
 			return false
 		}
-		u, err := DefaultDB.GetUser(ac.LastUserID)
+		u, err := DefaultDB.GetAccountUser(p.LoginKey, ac.LastUserID)
 		if err != nil {
 			logger.Error("login failed", zap.Error(err))
-			return false
-		}
-		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
 		p.LbsUser.DBUser = *u
 		p.SessionID = sessionID
 	} else if 0 < len(userID) && 0 < len(name) {
-		u, err := DefaultDB.GetUser(userID)
+		u, err := DefaultDB.GetAccountUser(p.LoginKey, userID)
 		if err != nil {
 			logger.Error("login failed", zap.Error(err))
-			return false
-		}
-		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", p.LoginKey))
 			return false
 		}
 		p.LbsUser.DBUser = *u
 		p.Name = name
 		p.SessionID = sessionID
 	} else {
-		logger.Error("undefined user id", zap.Any("user_id", userID), zap.Any("name", name), zap.Any("session_id", sessionID))
+		floodLog.Error("undefined user id", zap.Any("user_id", userID), zap.Any("name", name), zap.Any("session_id", sessionID))
 		return false
 	}
 
@@ -211,6 +203,11 @@ func (a *Lbs) OnGetBattleResult(p *LbsPeer, result *BattleResult) {
 	record, err := DefaultDB.GetBattleRecordUser(result.BattleCode, p.UserID)
 	if err != nil {
 		logger.Error("failed to load battle record", zap.Error(err), zap.String("record", string(js)))
+		return
+	}
+
+	if record.Result != "" {
+		logger.Info("battle result already recorded", zap.String("battle_code", result.BattleCode), zap.String("user_id", p.UserID))
 		return
 	}
 
@@ -491,13 +488,14 @@ func (a *Lbs) startBattle(platform string, lobbyID uint16, users []*LbsUser, rul
 			b.PlatformInfo[u.UserID] = battlePlatformInfo(peer)
 			peer.Battle = b
 			err = DefaultDB.AddBattleRecord(&BattleRecord{
-				BattleCode: b.BattleCode,
-				Aggregate:  1,
-				UserID:     u.UserID,
-				PilotName:  pilotName(u.Bin),
-				Players:    len(users),
-				Pos:        int(b.GetPosition(u.UserID)),
-				Side:       int(u.Entry),
+				BattleCode:  b.BattleCode,
+				Aggregate:   1,
+				UserID:      u.UserID,
+				PilotName:   pilotName(u.Bin),
+				Players:     len(users),
+				Pos:         int(b.GetPosition(u.UserID)),
+				Side:        int(u.Entry),
+				GgpoSession: b.GgpoSession,
 			})
 			if err != nil {
 				logger.Info("failed to add battle record", zap.Error(err))
@@ -551,7 +549,7 @@ func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 
 func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
-		logger.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
+		floodLog.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
 		return
 	}
 	p.PlatformInfo = info
@@ -562,6 +560,7 @@ func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
+		a.OnExitLobby(p)
 		p.LbsUser.Sync = ""
 		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
 			p.LbsUser.Sync = s
@@ -628,9 +627,20 @@ func (a *Lbs) OnGetLobbyEntryUserCount(p *LbsPeer, lobbyID uint16) (uint16, uint
 	return l.GetEntryUserCount()
 }
 
+// dropGoneLobbyUsers removes lobby members whose logged-in peer is gone or elsewhere:
+// one left behind would make every battle start of the lobby fail.
+func (a *Lbs) dropGoneLobbyUsers(l *LbsLobby) {
+	for id, u := range l.Users {
+		if p, ok := a.users[id]; !ok || p.Lobby != l || &p.LbsUser != u {
+			l.Exit(id)
+		}
+	}
+}
+
 func (a *Lbs) OnEntryLobbyBattle(p *LbsPeer, side byte) {
 	if p.Lobby != nil {
 		lobby := p.Lobby
+		a.dropGoneLobbyUsers(lobby)
 		lobby.Entry(&p.LbsUser, side)
 
 		setting := lobbySetting(lobby.Platform, lobby.ID)
@@ -908,6 +918,9 @@ func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
 	}
 	ok = r.Status == RoomStateEmpty
 	if ok {
+		if p.Room != r {
+			a.OnExitRoom(p)
+		}
 		r.Status = RoomStatePrepare
 		p.Room = r
 
@@ -948,7 +961,7 @@ func (a *Lbs) OnGetRuleDefaultIndex(p *LbsPeer, roomID uint16, ruleID byte) byte
 	}
 	room, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		logger.Error("room not found")
+		floodLog.Error("room not found")
 		return 0
 	}
 	return room.Rule.Get(ruleID)
@@ -1076,11 +1089,14 @@ func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID uint16) bool {
 	}
 	r, ok := p.Lobby.Rooms[roomID]
 	if !ok {
-		logger.Error("not found")
+		floodLog.Error("not found")
 		return false
 	}
 	if r.Status == RoomStateFull {
 		return false
+	}
+	if p.Room != r {
+		a.OnExitRoom(p)
 	}
 
 	for _, u := range r.Users {
@@ -1312,8 +1328,13 @@ func lobbyHasHack(s *MLobbySetting, hack string) bool {
 }
 
 func platformHasWideScreen(platform string) bool {
-	for i := 0; i < LobbyCount; i++ {
-		if lobbyHasHack(lobbySetting(platform, uint16(i)), HackWideScreen) {
+	settings, err := DefaultDB.GetLobbySettings()
+	if err != nil {
+		logger.Warn("GetLobbySettings failure", zap.Error(err))
+		return false
+	}
+	for _, s := range settings {
+		if s.Platform == platform && 0 <= s.No && s.No < LobbyCount && lobbyHasHack(s, HackWideScreen) {
 			return true
 		}
 	}
@@ -1334,17 +1355,17 @@ func lobbyChatCarry(p *LbsPeer, str string) bool {
 	}
 	ban, err := DefaultDB.FindBan(p.LoginKey)
 	if err != nil || ban != nil {
-		logger.Info("carry code refused", zap.String("login_key", p.LoginKey), zap.Error(err))
+		logger.Info("carry code refused", zap.String("login_key", maskKey(p.LoginKey)), zap.Error(err))
 		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードを発行できません")
 		return true
 	}
 	if n, err := DefaultDB.AccountBattleCount(p.LoginKey); err != nil || n < CarryMinBattles {
-		logger.Info("carry code refused: battles", zap.String("login_key", p.LoginKey), zap.Any("battles", n), zap.Error(err))
+		logger.Info("carry code refused: battles", zap.String("login_key", maskKey(p.LoginKey)), zap.Any("battles", n), zap.Error(err))
 		NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコードは１００戦以上で発行できます")
 		return true
 	}
 	code := p.app.carryCode(p.LoginKey)
-	logger.Info("carry code issued", zap.String("login_key", p.LoginKey))
+	logger.Info("carry code issued", zap.String("login_key", maskKey(p.LoginKey)))
 	NoticeChatMessage(p, "SERVER", "＞", "引き継ぎコード "+code)
 	NoticeChatMessage(p, "SERVER", "＞", "３分以内に一度だけ使えます")
 	NoticeChatMessage(p, "SERVER", "＞", "他人に教えないでください")

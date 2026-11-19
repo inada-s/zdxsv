@@ -350,6 +350,14 @@ func TestRegionalRelayRegistersAndRelays(t *testing.T) {
 	if registeredRelay(wrong.String()) != nil {
 		t.Fatal("a relay with a wrong secret registered")
 	}
+	select {
+	case err := <-wrongDone:
+		if err != nil {
+			t.Fatalf("relay with a wrong secret: %v, want shut down", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("relay with a wrong secret still running")
+	}
 
 	infoA := map[string]string{"asia-northeast1": "20"}
 	infoB := map[string]string{"asia-northeast1": "30"}
@@ -389,7 +397,6 @@ func TestRegionalRelayRegistersAndRelays(t *testing.T) {
 
 	cancel()
 	<-done
-	<-wrongDone
 	waitFor(t, "unregistration", func() bool { return registeredRelay(relay.String()) == nil })
 }
 
@@ -590,4 +597,36 @@ func TestRelayProvisioning(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 	waitFor(t, "idle relay unregistered", func() bool { return registeredRelay(laAddr) == nil })
+}
+
+func TestRelayOfUnlistedRegionShutsDown(t *testing.T) {
+	lobbyAddr := relayLobby(t, "s3cret")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	starter := &relayStarter{t: t, ctx: ctx, lobbyAddr: lobbyAddr, addrs: map[string]string{}, done: map[string]chan error{}}
+
+	a := NewLbs()
+	a.SetRelayProvisioning([]string{"us-west2"}, starter)
+	starter.StartRelay("asia-northeast1")
+	addr := starter.addrs["asia-northeast1"]
+	t.Cleanup(func() { UnregisterRelay(addr) })
+	waitFor(t, "relay registered", func() bool { return registeredRelay(addr) != nil })
+
+	t0 := time.Now()
+	a.updateRelays(t0)
+	a.updateRelays(t0.Add(relayIdleShutdown - time.Second))
+	select {
+	case err := <-starter.done["asia-northeast1"]:
+		t.Fatalf("relay stopped before relayIdleShutdown: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	a.updateRelays(t0.Add(relayIdleShutdown))
+	select {
+	case err := <-starter.done["asia-northeast1"]:
+		if err != nil {
+			t.Fatalf("relay stopped with %v, want a shutdown", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("relay of a region not provisioned still running after relayIdleShutdown")
+	}
 }

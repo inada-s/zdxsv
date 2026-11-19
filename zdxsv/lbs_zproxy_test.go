@@ -32,6 +32,7 @@ func (z *zproxyAPI) call(t *testing.T, path string, req, res any) {
 	r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 	r.RemoteAddr = "127.0.0.1:50000"
 	r.Header.Set("X-Forwarded-For", z.ip)
+	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	z.h.ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -97,7 +98,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 		UserID:         p0.userID,
 		LocalIP:        net.IPv4(192, 168, 0, 10),
 		Port:           9000,
-		UDPAddrs:       []string{"192.168.0.10:9000", "203.0.113.1:9000"},
+		UDPAddrs:       []string{"192.168.0.10:9000", "127.0.0.1:9000"},
 	}
 	rejected := []struct {
 		name string
@@ -109,6 +110,29 @@ func TestZproxyAPIFlow(t *testing.T) {
 		{"no local IP", func(r *RegisterProxyRequest) { r.LocalIP = nil }, "無効なローカルIPアドレスです"},
 		{"IPv6 local IP", func(r *RegisterProxyRequest) { r.LocalIP = net.ParseIP("fe80::1") }, "無効なローカルIPアドレスです"},
 		{"user not in lobby", func(r *RegisterProxyRequest) { r.UserID = "NOUSER" }, "ロビーにユーザが見つかりません"},
+		{"public local IP", func(r *RegisterProxyRequest) { r.LocalIP = net.IPv4(198, 51, 100, 7) }, "無効なローカルIPアドレスです"},
+		{"malformed UDP addresses", func(r *RegisterProxyRequest) {
+			r.UDPAddrs = []string{"127.0.0.1:0", "127.0.0.1", "127.0.0.1:65536", "[::1]:9000", "host:9000"}
+		}, "UDPアドレスが取得できていません"},
+	}
+	for _, h := range []struct {
+		key, value string
+		code       int
+	}{
+		{"Origin", "https://example.com", http.StatusForbidden},
+		{"Sec-Fetch-Mode", "no-cors", http.StatusForbidden},
+		{"Content-Type", "text/plain", http.StatusUnsupportedMediaType},
+	} {
+		body, _ := json.Marshal(good)
+		r := httptest.NewRequest(http.MethodPost, RegisterProxyPath, bytes.NewReader(body))
+		r.RemoteAddr = "127.0.0.1:50000"
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set(h.key, h.value)
+		w := httptest.NewRecorder()
+		api.h.ServeHTTP(w, r)
+		if w.Code != h.code {
+			t.Errorf("register with %s: %s: %d", h.key, h.value, w.Code)
+		}
 	}
 	for _, c := range rejected {
 		req := good
@@ -129,16 +153,29 @@ func TestZproxyAPIFlow(t *testing.T) {
 	if u := findUser(res.LobbyUsers, p1.userID); u == nil || u.UDP || len(u.UDPAddrs) != 0 {
 		t.Errorf("unregistered user %+v", u)
 	}
-	// From the lobby host, _AUTO_ takes any user with the same IP.
 	auto := good
 	auto.UserID = "_AUTO_"
-	if res := api.register(t, &auto); !res.Result || (res.UserID != p0.userID && res.UserID != p1.userID) {
-		t.Errorf("register _AUTO_: %+v", res)
+	if res := api.register(t, &auto); res.Result || res.Message != "同じIPアドレスのユーザが複数います. -userid でユーザIDを指定してください" {
+		t.Errorf("register _AUTO_ with two users on the host: %+v", res)
 	}
+	// A pong's address names the user whose zproxy registered it.
+	second := good
+	second.UserID = p1.userID
+	second.LocalIP = net.IPv4(192, 168, 0, 11)
+	second.UDPAddrs = []string{"192.168.0.11:9001", "127.0.0.1:9001"}
+	second.P2PConnected = map[string]struct{}{"127.0.0.1:9000": {}, "198.51.100.7:9000": {}}
+	if res := api.register(t, &second); !res.Result || res.UserID != p1.userID {
+		t.Fatalf("register second: %+v", res)
+	}
+	app.Locked(func(app *Lbs) {
+		if got := app.users[p1.userID].proxyP2PConnected; !reflect.DeepEqual(got, map[string]struct{}{p0.userID: {}}) {
+			t.Errorf("p2p connected %v", got)
+		}
+	})
 	far := newZproxyAPI(app)
 	for _, c := range []struct{ ip, userID, msg string }{
 		{"203.0.113.9", "_AUTO_", "ロビーにユーザが見つかりません"},
-		{"203.0.113.9", p0.userID, "ロビーにユーザが見つかりません"},
+		{"203.0.113.9", "NOUSER", "ロビーにユーザが見つかりません"},
 		{"2001:db8::1", "_AUTO_", "無効なグローバルIPアドレスです"},
 	} {
 		far.ip = c.ip
@@ -147,6 +184,17 @@ func TestZproxyAPIFlow(t *testing.T) {
 		if res := far.register(t, &req); res.Result || res.Message != c.msg {
 			t.Errorf("register %s from %s: %+v", c.userID, c.ip, res)
 		}
+	}
+	// A zproxy on another host than its user, behind a NAT whose UDP public IP is not its HTTP one.
+	far.ip = "203.0.113.9"
+	moved := good
+	moved.UDPAddrs = []string{"192.168.0.10:9000", "198.51.100.7:9000"}
+	if res := far.register(t, &moved); !res.Result || res.UserID != p0.userID {
+		t.Fatalf("register from another host: %+v", res)
+	}
+	res = api.register(t, &second)
+	if u := findUser(res.LobbyUsers, p0.userID); !res.Result || u == nil || !reflect.DeepEqual(u.UDPAddrs, []string{"198.51.100.7:9000"}) {
+		t.Errorf("zproxy on another host seen from the lobby host: %+v", res)
 	}
 
 	st := app.Status()

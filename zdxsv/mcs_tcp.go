@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"errors"
 	"io"
 	"net"
 	"sync"
@@ -32,12 +31,9 @@ func (s *McsTCPServer) ListenAndServe(addr string) error {
 // Serve accepts connections on l until l is closed.
 func (s *McsTCPServer) Serve(l net.Listener) error {
 	for {
-		conn, err := l.Accept()
-		if errors.Is(err, net.ErrClosed) {
-			return err
-		}
+		conn, err := accept(l, "battle tcp")
 		if err != nil {
-			continue
+			return err
 		}
 		peer := NewTCPPeer(conn)
 		go peer.Serve(s.mcs)
@@ -47,21 +43,37 @@ func (s *McsTCPServer) Serve(l net.Listener) error {
 type McsTCPPeer struct {
 	BaseMcsPeer
 
-	sendMtx sync.Mutex
-	conn    net.Conn
-	room    *McsRoom
-	seq     uint32
+	conn      net.Conn
+	room      *McsRoom
+	seq       uint32
+	sendq     chan []byte
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
+var (
+	tcpSendQueueLen = 1024
+	tcpWriteTimeout = 10 * time.Second
+)
+
 func NewTCPPeer(conn net.Conn) *McsTCPPeer {
-	return &McsTCPPeer{
-		conn: conn,
-		seq:  1,
+	u := &McsTCPPeer{
+		conn:  conn,
+		seq:   1,
+		sendq: make(chan []byte, tcpSendQueueLen),
+		done:  make(chan struct{}),
 	}
+	go u.writeLoop()
+	return u
 }
 
 func (u *McsTCPPeer) Close() error {
-	return u.conn.Close()
+	var err error
+	u.closeOnce.Do(func() {
+		close(u.done)
+		err = u.conn.Close()
+	})
+	return err
 }
 
 func (u *McsTCPPeer) Serve(mcs *Mcs) {
@@ -74,7 +86,7 @@ func (u *McsTCPPeer) Serve(mcs *Mcs) {
 		u.room.Leave(u)
 		u.room = nil
 	}
-	u.conn.Close()
+	u.Close()
 }
 
 func (u *McsTCPPeer) AddSendMessage(msg McsMessage) {
@@ -82,15 +94,28 @@ func (u *McsTCPPeer) AddSendMessage(msg McsMessage) {
 }
 
 func (u *McsTCPPeer) AddSendData(data []byte) {
-	u.sendMtx.Lock()
-	defer u.sendMtx.Unlock()
-	for sum := 0; sum < len(data); {
-		n, err := u.conn.Write(data[sum:])
-		if err != nil {
-			logger.Error("tcp write error", zap.Any("addr", u.Address()), zap.Error(err))
-			break
+	select {
+	case <-u.done:
+	case u.sendq <- data:
+	default:
+		logger.Error("tcp send queue full", zap.Any("addr", u.Address()))
+		u.Close()
+	}
+}
+
+func (u *McsTCPPeer) writeLoop() {
+	for {
+		select {
+		case <-u.done:
+			return
+		case data := <-u.sendq:
+			u.conn.SetWriteDeadline(time.Now().Add(tcpWriteTimeout))
+			if _, err := u.conn.Write(data); err != nil {
+				logger.Error("tcp write error", zap.Any("addr", u.Address()), zap.Error(err))
+				u.Close()
+				return
+			}
 		}
-		sum += n
 	}
 }
 

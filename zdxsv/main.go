@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -76,11 +78,11 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, revoketokens <provider> <user id>, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
 }
 
 func prepareDB() {
-	conn, err := sqlx.Open("sqlite3", Conf.DB.Name)
+	conn, err := sqlx.Open("sqlite3", Conf.DB.Name+"?_busy_timeout=5000&_journal_mode=WAL")
 	if err != nil {
 		logger.Fatal("startup failed", zap.Error(err))
 	}
@@ -153,15 +155,30 @@ func main() {
 		}
 		mainTLSCheck(args[1], args[2:])
 	case "initdb":
-		os.Remove(Conf.DB.Name)
+		if _, err := os.Stat(Conf.DB.Name); !errors.Is(err, os.ErrNotExist) {
+			logger.Fatal("initdb: the database file exists; remove it first to start over", zap.String("name", Conf.DB.Name), zap.Error(err))
+		}
 		prepareDB()
-		DefaultDB.Init()
+		if err := DefaultDB.Init(); err != nil {
+			logger.Fatal("initdb failed", zap.Error(err))
+		}
 	case "migratedb":
 		prepareDB()
 		if err := DefaultDB.Migrate(); err != nil {
 			logger.Fatal("migration failed", zap.Error(err))
 		}
 		logger.Info("migration done")
+	case "revoketokens":
+		if len(args) != 3 {
+			log.Println("Usage: ", os.Args[0], "revoketokens <provider> <user id>")
+			os.Exit(1)
+		}
+		prepareDB()
+		n, err := DefaultDB.RevokeProviderTokens(args[1], args[2])
+		if err != nil {
+			logger.Fatal("revoke failed", zap.Error(err))
+		}
+		fmt.Println("revoked", n)
 	default:
 		printUsage()
 		os.Exit(1)
@@ -176,6 +193,9 @@ func main() {
 // With ZDXSV_TLS_CERT_FILE set, dnas, lobby and battle also serve their TLS ports.
 func mainAll() {
 	prepareDB()
+	if err := DefaultDB.(SQLiteDB).CheckSchema(); err != nil {
+		logger.Fatal("startup failed", zap.Error(err))
+	}
 	login := prepareLogin()
 	dnsServer, err := newDNSServer()
 	if err != nil {
@@ -274,7 +294,8 @@ func serveLbs(app *Lbs) {
 			} else if c.ReplayDir != "" {
 				api.ReplayStore = &DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
 			}
-			if err := http.ListenAndServe(c.APIAddr, api); err != nil {
+			srv := &http.Server{Addr: c.APIAddr, Handler: api, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+			if err := srv.ListenAndServe(); err != nil {
 				logger.Error("public api stopped", zap.Error(err))
 			}
 		}()
@@ -441,3 +462,77 @@ func setupLogger(o LogOptions) error {
 }
 
 func logDebugEnabled() bool { return logger.Core().Enabled(zap.DebugLevel) }
+
+// floodLog is for log sites a remote peer can hit at line rate: each message
+// gets at most floodLogPerSecond lines a second; the next written line carries
+// how many were dropped.
+var floodLog = &logLimiter{counts: map[string]*logCount{}}
+
+const floodLogPerSecond = 10
+
+type logLimiter struct {
+	mu     sync.Mutex
+	counts map[string]*logCount
+}
+
+type logCount struct {
+	sec     int64
+	n       int
+	dropped int
+}
+
+func (l *logLimiter) Error(msg string, fields ...zap.Field) {
+	l.log(zapcore.ErrorLevel, msg, fields)
+}
+
+func (l *logLimiter) Warn(msg string, fields ...zap.Field) {
+	l.log(zapcore.WarnLevel, msg, fields)
+}
+
+func (l *logLimiter) log(lvl zapcore.Level, msg string, fields []zap.Field) {
+	dropped, ok := l.take(msg, time.Now().Unix())
+	if !ok {
+		return
+	}
+	if dropped > 0 {
+		fields = append(fields, zap.Int("dropped", dropped))
+	}
+	if ce := logger.WithOptions(zap.AddCallerSkip(2)).Check(lvl, msg); ce != nil {
+		ce.Write(fields...)
+	}
+}
+
+func (l *logLimiter) take(msg string, sec int64) (dropped int, ok bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	c := l.counts[msg]
+	if c == nil {
+		c = &logCount{}
+		l.counts[msg] = c
+	}
+	if c.sec != sec {
+		c.sec, c.n = sec, 0
+	}
+	if c.n >= floodLogPerSecond {
+		c.dropped++
+		return 0, false
+	}
+	c.n++
+	dropped, c.dropped = c.dropped, 0
+	return dropped, true
+}
+
+// accept returns the next connection on l. Errors other than a closed
+// listener (such as running out of file descriptors) are retried with backoff.
+func accept(l net.Listener, name string) (net.Conn, error) {
+	var delay time.Duration
+	for {
+		c, err := l.Accept()
+		if err == nil || errors.Is(err, net.ErrClosed) {
+			return c, err
+		}
+		delay = min(max(2*delay, 5*time.Millisecond), time.Second)
+		logger.Error("accept failed", zap.String("name", name), zap.Error(err), zap.Duration("retry_in", delay))
+		time.Sleep(delay)
+	}
+}
