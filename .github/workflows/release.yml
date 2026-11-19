@@ -59,4 +59,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ZDXSV_RELEASE_SIGNING_KEY: ${{ secrets.ZDXSV_RELEASE_SIGNING_KEY }}

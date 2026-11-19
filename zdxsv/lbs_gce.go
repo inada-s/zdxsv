@@ -434,6 +434,7 @@ if [[ ! -x $TAG_NAME/zdxsv ]]; then
   popd
 fi
 echo "__BIN_SHA256__  $TAG_NAME/zdxsv" | sha256sum -c -
+find . -maxdepth 1 -type d -name 'v*' ! -name "$TAG_NAME" -exec rm -rf {} +
 
 readonly METADATA=http://metadata.google.internal/computeMetadata/v1/instance
 readonly ZONE=$(basename $(curl -s -H "Metadata-Flavor: Google" $METADATA/zone))

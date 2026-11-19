@@ -153,12 +153,6 @@ zproxy (`scripts/zproxy-release-needed.sh`). zproxy is its own Go module (`zprox
 imports no server package. The server tarball's name must never end in
 `<os>_<arch>`: zproxy's self-update would take it (`zproxy/release_test.go`).
 
-zproxy applies a self-update only with a valid `<archive>.sig`, made at release by
-`scripts/releasesign` with the repository secret `ZDXSV_RELEASE_SIGNING_KEY` against
-`zproxy/release_signing.pub`. One key: `go run ./scripts/releasesign genkey <file>` writes a new
-pair; the secret takes the file, commit the public key. A new key only reaches players through a
-zproxy release signed with the old one.
-
 ## Clients
 
 - Real PS2: set the DNS to the server's IP.

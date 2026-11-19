@@ -1,45 +1,13 @@
 package main
 
 import (
-	"crypto/ed25519"
-	_ "embed"
-	"encoding/base64"
-	"errors"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/blang/semver"
 	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
-
-// releaseSigningPub checks the <archive>.sig that scripts/releasesign makes for every zproxy
-// archive of a release; an update without a valid one is not applied.
-//
-//go:embed release_signing.pub
-var releaseSigningPub string
-
-type signatureValidator struct {
-	pub ed25519.PublicKey
-}
-
-func newSignatureValidator(b64 string) (*signatureValidator, error) {
-	pub, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
-	if err != nil || len(pub) != ed25519.PublicKeySize {
-		return nil, errors.New("no valid release signing key")
-	}
-	return &signatureValidator{pub: pub}, nil
-}
-
-func (v *signatureValidator) Validate(release, sig []byte) error {
-	if !ed25519.Verify(v.pub, release, sig) {
-		return errors.New("bad release signature")
-	}
-	return nil
-}
-
-func (v *signatureValidator) Suffix() string { return ".sig" }
 
 var (
 	// These variables are automatically assigned during release process.
@@ -67,12 +35,7 @@ func doSelfUpdate() {
 
 	// Only the zproxy archives (zdxsv_<ver>_<os>_<arch>.zip): the same releases also carry
 	// the server tarball (.goreleaser.yml).
-	validator, err := newSignatureValidator(releaseSigningPub)
-	if err != nil {
-		log.Println("アップデートチェックに失敗しました", err)
-		return
-	}
-	up, err := selfupdate.NewUpdater(selfupdate.Config{Filters: []string{`^zdxsv_`}, Validator: validator})
+	up, err := selfupdate.NewUpdater(selfupdate.Config{Filters: []string{`^zdxsv_`}})
 	if err != nil {
 		log.Println("アップデートチェックに失敗しました", err)
 		return
@@ -102,7 +65,7 @@ func doSelfUpdate() {
 	}
 
 	log.Println("アップデート中...")
-	if err := up.UpdateTo(latest, exe); err != nil {
+	if err := selfupdate.UpdateTo(latest.AssetURL, exe); err != nil {
 		log.Println("アップデートに失敗しました", err)
 		return
 	}
