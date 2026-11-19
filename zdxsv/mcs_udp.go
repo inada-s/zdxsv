@@ -84,7 +84,7 @@ func (s *McsUDPServer) readLoop() error {
 			s.conn.WriteToUDP(AppendHelloAnswer(nil, pkt.SessionID, valid), addr)
 		case KindBattle:
 			if !found {
-				logger.Error("battle data received but peer not found", zap.Any("addr", key))
+				floodLog.Error("battle data received but peer not found", zap.Any("addr", key))
 				continue
 			}
 			peer.OnReceive(pkt)
