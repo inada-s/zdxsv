@@ -78,7 +78,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, revoketokens <provider> <user id>, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
 }
 
 func prepareDB() {
@@ -168,6 +168,17 @@ func main() {
 			logger.Fatal("migration failed", zap.Error(err))
 		}
 		logger.Info("migration done")
+	case "revoketokens":
+		if len(args) != 3 {
+			log.Println("Usage: ", os.Args[0], "revoketokens <provider> <user id>")
+			os.Exit(1)
+		}
+		prepareDB()
+		n, err := DefaultDB.RevokeProviderTokens(args[1], args[2])
+		if err != nil {
+			logger.Fatal("revoke failed", zap.Error(err))
+		}
+		fmt.Println("revoked", n)
 	default:
 		printUsage()
 		os.Exit(1)

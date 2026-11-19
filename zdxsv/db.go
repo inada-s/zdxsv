@@ -296,6 +296,10 @@ type DB interface {
 	// IssueAuthToken stores a new emulator token for a provider identity and returns it.
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
+	// RevokeIdentityTokens deletes every token of the token's identity (only the token when it has none).
+	RevokeIdentityTokens(token string) error
+	// RevokeProviderTokens deletes every token of a provider identity and returns how many.
+	RevokeProviderTokens(provider, providerUserID string) (int64, error)
 	// LoginAccount records a login of the account at the login pages.
 	LoginAccount(*DBAccount) error
 

@@ -5,7 +5,9 @@
 //	GET  /auth/discord/callback: the provider's redirect; ends at http://127.0.0.1:P/callback?code=X&state=S.
 //	POST /auth/token (form code, code_verifier): {"token": T}, the emulator's token of the provider
 //	     identity, for /lbs/login. A sign-in creates no account: the identity may hold none.
-//	POST /auth/revoke (form token): deletes the token.
+//	POST /auth/revoke (form token[, all=1]): deletes the token; all=1: every token of its identity, signing
+//	     out every emulator. A token unused for AuthTokenIdleExpiry is refused and deleted.
+//	     /auth/accounts* and /lbs/login answer 401 to an unknown, revoked or expired token (sign in again).
 //	POST /auth/accounts (form token): {"accounts": [{"account": N, "users": [name...], "carried": B}], "default": N,
 //	     "max_new": A, "max_carried": C},
 //	     the accounts of the token's identity; /lbs/login takes account=N, without it "default", and
@@ -76,6 +78,7 @@ func DiscordProvider(clientID, clientSecret string) Provider {
 type Store interface {
 	IssueAuthToken(provider, providerUserID string) (string, error)
 	RevokeAuthToken(token string) error
+	RevokeIdentityTokens(token string) error
 	TokenAccounts(token string) (string, []string, error)
 	CarryTokenAccount(token, loginKey string) error
 	RegisterAccount(ip string) (*DBAccount, error)
@@ -425,7 +428,11 @@ func (s *AuthServer) serveRevoke(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token required", http.StatusBadRequest)
 		return
 	}
-	if err := s.Store.RevokeAuthToken(token); err != nil {
+	revoke := s.Store.RevokeAuthToken
+	if r.FormValue("all") == "1" {
+		revoke = s.Store.RevokeIdentityTokens
+	}
+	if err := revoke(token); err != nil {
 		logger.Error("auth revoke failure", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -454,7 +461,11 @@ func (s *AuthServer) serveAccounts(w http.ResponseWriter, r *http.Request, op ac
 	token := r.FormValue("token")
 	key, keys, err := s.Store.TokenAccounts(token)
 	if err != nil {
-		http.Error(w, "unknown token", http.StatusForbidden)
+		if errors.Is(err, ErrUnknownToken) {
+			http.Error(w, "unknown token", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	added := ""
