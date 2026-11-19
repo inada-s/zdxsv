@@ -78,6 +78,7 @@ type BattleInfo struct {
 	RoomID int
 
 	expires time.Time
+	room    *McsRoom
 }
 
 // mcsWaitingTTL bounds the wait for a user who never joins, such as one who
@@ -88,14 +89,14 @@ type Mcs struct {
 	mtx        sync.Mutex
 	nextRoomID int
 	waiting    map[string]*BattleInfo
-	rooms      []*McsRoom
+	rooms      map[int]*McsRoom
 	now        func() time.Time
 }
 
 func NewMcs() *Mcs {
 	return &Mcs{
 		waiting: make(map[string]*BattleInfo),
-		rooms:   make([]*McsRoom, MaxRoom),
+		rooms:   make(map[int]*McsRoom),
 		now:     time.Now,
 	}
 }
@@ -110,7 +111,9 @@ func (m *Mcs) AddBattle(users []McsUser) {
 		}
 	}
 	info := &BattleInfo{Users: users, RoomID: m.nextRoomID, expires: now.Add(mcsWaitingTTL)}
-	m.nextRoomID = (m.nextRoomID + 1) % MaxRoom
+	info.room = newMcsRoom(info.RoomID)
+	info.room.onEmpty = m.removeRoom
+	m.nextRoomID++
 	for _, u := range users {
 		m.waiting[u.SessionID] = info
 	}
@@ -160,17 +163,28 @@ func (m *Mcs) Join(p McsPeer, sessionID string) *McsRoom {
 		return nil
 	}
 	delete(m.waiting, sessionID)
-	room := m.rooms[info.RoomID]
-	if room == nil {
-		room = newMcsRoom(info.RoomID)
-		m.rooms[info.RoomID] = room
-	}
-	m.mtx.Unlock()
-
+	room := info.room
+	m.rooms[room.id] = room
 	p.SetUserID(user.UserID)
 	p.SetSessionID(sessionID)
 	room.Join(p)
+	m.mtx.Unlock()
 	return room
+}
+
+func (m *Mcs) removeRoom(r *McsRoom) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	r.RLock()
+	defer r.RUnlock()
+	for _, p := range r.peers {
+		if p != nil {
+			return
+		}
+	}
+	if m.rooms[r.id] == r {
+		delete(m.rooms, r.id)
+	}
 }
 
 // ParseSessionID decodes the session id field of a battle join: always 10 digits.
@@ -197,6 +211,8 @@ type McsRoom struct {
 
 	id    int
 	peers []McsPeer // 追加はappend 削除はnil代入 インデックスがposと一致するように維持
+
+	onEmpty func(*McsRoom)
 }
 
 func newMcsRoom(id int) *McsRoom {
@@ -257,6 +273,9 @@ func (r *McsRoom) Leave(p McsPeer) {
 	r.Unlock()
 	if empty {
 		r.Clear()
+		if r.onEmpty != nil {
+			r.onEmpty(r)
+		}
 	}
 
 	logger.Info("leave peer", zap.Any("addr", p.Address()))

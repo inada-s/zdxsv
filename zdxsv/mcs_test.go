@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -135,17 +136,51 @@ func TestMcsJoin(t *testing.T) {
 	}
 }
 
-func TestAddBattleRoomIDWraps(t *testing.T) {
+func TestMcsBattleRooms(t *testing.T) {
 	l := NewMcs()
-	users := []McsUser{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}}
-	for i := 0; i < MaxRoom+1; i++ {
-		l.AddBattle(users)
+	l.AddBattle([]McsUser{{UserID: "U1", SessionID: "S1"}, {UserID: "U2", SessionID: "S2"}})
+	p1 := &fakePeer{addr: "a"}
+	r1 := l.Join(p1, "S1")
+	if r1 == nil {
+		t.Fatal("S1 did not join")
 	}
-	if info := l.GetBattleInfo("S2"); info == nil || info.RoomID != 0 || len(info.Users) != 2 {
-		t.Fatalf("GetBattleInfo = %+v", info)
+
+	for i := 0; i < 2*MaxRoom; i++ {
+		s := fmt.Sprintf("T%d", i)
+		l.AddBattle([]McsUser{{UserID: "U" + s, SessionID: s}})
+		p := &fakePeer{addr: s}
+		r := l.Join(p, s)
+		if r == nil || r == r1 || p.RoomID() == p1.RoomID() {
+			t.Fatalf("battle %d joined room %p id %d; first battle room %p id %d", i, r, p.RoomID(), r1, p1.RoomID())
+		}
+		r.SendMessage(p, McsMessage{Body: []byte{1}})
+		r.Leave(p)
 	}
-	if l.Join(&fakePeer{}, "S2") == nil || l.GetBattleInfo("S2") != nil || l.GetBattleInfo("S1") == nil {
-		t.Errorf("Join cleared the wrong session")
+	p1.mu.Lock()
+	got := len(p1.msgs)
+	p1.mu.Unlock()
+	if got != 0 {
+		t.Errorf("first battle got %d messages from other battles", got)
+	}
+	if n := len(l.rooms); n != 1 {
+		t.Errorf("live rooms = %d, want 1", n)
+	}
+
+	p2 := &fakePeer{addr: "b"}
+	if r := l.Join(p2, "S2"); r != r1 {
+		t.Fatalf("S2 joined %p, want %p", r, r1)
+	}
+	r1.SendMessage(p2, McsMessage{Body: []byte{2}})
+	p1.mu.Lock()
+	got = len(p1.msgs)
+	p1.mu.Unlock()
+	if got != 1 {
+		t.Errorf("first battle got %d messages from its own peer, want 1", got)
+	}
+	r1.Leave(p1)
+	r1.Leave(p2)
+	if n := len(l.rooms); n != 0 {
+		t.Errorf("live rooms after all left = %d, want 0", n)
 	}
 }
 
