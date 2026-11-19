@@ -108,7 +108,7 @@ curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" 
 ## Commands
 
 ```sh
-zdxsv initdb      # first deploy only: wipes the tables
+zdxsv initdb      # first deploy only: makes the database; fails if the file exists
 zdxsv             # the server
 zdxsv migratedb   # server stopped, when a release changes the schema; exits non-zero on failure
 ```
@@ -130,7 +130,7 @@ Each line is a fixed `message` plus fields (`addr`, `user_id`, `battle_code`, `e
 
 Replace the binary, run `zdxsv migratedb` if the release changes the schema, restart.
 Releases before v1.4.0 refuse `-prodlog`: drop it before going back to one.
-Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`.
+Back up the live database with `sqlite3 <db> ".backup <file>"`, not `cp`. The database runs in WAL mode: to restore a file, stop the server and delete `<db>-wal` and `<db>-shm` with the old file, or the old WAL is replayed onto the restored one.
 
 A release that changes a wire message (`testdata/wire/`) ships with the pcsx2 release that speaks
 it: set `min_pcsx2_version` in the master data's `m_server_setting` to that release (`zdxsv-X.Y.Z`)
