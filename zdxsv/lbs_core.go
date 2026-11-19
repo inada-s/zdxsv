@@ -554,7 +554,7 @@ func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
 	}
 	p.PlatformInfo = info
 	p.Platform = PlatformFromInfo(info)
-	logger.Info("platform", zap.Any("platform", p.Platform), zap.Any("info", info))
+	floodLog.Info("platform", zap.Any("platform", p.Platform), zap.Any("info", info))
 }
 
 func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {

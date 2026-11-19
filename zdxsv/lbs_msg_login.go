@@ -84,10 +84,10 @@ var _ = register(0x6101, "ResponseKeyPair", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	key1 := r.ReadString()
 	loginKey := r.ReadEncryptedString()
-	logger.Info("login key", zap.Any("key1", key1))
+	floodLog.Info("login key", zap.Any("key1", key1))
 	sessionID, err := DecodeSessionID(key1)
 	if err != nil {
-		logger.Error("login failed", zap.Error(err))
+		floodLog.Error("login failed", zap.Error(err))
 		return
 	}
 	p.app.OnKeePair(p, loginKey, sessionID)

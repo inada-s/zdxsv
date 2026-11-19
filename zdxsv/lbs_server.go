@@ -85,7 +85,7 @@ func (s *LbsServer) Serve(l net.Listener) error {
 		}
 		ip, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
 		if !s.acquireConn(ip) {
-			logger.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
+			floodLog.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
 			tcpConn.Close()
 			continue
 		}
