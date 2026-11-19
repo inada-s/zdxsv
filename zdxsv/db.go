@@ -33,7 +33,7 @@ func GenLoginKey() string {
 	return randomString(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 }
 
-func genUserID() string {
+var genUserID = func() string {
 	return randomString(6, "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789")
 }
 
@@ -282,7 +282,7 @@ type DB interface {
 	// SetLoginEndpoint records where the account last logged in to the lobby from.
 	SetLoginEndpoint(loginKey, ip, machineID string) error
 
-	// FindBan returns an unexpired m_ban of a user of the account, nil if none.
+	// FindBan returns an unexpired m_ban of a user of the account or of an account of its identity, nil if none.
 	FindBan(loginKey string) (*MasterBan, error)
 	// GetServerSetting returns the m_server_setting value of key, "" if none.
 	GetServerSetting(key string) (string, error)
@@ -302,6 +302,7 @@ type DB interface {
 	RegisterUser(loginKey string) (*DBUser, error)
 	GetUserList(loginKey string) ([]*DBUser, error)
 	GetUser(userID string) (*DBUser, error)
+	GetAccountUser(loginKey, userID string) (*DBUser, error)
 	LoginUser(user *DBUser) error
 	UpdateUser(user *DBUser) error
 

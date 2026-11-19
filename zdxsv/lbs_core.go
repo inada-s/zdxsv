@@ -149,25 +149,17 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 			logger.Error("login failed", zap.Error(err))
 			return false
 		}
-		u, err := DefaultDB.GetUser(ac.LastUserID)
+		u, err := DefaultDB.GetAccountUser(p.LoginKey, ac.LastUserID)
 		if err != nil {
 			logger.Error("login failed", zap.Error(err))
-			return false
-		}
-		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 			return false
 		}
 		p.LbsUser.DBUser = *u
 		p.SessionID = sessionID
 	} else if 0 < len(userID) && 0 < len(name) {
-		u, err := DefaultDB.GetUser(userID)
+		u, err := DefaultDB.GetAccountUser(p.LoginKey, userID)
 		if err != nil {
 			logger.Error("login failed", zap.Error(err))
-			return false
-		}
-		if u.LoginKey != p.LoginKey {
-			logger.Error("user of another account refused", zap.String("user_id", u.UserID), zap.String("login_key", maskKey(p.LoginKey)))
 			return false
 		}
 		p.LbsUser.DBUser = *u

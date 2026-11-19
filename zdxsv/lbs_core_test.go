@@ -57,6 +57,20 @@ func TestLobbyBan(t *testing.T) {
 		return
 	})
 	dialLobby(t, addr).login(ac1, u1, "one")
+
+	a1, err := DefaultDB.RegisterIdentityAccount("discord", "7777", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a2, err := DefaultDB.RegisterIdentityAccount("discord", "7777", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := registerAccount(t)
+	u3, _, _ := dialLobby(t, addr).login(loginAgain(a1.LoginKey), "******", "three")
+	ban(&MasterBan{Key: u3, Until: time.Now().Add(time.Hour)})
+	refused(loginAgain(a2.LoginKey))
+	dialLobby(t, addr).login(other, "******", "other")
 }
 
 func TestAccountUsersLogInAtOnce(t *testing.T) {

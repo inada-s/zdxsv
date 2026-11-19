@@ -325,7 +325,10 @@ func (db SQLiteDB) SetLoginEndpoint(loginKey, ip, machineID string) error {
 
 func (db SQLiteDB) FindBan(loginKey string) (*MasterBan, error) {
 	bans := []*MasterBan{}
-	err := db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?)`, loginKey)
+	err := db.Select(&bans, `SELECT * FROM m_ban WHERE key IN (SELECT user_id FROM user WHERE login_key = ?
+		OR login_key IN (SELECT o.login_key FROM auth_identity i JOIN auth_identity o
+			ON o.provider = i.provider AND o.provider_user_id = i.provider_user_id
+			WHERE i.login_key = ? AND i.provider_user_id <> ''))`, loginKey, loginKey)
 	if err != nil {
 		return nil, err
 	}
@@ -455,25 +458,30 @@ func (db SQLiteDB) GetServerSetting(key string) (string, error) {
 }
 
 func (db SQLiteDB) RegisterUser(loginKey string) (*DBUser, error) {
-	userID := genUserID()
-	now := time.Now()
-	res, err := db.Exec(`INSERT INTO user (user_id, login_key, created)
-		SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM user WHERE login_key = ?) < ?`,
-		userID, loginKey, now, loginKey, MaxUsersPerAccount)
-	if err != nil {
-		return nil, err
+	for range 10 {
+		userID := genUserID()
+		now := time.Now()
+		res, err := db.Exec(`INSERT INTO user (user_id, login_key, created)
+		SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM user WHERE login_key = ?) < ?
+			AND NOT EXISTS (SELECT 1 FROM user WHERE user_id = ?)`,
+			userID, loginKey, now, loginKey, MaxUsersPerAccount, userID)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return nil, err
+		} else if n == 1 {
+			return &DBUser{LoginKey: loginKey, UserID: userID, Created: now}, nil
+		}
+		var count int
+		if err := db.Get(&count, `SELECT COUNT(*) FROM user WHERE login_key = ?`, loginKey); err != nil {
+			return nil, err
+		}
+		if count >= MaxUsersPerAccount {
+			return nil, ErrUserLimit
+		}
 	}
-	if n, err := res.RowsAffected(); err != nil {
-		return nil, err
-	} else if n == 0 {
-		return nil, ErrUserLimit
-	}
-	u := &DBUser{
-		LoginKey: loginKey,
-		UserID:   userID,
-		Created:  now,
-	}
-	return u, nil
+	return nil, errors.New("no unused user id")
 }
 
 func (db SQLiteDB) GetUserList(loginKey string) ([]*DBUser, error) {
@@ -501,6 +509,12 @@ func (db SQLiteDB) GetUser(userID string) (*DBUser, error) {
 	return u, err
 }
 
+func (db SQLiteDB) GetAccountUser(loginKey, userID string) (*DBUser, error) {
+	u := &DBUser{}
+	err := db.Get(u, `SELECT * FROM user WHERE login_key = ? AND user_id = ?`, loginKey, userID)
+	return u, err
+}
+
 func (db SQLiteDB) LoginUser(user *DBUser) error {
 	a, err := db.GetAccountByLoginKey(user.LoginKey)
 	if err != nil {
@@ -513,7 +527,7 @@ func (db SQLiteDB) LoginUser(user *DBUser) error {
 		return err
 	}
 
-	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ?`, user.SessionID, user.UserID)
+	_, err = db.Exec(`UPDATE user SET session_id = ? WHERE user_id = ? AND login_key = ?`, user.SessionID, user.UserID, user.LoginKey)
 	return err
 }
 
@@ -543,7 +557,7 @@ SET
 	daily_lose_count = :daily_lose_count,
 	system = :system
 WHERE
-	user_id = :user_id`, user)
+	user_id = :user_id AND login_key = :login_key`, user)
 	return err
 }
 
