@@ -142,7 +142,7 @@ func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 		inbuf = append(inbuf, buf[:n]...)
 
 		if u.room == nil {
-			logger.Info("room nil", zap.Any("addr", u.Address()))
+			floodLog.Info("room nil", zap.Any("addr", u.Address()))
 			if len(inbuf) < 22 {
 				continue
 			}

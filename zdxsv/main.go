@@ -489,6 +489,10 @@ func (l *logLimiter) Warn(msg string, fields ...zap.Field) {
 	l.log(zapcore.WarnLevel, msg, fields)
 }
 
+func (l *logLimiter) Info(msg string, fields ...zap.Field) {
+	l.log(zapcore.InfoLevel, msg, fields)
+}
+
 func (l *logLimiter) log(lvl zapcore.Level, msg string, fields []zap.Field) {
 	dropped, ok := l.take(msg, time.Now().Unix())
 	if !ok {
