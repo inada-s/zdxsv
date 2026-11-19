@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -89,8 +90,13 @@ func newChatopsRig(t *testing.T) *chatopsRig {
 
 func (r *chatopsRig) post(body string, sign bool) (int, map[string]interface{}) {
 	r.t.Helper()
+	return r.postAt(body, sign, time.Now())
+}
+
+func (r *chatopsRig) postAt(body string, sign bool, at time.Time) (int, map[string]interface{}) {
+	r.t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, r.api.URL, bytes.NewBufferString(body))
-	ts := "1700000000"
+	ts := strconv.FormatInt(at.Unix(), 10)
 	sig := ed25519.Sign(r.key, []byte(ts+body))
 	if !sign {
 		sig[0] ^= 1
@@ -128,7 +134,8 @@ func (r *chatopsRig) run(user string, roles ...string) string {
 func (r *chatopsRig) runCommand(name, user string, roles ...string) string {
 	r.t.Helper()
 	code, m := r.post(command(name, user, roles...), true)
-	if code != http.StatusOK || m["type"] != float64(responseDeferredChannelMessage) {
+	data, _ := m["data"].(map[string]interface{})
+	if code != http.StatusOK || m["type"] != float64(responseDeferredChannelMessage) || data["flags"] != float64(messageFlagEphemeral) {
 		r.t.Fatalf("answer %d %v, want deferred message", code, m)
 	}
 	r.d.Wait()
@@ -509,6 +516,11 @@ func TestDiscordRejects(t *testing.T) {
 
 	if code, _ := r.post(command("op master-up", "ops-user"), false); code != http.StatusUnauthorized {
 		t.Errorf("bad signature: %d", code)
+	}
+	for _, at := range []time.Time{time.Now().Add(-signatureMaxAge - time.Minute), time.Now().Add(signatureMaxAge + time.Minute)} {
+		if code, _ := r.postAt(command("op master-up", "ops-user"), true, at); code != http.StatusUnauthorized {
+			t.Errorf("timestamp %v: %d", at, code)
+		}
 	}
 	if code, m := r.post(`{"type":1}`, true); code != http.StatusOK || m["type"] != float64(responsePong) {
 		t.Errorf("ping: %d %v", code, m)
