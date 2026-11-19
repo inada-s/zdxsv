@@ -77,8 +77,8 @@ func (u *McsTCPPeer) Close() error {
 }
 
 func (u *McsTCPPeer) Serve(mcs *Mcs) {
-	logger.Info("tcp serve start", zap.Any("addr", u.Address()))
-	defer logger.Info("tcp serve end", zap.Any("addr", u.Address()))
+	floodLog.Info("tcp serve start", zap.Any("addr", u.Address()))
+	defer floodLog.Info("tcp serve end", zap.Any("addr", u.Address()))
 	data, _ := hex.DecodeString("280110310000000100ffffff")
 	u.AddSendData(data)
 	u.readLoop(mcs)
@@ -98,7 +98,7 @@ func (u *McsTCPPeer) AddSendData(data []byte) {
 	case <-u.done:
 	case u.sendq <- data:
 	default:
-		logger.Error("tcp send queue full", zap.Any("addr", u.Address()))
+		floodLog.Error("tcp send queue full", zap.Any("addr", u.Address()))
 		u.Close()
 	}
 }
@@ -111,7 +111,7 @@ func (u *McsTCPPeer) writeLoop() {
 		case data := <-u.sendq:
 			u.conn.SetWriteDeadline(time.Now().Add(tcpWriteTimeout))
 			if _, err := u.conn.Write(data); err != nil {
-				logger.Error("tcp write error", zap.Any("addr", u.Address()), zap.Error(err))
+				floodLog.Error("tcp write error", zap.Any("addr", u.Address()), zap.Error(err))
 				u.Close()
 				return
 			}
@@ -132,7 +132,7 @@ func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 		n, err := u.conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
-				logger.Error("tcp read error", zap.Any("addr", u.Address()), zap.Error(err))
+				floodLog.Error("tcp read error", zap.Any("addr", u.Address()), zap.Error(err))
 			}
 			return
 		}
@@ -149,10 +149,10 @@ func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 			value := string(inbuf[12:22])
 			inbuf = inbuf[:0]
 			sessionID, err := ParseSessionID(value)
-			logger.Info("tcp session id", zap.Any("session_id", sessionID), zap.Error(err))
+			floodLog.Info("tcp session id", zap.Any("session_id", sessionID), zap.Error(err))
 			u.room = mcs.Join(u, sessionID)
 			if u.room == nil {
-				logger.Info("failed to join room", zap.Any("user_id", u.UserID()), zap.Any("addr", u.Address()))
+				floodLog.Info("failed to join room", zap.Any("user_id", u.UserID()), zap.Any("addr", u.Address()))
 				u.conn.Close()
 				break
 			}
@@ -163,7 +163,7 @@ func (u *McsTCPPeer) readLoop(mcs *Mcs) {
 				size := int(inbuf[0])
 				if size == 0 {
 					// a zero size frame never advances; the stream cannot be resynced
-					logger.Error("tcp zero size frame", zap.Any("addr", u.Address()))
+					floodLog.Error("tcp zero size frame", zap.Any("addr", u.Address()))
 					return
 				}
 				if size <= len(inbuf) {
