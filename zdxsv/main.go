@@ -283,7 +283,8 @@ func serveLbs(app *Lbs) {
 			} else if c.ReplayDir != "" {
 				api.ReplayStore = &DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
 			}
-			if err := http.ListenAndServe(c.APIAddr, api); err != nil {
+			srv := &http.Server{Addr: c.APIAddr, Handler: api, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+			if err := srv.ListenAndServe(); err != nil {
 				logger.Error("public api stopped", zap.Error(err))
 			}
 		}()

@@ -776,12 +776,12 @@ func TestStatusAfterClientClosedInBattle(t *testing.T) {
 func TestReplayUploadUsedMsSearch(t *testing.T) {
 	UseTestDB(t)
 	for _, r := range []*BattleRecord{
-		{BattleCode: "B1", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
-		{BattleCode: "B1", UserID: "BBBBBB", Players: 2, Pos: 2, Side: 2},
-		{BattleCode: "B2", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
-		{BattleCode: "B2", UserID: "CCCCCC", Players: 2, Pos: 2, Side: 2},
-		{BattleCode: "B3", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
-		{BattleCode: "B4", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1},
+		{BattleCode: "B1", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1, GgpoSession: 7},
+		{BattleCode: "B1", UserID: "BBBBBB", Players: 2, Pos: 2, Side: 2, GgpoSession: 7},
+		{BattleCode: "B2", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1, GgpoSession: 7},
+		{BattleCode: "B2", UserID: "CCCCCC", Players: 2, Pos: 2, Side: 2, GgpoSession: 7},
+		{BattleCode: "B3", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1, GgpoSession: 7},
+		{BattleCode: "B4", UserID: "AAAAAA", Players: 2, Pos: 1, Side: 1, GgpoSession: 7},
 	} {
 		if err := DefaultDB.AddBattleRecord(r); err != nil {
 			t.Fatal(err)
@@ -791,7 +791,7 @@ func TestReplayUploadUsedMsSearch(t *testing.T) {
 	h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
 	upload := func(code string, wantCode int, fields ...string) {
 		w := httptest.NewRecorder()
-		h.ServeHTTP(w, replayUploadRequest(t, code+".pb", []byte("replay"), fields...))
+		h.ServeHTTP(w, replayUploadRequest(t, "battle_code="+code+"&session_id=7", code+".pb", []byte("replay"), fields...))
 		if w.Code != wantCode {
 			t.Errorf("upload %s %v: code %d body %s", code, fields, w.Code, w.Body.String())
 		}
@@ -801,7 +801,7 @@ func TestReplayUploadUsedMsSearch(t *testing.T) {
 	upload("B2", 200, "used_ms", "[[2,64]]")
 	upload("B3", 200, "used_ms", `[[1,"x"]]`)
 	upload("B4", 200)
-	upload("B9", 200, "used_ms", "[[5,5]]")
+	upload("B9", http.StatusForbidden, "used_ms", "[[5,5]]")
 
 	search := func(query string) (codes []string, users map[string]string) {
 		w := httptest.NewRecorder()

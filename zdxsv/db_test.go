@@ -128,12 +128,13 @@ func test106GetUserListNone(t *testing.T) {
 
 func test200AddBattleRecord(t *testing.T) {
 	br := &BattleRecord{
-		BattleCode: "battlecode",
-		UserID:     "123456",
-		Players:    4,
-		Pos:        1,
-		Side:       2,
-		System:     123,
+		BattleCode:  "battlecode",
+		UserID:      "123456",
+		Players:     4,
+		Pos:         1,
+		Side:        2,
+		System:      123,
+		GgpoSession: 0xF0000001,
 	}
 	err := testDB.AddBattleRecord(br)
 	must(t, err)

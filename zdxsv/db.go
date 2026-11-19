@@ -206,6 +206,8 @@ type BattleRecord struct {
 	UsedMsList string `db:"used_ms_list" json:"used_ms_list,omitempty"`
 	// PlayCount: how often the replay was played (IncrementReplayPlayCount), the same on every player's record.
 	PlayCount int `db:"play_count" json:"play_count,omitempty"`
+	// GgpoSession: the battle's ggpo_session; its replay upload must name it.
+	GgpoSession uint32 `db:"ggpo_session" json:"-"`
 
 	Created time.Time `db:"created" json:"created,omitempty"`
 	Updated time.Time `db:"updated" json:"updated,omitempty"`
