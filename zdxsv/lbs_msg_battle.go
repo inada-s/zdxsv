@@ -54,7 +54,7 @@ var _ = register(0x6913, "GetBattleOpponentUser", func(p *LbsPeer, m *LbsMessage
 		// Unverified guess: 6 meant a broadband line.
 		w.Write8(6)
 	} else {
-		logger.Info("UserPos not found", zap.Any("pos", pos))
+		floodLog.Info("UserPos not found", zap.Any("pos", pos))
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
@@ -67,7 +67,7 @@ var _ = register(0x6917, "GetBattleOpponentStatus", func(p *LbsPeer, m *LbsMessa
 	user := p.app.OnGetBattleOpponentUser(p, pos)
 	w.Write8(pos)
 	if user == nil {
-		logger.Info("UserPos not found", zap.Any("pos", pos))
+		floodLog.Info("UserPos not found", zap.Any("pos", pos))
 		a.Status = StatusError
 		p.SendMessage(a)
 		return
@@ -102,7 +102,7 @@ var _ = register(0x6915, "GetBattleBattleCode", func(p *LbsPeer, m *LbsMessage) 
 		w := a.Writer()
 		w.WriteString(battleCode)
 	} else {
-		logger.Info("failed to get battle code")
+		floodLog.Info("failed to get battle code")
 		a.Status = StatusError
 	}
 	p.SendMessage(a)
