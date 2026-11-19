@@ -73,7 +73,8 @@ Optional:
 With `ZDXSV_LOBBY_RELAY_REGIONS` set (comma separated regions, e.g. `asia-east2,us-west2`), the lobby
 starts a relay VM in each of them while players from two region groups are online, and stops it once
 unneeded for 30 minutes. One VM per region, named `zdxsv-relay-<region>-latest`: stopped VMs are
-started again, unused ones deleted after 5 days. A VM downloads the latest release, runs `zdxsv relay`
+started again, unused ones deleted after 5 days. A VM downloads the lobby's own release (the lobby must run an unmodified release binary: the VM
+runs `zdxsv` only if its SHA-256 matches the lobby's executable), runs `zdxsv relay`
 on UDP 8223, and registers at `ZDXSV_LOBBY_PUBLIC_ADDR` with `ZDXSV_RELAY_SECRET`.
 
 ```sh
