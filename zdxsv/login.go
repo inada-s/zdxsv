@@ -180,6 +180,9 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	// An account made for a sign-in identity logs in by token only: no client ever holds its key.
 	identityOnly, err := DefaultDB.AccountMadeForIdentity(loginKey)
+	if err != nil {
+		floodLog.Error("login page: identity check failed", zap.Error(err))
+	}
 	if loginKey == "" || identityOnly || err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
