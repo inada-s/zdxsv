@@ -453,10 +453,10 @@ func (a *Lbs) LiveUploadEnded(battleCode string) {
 // OnP2PMatchingReport logs a report body as received; the server reads nothing from it.
 func (a *Lbs) OnP2PMatchingReport(p *LbsPeer, body []byte) {
 	if p.PlatformInfo == nil {
-		logger.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
+		floodLog.Warn("p2p matching report without platform info ignored", zap.String("user_id", p.UserID))
 		return
 	}
-	logger.Info("p2p matching report", zap.String("user_id", p.UserID), p2pMatchingReportField(body))
+	floodLog.Info("p2p matching report", zap.String("user_id", p.UserID), p2pMatchingReportField(body))
 }
 
 func p2pMatchingReportField(body []byte) zap.Field {

@@ -85,11 +85,11 @@ func (s *LbsServer) Serve(l net.Listener) error {
 		}
 		ip, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
 		if !s.acquireConn(ip) {
-			logger.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
+			floodLog.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
 			tcpConn.Close()
 			continue
 		}
-		logger.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
+		floodLog.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
 		go func() {
 			defer s.releaseConn(ip)
 			s.ServeConn(tcpConn)
@@ -185,11 +185,11 @@ func (c *LbsConn) readLoop(ctx context.Context, cancel func()) {
 		c.conn.SetReadDeadline(time.Now().Add(time.Minute * 30))
 		n, err := c.conn.Read(buf)
 		if err != nil {
-			logger.Info("tcp conn error", zap.Error(err))
+			floodLog.Info("tcp conn error", zap.Error(err))
 			return
 		}
 		if n == 0 {
-			logger.Info("tcp read zero")
+			floodLog.Info("tcp read zero")
 			return
 		}
 		c.mInbuf.Lock()

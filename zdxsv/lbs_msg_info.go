@@ -154,7 +154,7 @@ var _ = register(0x6801, "GetRegurationData", func(p *LbsPeer, m *LbsMessage) {
 			logger.Error("info page failed", zap.Error(err))
 		}
 	default:
-		logger.Error("page request", zap.Any("path", path))
+		floodLog.Error("page request", zap.Any("path", path))
 		err := tplUnderConstruction.Execute(tw, nil)
 		if err != nil {
 			logger.Error("info page failed", zap.Error(err))

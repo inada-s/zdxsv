@@ -284,7 +284,7 @@ var _ = register(0x6406, "EnterRoom", func(p *LbsPeer, m *LbsMessage) {
 		return
 	}
 	p.app.OnEnterRoom(p, roomID)
-	logger.Info("EnterRoom", zap.Any("room_id", roomID))
+	floodLog.Info("EnterRoom", zap.Any("room_id", roomID))
 	p.SendMessage(a)
 })
 

@@ -142,7 +142,7 @@ func (m *Mcs) FindWaitingUser(sessionID string) (*McsUser, bool) {
 
 func findMcsUser(info *BattleInfo, sessionID string) (*McsUser, bool) {
 	if info == nil {
-		logger.Error("BattleInfo not found", zap.Any("session_id", sessionID))
+		floodLog.Error("BattleInfo not found", zap.Any("session_id", sessionID))
 		return nil, false
 	}
 	for _, u := range info.Users {
@@ -150,7 +150,7 @@ func findMcsUser(info *BattleInfo, sessionID string) (*McsUser, bool) {
 			return &u, true
 		}
 	}
-	logger.Error("user not found in BattleInfo", zap.Any("session_id", sessionID))
+	floodLog.Error("user not found in BattleInfo", zap.Any("session_id", sessionID))
 	return nil, false
 }
 

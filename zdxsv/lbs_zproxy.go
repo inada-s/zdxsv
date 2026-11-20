@@ -17,7 +17,7 @@ const (
 // RegisterProxy registers the zproxy at ip for the lobby user UserID, or for UserID _AUTO_
 // the only lobby user connected from ip. The lobby host's own addresses count as one host.
 func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
-	logger.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
+	floodLog.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
 	res := new(RegisterProxyResponse)
 
 	if req.CurrentVersion < requiredVersion {
@@ -168,7 +168,7 @@ func sameHost(a, b net.IP) bool {
 
 // BattleInfo is the battle of the zproxy whose user has session req.SessionID.
 func (a *Lbs) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
-	logger.Info("BattleInfoRequest", zap.Any("req", req))
+	floodLog.Info("BattleInfoRequest", zap.Any("req", req))
 	res := new(BattleInfoResponse)
 
 	if req.SessionID == "" {
