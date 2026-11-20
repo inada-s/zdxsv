@@ -613,6 +613,30 @@ func TestMigrateEmptyDB(t *testing.T) {
 	must(t, db.SetReplayURL("none", "http://r/1"))
 }
 
+func TestMigrateSharedUserIDKeepsDB(t *testing.T) {
+	oldIndexes := strings.Replace(indexes, "CREATE UNIQUE INDEX IF NOT EXISTS USER_USER_ID ON user(user_id);\n", "", 1)
+	if oldIndexes == indexes {
+		t.Fatal("USER_USER_ID index not found")
+	}
+	db := openSchemaDB(t, schema+oldIndexes+`INSERT INTO user (user_id, login_key) VALUES ('AAAAAA', 'k1'), ('AAAAAA', 'k2');`)
+	if err := db.Migrate(); err == nil {
+		t.Fatal("Migrate succeeds with a user_id held by two accounts")
+	}
+	var n int
+	must(t, db.Get(&n, `SELECT count(*) FROM user WHERE user_id = 'AAAAAA'`))
+	assertEq(t, 2, n)
+	must(t, db.Get(&n, `SELECT count(*) FROM sqlite_master WHERE name LIKE '%_tmp' OR name = 'USER_USER_ID'`))
+	assertEq(t, 0, n)
+
+	_, err := db.Exec(`DELETE FROM user WHERE login_key = 'k2'`)
+	must(t, err)
+	must(t, db.Migrate())
+	assertIndexes(t, db)
+	if _, err := db.Exec(`INSERT INTO user (user_id, login_key) VALUES ('AAAAAA', 'k3')`); err == nil {
+		t.Fatal("a second account takes a used user_id")
+	}
+}
+
 func TestMigrateDropsAccountSessionColumns(t *testing.T) {
 	oldSchema := strings.Replace(schema, "\tsystem integer default 0,\n\tPRIMARY KEY (login_key)\n);\nCREATE TABLE IF NOT EXISTS auth_identity",
 		"\tsystem integer default 0,\n\tsession_id text default '',\n\ttemp_key text UNIQUE,\n\tPRIMARY KEY (login_key)\n);\nCREATE TABLE IF NOT EXISTS auth_identity", 1)
@@ -640,7 +664,7 @@ func assertIndexes(t *testing.T, db SQLiteDB) {
 	t.Helper()
 	var names []string
 	must(t, db.Select(&names, `SELECT name FROM sqlite_master WHERE name LIKE '%_tmp' OR type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name`))
-	assertEq(t, []string{"ACCOUNT_CREATED_IP", "ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_PROVIDER", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID"}, names)
+	assertEq(t, []string{"ACCOUNT_CREATED_IP", "ACCOUNT_LAST_LOGIN_MACHINE_ID", "AUTH_IDENTITY_PROVIDER", "AUTH_TOKEN_LOGIN_KEY", "BATTLE_RECORD_AGGRIGATE", "BATTLE_RECORD_CREATED", "BATTLE_RECORD_PLAYERS", "BATTLE_RECORD_USER_ID", "USER_USER_ID"}, names)
 }
 
 // UseTestDB points DefaultDB at a new SQLite DB in t.TempDir() until the test ends.
