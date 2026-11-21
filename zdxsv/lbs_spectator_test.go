@@ -72,13 +72,16 @@ func TestLiveStream(t *testing.T) {
 	if res, _ := http.Get(sv.URL + "/lbs/live_stream?battle_code=B1"); res.StatusCode != 404 {
 		t.Fatalf("unknown battle: %d", res.StatusCode)
 	}
-	r.Open("B1", 7, nil, time.Now())
+	r.Open("B1", 7, nil, time.Now().Add(-90*time.Second))
 	if u := startUpload(t, sv.URL, "B1", "8"); func() int { u.w.Close(); return <-u.done }() != 404 {
 		t.Fatal("wrong session accepted")
 	}
 	up := startUpload(t, sv.URL, "B1", "7")
 	up.w.Write([]byte("head"))
 	waitFor(t, "the first upload", func() bool { l := r.List(); return len(l) == 1 && l[0].Bytes == 4 })
+	if l := r.List()[0]; l.ServerUnix-l.StartUnix < 90 || l.ServerUnix-l.StartUnix > 120 {
+		t.Fatalf("server_unix %d, start_unix %d", l.ServerUnix, l.StartUnix)
+	}
 	if u := startUpload(t, sv.URL, "B1", "7"); func() int { u.w.Close(); return <-u.done }() != 409 {
 		t.Fatal("second upload accepted")
 	}

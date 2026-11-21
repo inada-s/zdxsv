@@ -265,6 +265,7 @@ type LiveBattle struct {
 	Bytes      int           `json:"bytes"`
 	Closed     bool          `json:"closed"`
 	Spectators int           `json:"spectators"`
+	ServerUnix int64         `json:"server_unix"`
 }
 
 // List returns the battles with an upload, running first, then newest opened first.
@@ -283,6 +284,7 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 		}
 		return bs[i].opened.After(bs[j].opened)
 	})
+	now := time.Now().Unix()
 	list := make([]*LiveBattle, 0, len(bs))
 	for _, b := range bs {
 		list = append(list, &LiveBattle{
@@ -292,6 +294,7 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 			Bytes:      len(b.buf),
 			Closed:     !b.done.IsZero(),
 			Spectators: b.watchers,
+			ServerUnix: now,
 		})
 	}
 	return list
