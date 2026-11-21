@@ -78,7 +78,7 @@ func stripHost(addr string) string {
 }
 
 func printUsage() {
-	log.Println("Usage: ", os.Args[0], "[all (default), dns, relay [<session id> <hex token>], initdb, migratedb, revoketokens <provider> <user id>, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
+	log.Println("Usage: ", os.Args[0], "[all (default), dns, battle, relay [<session id> <hex token>], initdb, migratedb, revoketokens <provider> <user id>, dnascheck host:port [pin...], tlscheck host:port pin..., version]")
 }
 
 func prepareDB() {
@@ -136,6 +136,8 @@ func main() {
 		mainAll()
 	case "dns":
 		mainDNS()
+	case "battle":
+		mainBattle()
 	case "relay":
 		if len(args) == 1 {
 			mainRelay()
@@ -539,4 +541,19 @@ func accept(l net.Listener, name string) (net.Conn, error) {
 		logger.Error("accept failed", zap.String("name", name), zap.Error(err), zap.Duration("retry_in", delay))
 		time.Sleep(delay)
 	}
+}
+
+// mainBattle runs only the battle server, for a test lobby in another process
+// that registers each battle on ZDXSV_BATTLE_RPC_ADDR (default 127.0.0.1:3080).
+func mainBattle() {
+	mcs := NewMcs()
+	battleAddr := stripHost(Conf.Battle.Addr)
+	rpcAddr := Conf.Battle.RPCAddr
+	if rpcAddr == "" {
+		rpcAddr = "127.0.0.1:3080"
+	}
+	logger.Info("battle listen", zap.Any("addr", battleAddr))
+	go func() { logger.Fatal("battle udp", zap.Error(NewUDPServer(mcs).ListenAndServe(battleAddr))) }()
+	go func() { logger.Fatal("battle tcp", zap.Error(NewTCPServer(mcs).ListenAndServe(battleAddr))) }()
+	logger.Fatal("battle rpc", zap.Error(serveMcsRPC(mcs, rpcAddr)))
 }

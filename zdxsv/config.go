@@ -117,6 +117,7 @@ type LbsConfig struct {
 type McsConfig struct {
 	Addr       string `env:"ZDXSV_BATTLE_ADDR"`
 	PublicAddr string `env:"ZDXSV_BATTLE_PUBLIC_ADDR"`
+	RPCAddr    string `env:"ZDXSV_BATTLE_RPC_ADDR"`
 }
 
 type DBConfig struct {
