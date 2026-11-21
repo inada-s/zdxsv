@@ -561,10 +561,6 @@ func (a *Lbs) OnEnterLobby(p *LbsPeer, lobbyID uint16) {
 	l, ok := a.getLobby(p.Platform, lobbyID)
 	if ok {
 		a.OnExitLobby(p)
-		p.LbsUser.Sync = ""
-		if s := p.PlatformInfo["sync"]; syncFingerprint.MatchString(s) {
-			p.LbsUser.Sync = s
-		}
 		a.dropBattlesOf(p.UserID)
 		p.Lobby = l
 		p.Lobby.Enter(&p.LbsUser)
