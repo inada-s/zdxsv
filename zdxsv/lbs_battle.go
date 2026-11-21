@@ -204,8 +204,8 @@ func (a *Lbs) OnGetBattleInfo(p *LbsPeer) *P2PMatching {
 // ping test packets, its length in ms); a player alone with a GGPO port gets a session and no ping test;
 // relays: the lobby's relay server (relayServers), when every player supports it;
 // users[].team: the entry side (1 / 2);
-// users[].sync: platform info "sync", self included: the client cuts the battle when one
-// differs from its own.
+// users[].sync: platform info "sync", self included: pcsx2 zdxsv-1.1.2 and older cut the battle when one
+// differs from their own or is missing; later releases send and read none.
 var syncFingerprint = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 func p2pMatching(p *LbsPeer, info func(userID string) map[string]string) *P2PMatching {

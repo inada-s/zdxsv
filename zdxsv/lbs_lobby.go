@@ -83,8 +83,18 @@ func (l *LbsLobby) GetEntryUserCount() (uint16, uint16) {
 }
 
 func (l *LbsLobby) CanBattleStart() bool {
-	_, ok := l.startGroup()
-	return ok
+	a, b := 0, 0
+	for _, id := range l.EntryUsers {
+		if u, ok := l.Users[id]; ok {
+			switch u.Entry {
+			case EntryAeug:
+				a++
+			case EntryTitans:
+				b++
+			}
+		}
+	}
+	return l.canStart(a, b)
 }
 
 // Start values: the players per side a lobby battle needs. Empty: 2v2.
@@ -115,44 +125,12 @@ func (l *LbsLobby) canStart(a, b int) bool {
 	return n <= a && n <= b
 }
 
-// startGroup returns the sync fingerprint of the first entry group (in entry order)
-// that can start a battle, else the first entry user's and false.
-func (l *LbsLobby) startGroup() (string, bool) {
-	first, seen := "", false
-	counts := map[string]*[2]int{}
-	for _, id := range l.EntryUsers {
-		u, ok := l.Users[id]
-		if !ok {
-			continue
-		}
-		if !seen {
-			first, seen = u.Sync, true
-		}
-		c := counts[u.Sync]
-		if c == nil {
-			c = &[2]int{}
-			counts[u.Sync] = c
-		}
-		switch u.Entry {
-		case EntryAeug:
-			c[0]++
-		case EntryTitans:
-			c[1]++
-		}
-		if l.canStart(c[0], c[1]) {
-			return u.Sync, true
-		}
-	}
-	return first, false
-}
-
-// StartBattleUsers picks up to two users per side from the startGroup.
+// StartBattleUsers picks up to two users per side in entry order.
 func (l *LbsLobby) StartBattleUsers() []*LbsUser {
-	sync, _ := l.startGroup()
 	if n := l.perSide(); l.TeamShuffle && n > 0 {
 		var ret []*LbsUser
 		for _, id := range l.EntryUsers {
-			if u, ok := l.Users[id]; ok && u.Sync == sync && (u.Entry == EntryAeug || u.Entry == EntryTitans) && len(ret) < 2*n {
+			if u, ok := l.Users[id]; ok && (u.Entry == EntryAeug || u.Entry == EntryTitans) && len(ret) < 2*n {
 				ret = append(ret, u)
 			}
 		}
@@ -170,7 +148,7 @@ func (l *LbsLobby) StartBattleUsers() []*LbsUser {
 	ret := []*LbsUser{}
 	for _, id := range l.EntryUsers {
 		u, ok := l.Users[id]
-		if ok && u.Sync == sync {
+		if ok {
 			switch u.Entry {
 			case EntryAeug:
 				if a < 2 {

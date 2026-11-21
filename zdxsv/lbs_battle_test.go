@@ -490,7 +490,8 @@ func TestBattleInfoAfterPeersLeft(t *testing.T) {
 	}
 }
 
-func TestLobbyBattleSameSyncOnly(t *testing.T) {
+// Players of different builds or settings battle each other.
+func TestLobbyBattleAnySync(t *testing.T) {
 	conn := UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('emu', 2, '1v1', '', '', '')`); err != nil {
 		t.Fatal(err)
@@ -509,31 +510,13 @@ func TestLobbyBattleSameSyncOnly(t *testing.T) {
 		c.ask(0x640E, []byte{side})
 		return c
 	}
-	started := func(c *testClient) bool {
-		t.Helper()
-		c.ask(0x600E, nil)
-		for _, m := range c.queue {
-			if m.Command == 0x6910 {
-				return true
-			}
-		}
-		return false
-	}
-
-	a1 := enter(0, "00000000000000aa", EntryAeug)
-	b1 := enter(1, "00000000000000bb", EntryTitans)
-	if started(a1) || started(b1) {
-		t.Fatal("battle between different sync fingerprints")
-	}
-	a2 := enter(2, "00000000000000aa", EntryTitans)
-	for i, c := range []*testClient{a1, a2} {
+	a := enter(0, "00000000000000aa", EntryAeug)
+	b := enter(1, "00000000000000bb", EntryTitans)
+	for i, c := range []*testClient{a, b} {
 		c.expect(0x6910, CategoryNotice)
 		if n := c.ask(0x6911, nil).Reader().Read8(); n != 2 {
 			t.Errorf("player %d: user count %d", i, n)
 		}
-	}
-	if started(b1) {
-		t.Fatal("the other fingerprint joined the battle")
 	}
 }
 
