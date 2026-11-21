@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"net/http"
+	"net/rpc"
 	"sync"
 	"time"
 
@@ -279,4 +282,33 @@ func (r *McsRoom) Leave(p McsPeer) {
 	}
 
 	logger.Info("leave peer", zap.Any("addr", p.Address()))
+}
+
+// McsRPC lets a test lobby in another process register battles (net/rpc over
+// HTTP, service "Logic"). Only `zdxsv battle` serves it.
+type McsRPC struct {
+	mcs *Mcs
+}
+
+type McsBattleArgs struct {
+	Users []McsUser
+}
+
+func (r *McsRPC) NotifyBattleUsers(args McsBattleArgs, reply *int) error {
+	r.mcs.AddBattle(args.Users)
+	*reply = len(args.Users)
+	return nil
+}
+
+func serveMcsRPC(mcs *Mcs, addr string) error {
+	s := rpc.NewServer()
+	if err := s.RegisterName("Logic", &McsRPC{mcs: mcs}); err != nil {
+		return err
+	}
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	logger.Info("battle rpc listen", zap.String("addr", l.Addr().String()))
+	return http.Serve(l, s)
 }
