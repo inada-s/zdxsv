@@ -265,6 +265,8 @@ type LiveBattle struct {
 	Bytes      int           `json:"bytes"`
 	Closed     bool          `json:"closed"`
 	Spectators int           `json:"spectators"`
+	// ElapsedSeconds: from the open to now, or to the upload's end once closed (the server's clock).
+	ElapsedSeconds int64 `json:"elapsed_seconds"`
 }
 
 // List returns the battles with an upload, running first, then newest opened first.
@@ -283,15 +285,21 @@ func (r *SpectatorRegistry) List() []*LiveBattle {
 		}
 		return bs[i].opened.After(bs[j].opened)
 	})
+	now := time.Now()
 	list := make([]*LiveBattle, 0, len(bs))
 	for _, b := range bs {
+		end := b.done
+		if end.IsZero() {
+			end = now
+		}
 		list = append(list, &LiveBattle{
-			BattleCode: b.code,
-			Users:      b.users,
-			StartUnix:  b.opened.Unix(),
-			Bytes:      len(b.buf),
-			Closed:     !b.done.IsZero(),
-			Spectators: b.watchers,
+			BattleCode:     b.code,
+			Users:          b.users,
+			StartUnix:      b.opened.Unix(),
+			Bytes:          len(b.buf),
+			Closed:         !b.done.IsZero(),
+			Spectators:     b.watchers,
+			ElapsedSeconds: max(0, int64(end.Sub(b.opened)/time.Second)),
 		})
 	}
 	return list

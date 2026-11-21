@@ -72,13 +72,16 @@ func TestLiveStream(t *testing.T) {
 	if res, _ := http.Get(sv.URL + "/lbs/live_stream?battle_code=B1"); res.StatusCode != 404 {
 		t.Fatalf("unknown battle: %d", res.StatusCode)
 	}
-	r.Open("B1", 7, nil, time.Now())
+	r.Open("B1", 7, nil, time.Now().Add(-90*time.Second))
 	if u := startUpload(t, sv.URL, "B1", "8"); func() int { u.w.Close(); return <-u.done }() != 404 {
 		t.Fatal("wrong session accepted")
 	}
 	up := startUpload(t, sv.URL, "B1", "7")
 	up.w.Write([]byte("head"))
 	waitFor(t, "the first upload", func() bool { l := r.List(); return len(l) == 1 && l[0].Bytes == 4 })
+	if e := r.List()[0].ElapsedSeconds; e < 90 || e > 120 {
+		t.Fatalf("running: elapsed %d s", e)
+	}
 	if u := startUpload(t, sv.URL, "B1", "7"); func() int { u.w.Close(); return <-u.done }() != 409 {
 		t.Fatal("second upload accepted")
 	}
@@ -132,6 +135,11 @@ func TestLiveStream(t *testing.T) {
 	}
 	if l := r.List(); !l[0].Closed {
 		t.Fatal("not closed")
+	}
+	e := r.List()[0].ElapsedSeconds
+	time.Sleep(1100 * time.Millisecond)
+	if e < 90 || r.List()[0].ElapsedSeconds != e {
+		t.Fatalf("closed: elapsed %d s, then %d s", e, r.List()[0].ElapsedSeconds)
 	}
 	if res, _ := http.Get(sv.URL + "/lbs/live_stream?skip="); res.StatusCode != 404 {
 		t.Fatal("auto-next picked an ended battle")
