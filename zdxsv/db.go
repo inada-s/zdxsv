@@ -107,9 +107,6 @@ type MLobbySetting struct {
 	Hack string `db:"hack"`
 	// Patches lists the m_patch names the lobby's emulator battles apply, comma separated.
 	Patches string `db:"patches"`
-	// TeamShuffle starts a battle once enough players entered, whatever sides they picked, and splits them
-	// into the two sides at random.
-	TeamShuffle bool `db:"team_shuffle"`
 }
 
 // MPatch is a game memory patch an emulator applies during a battle. Codes: one

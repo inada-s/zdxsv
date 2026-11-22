@@ -136,7 +136,6 @@ CREATE TABLE IF NOT EXISTS m_lobby_setting (
 	rule_id text default '',
 	hack text default '',
 	patches text default '',
-	team_shuffle integer default 0,
 	PRIMARY KEY (platform, no)
 );
 CREATE TABLE IF NOT EXISTS m_rule (
@@ -422,7 +421,7 @@ func (db SQLiteDB) ReplaceMaster(m *Master) error {
 			return err
 		}
 		for _, s := range m.LobbySettings {
-			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack, patches, team_shuffle) VALUES (:platform, :no, :start, :explain, :rule_id, :hack, :patches, :team_shuffle)`, s)
+			_, err := tx.NamedExec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack, patches) VALUES (:platform, :no, :start, :explain, :rule_id, :hack, :patches)`, s)
 			if err != nil {
 				return err
 			}

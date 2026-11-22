@@ -11,14 +11,13 @@ const roomCount = 5
 const LobbyCount = 26
 
 type LbsLobby struct {
-	ID          uint16
-	Platform    string
-	Rule        *Rule
-	Start       string
-	TeamShuffle bool
-	Users       map[string]*LbsUser
-	Rooms       map[uint16]*LbsRoom
-	EntryUsers  []string
+	ID         uint16
+	Platform   string
+	Rule       *Rule
+	Start      string
+	Users      map[string]*LbsUser
+	Rooms      map[uint16]*LbsRoom
+	EntryUsers []string
 }
 
 func NewLobby(platform string, lobbyID uint16) *LbsLobby {
@@ -97,11 +96,13 @@ func (l *LbsLobby) CanBattleStart() bool {
 	return l.canStart(a, b)
 }
 
-// Start values: the players per side a lobby battle needs. Empty: 2v2.
+// Start values: the players per side a lobby battle needs. Empty: 2v2. Shuffle: any 4 entries, whatever
+// sides they picked, split into the two sides at random.
 const (
-	Start2v2  = "2v2"
-	Start1v1  = "1v1"
-	StartSolo = "solo"
+	Start2v2     = "2v2"
+	Start1v1     = "1v1"
+	StartSolo    = "solo"
+	StartShuffle = "shuffle"
 )
 
 func (l *LbsLobby) perSide() int {
@@ -119,7 +120,7 @@ func (l *LbsLobby) canStart(a, b int) bool {
 	if n == 0 {
 		return 1 <= a || 1 <= b
 	}
-	if l.TeamShuffle {
+	if l.Start == StartShuffle {
 		return 2*n <= a+b
 	}
 	return n <= a && n <= b
@@ -127,7 +128,7 @@ func (l *LbsLobby) canStart(a, b int) bool {
 
 // StartBattleUsers picks up to two users per side in entry order.
 func (l *LbsLobby) StartBattleUsers() []*LbsUser {
-	if n := l.perSide(); l.TeamShuffle && n > 0 {
+	if n := l.perSide(); l.Start == StartShuffle {
 		var ret []*LbsUser
 		for _, id := range l.EntryUsers {
 			if u, ok := l.Users[id]; ok && (u.Entry == EntryAeug || u.Entry == EntryTitans) && len(ret) < 2*n {
