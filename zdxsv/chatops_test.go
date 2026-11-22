@@ -542,18 +542,12 @@ func TestDiscordRejects(t *testing.T) {
 	}
 }
 
-func TestParseLobbySettingsTeamShuffle(t *testing.T) {
-	header := []string{"platform", "no", "team_shuffle"}
-	got, err := ParseLobbySettings([][]string{header, {"emu", "1", "TRUE"}, {"emu", "2", "false"}, {"emu", "3", ""}, {"emu", "4", "1"}, {"emu", "5", "0"}})
-	if err != nil {
-		t.Fatal(err)
+func TestParseLobbySettingsShuffle(t *testing.T) {
+	got, err := ParseLobbySettings([][]string{{"platform", "no", "start"}, {"emu", "1", "shuffle"}})
+	if err != nil || got[0].Start != StartShuffle {
+		t.Fatalf("start %v, error %v", got, err)
 	}
-	for i, want := range []bool{true, false, false, true, false} {
-		if got[i].TeamShuffle != want {
-			t.Errorf("row %d: team_shuffle %v, want %v", i+1, got[i].TeamShuffle, want)
-		}
-	}
-	if _, err := ParseLobbySettings([][]string{header, {"emu", "1", "yes"}}); err == nil || !strings.Contains(err.Error(), `team_shuffle "yes" is not TRUE, FALSE, 1 or 0`) {
+	if _, err := ParseLobbySettings([][]string{{"platform", "no", "team_shuffle"}, {"emu", "1", "1"}}); err == nil || !strings.Contains(err.Error(), `unknown column "team_shuffle"`) {
 		t.Errorf("error %v", err)
 	}
 }

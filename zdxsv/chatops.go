@@ -530,7 +530,7 @@ const RuleTable = "m_rule"
 // PatchTable is the spreadsheet table that becomes m_patch, when the sheet has it.
 const PatchTable = "m_patch"
 
-var lobbyStarts = []string{Start2v2, Start1v1, StartSolo}
+var lobbyStarts = []string{Start2v2, Start1v1, StartSolo, StartShuffle}
 
 var lobbyHacks = []string{HackNone, HackPadDelay, HackWideScreen, HackZproxyTest, HackChatCommand}
 
@@ -561,10 +561,10 @@ func parseLobbyHack(cell string) (string, error) {
 
 // ParseLobbySettings checks the m_lobby_setting table (header first): platform (console or emu)
 // and no (lobby number) are required; start, explain, rule_id, hack, patches (m_patch names,
-// comma separated) and team_shuffle (parseSheetBool) optional.
+// comma separated) optional.
 // An empty cell keeps the lobby's default.
 func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
-	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack", "patches", "team_shuffle"})
+	col, errs := columns(table, []string{"platform", "no"}, []string{"start", "explain", "rule_id", "hack", "patches"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -591,9 +591,6 @@ func ParseLobbySettings(table [][]string) ([]*MLobbySetting, error) {
 			errs = append(errs, fmt.Errorf("row %d: start %q is not one of %v", line, s.Start, lobbyStarts))
 		}
 		if s.Hack, err = parseLobbyHack(s.Hack); err != nil {
-			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
-		}
-		if s.TeamShuffle, err = parseSheetBool("team_shuffle", cell("team_shuffle")); err != nil {
 			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
 		settings = append(settings, s)

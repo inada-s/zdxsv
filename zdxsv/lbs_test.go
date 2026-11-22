@@ -1028,6 +1028,7 @@ func TestLobbyCanBattleStart(t *testing.T) {
 		{StartSolo, 1, 0, true}, {StartSolo, 0, 1, true}, {StartSolo, 0, 0, false},
 		{Start2v2, 1, 1, false}, {Start2v2, 2, 1, false}, {Start2v2, 2, 2, true},
 		{"", 1, 1, false}, {"", 1, 0, false}, {"", 2, 2, true},
+		{StartShuffle, 4, 0, true}, {StartShuffle, 1, 3, true}, {StartShuffle, 2, 1, false},
 	}
 	for _, c := range cases {
 		l := NewLobby("ps2", 2)

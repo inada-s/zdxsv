@@ -292,10 +292,10 @@ func TestLobbyExplainHacks(t *testing.T) {
 	}
 }
 
-func TestLobbyTeamShuffle(t *testing.T) {
+func TestLobbyStartShuffle(t *testing.T) {
 	conn := UseTestDB(t)
 	addr := startLobby(t, NewMcs())
-	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, team_shuffle) VALUES ('emu', 9, 1), ('emu', 10, 0)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start) VALUES ('emu', 9, 'shuffle'), ('emu', 10, '2v2')`); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
@@ -320,7 +320,7 @@ func TestLobbyTeamShuffle(t *testing.T) {
 	plain[3].ask(0x600E, nil)
 	for _, m := range plain[3].queue {
 		if m.Command == 0x6910 {
-			t.Fatal("a battle started with 4 aeug entries in a lobby without team_shuffle")
+			t.Fatal("a battle started with 4 aeug entries in a 2v2 lobby")
 		}
 	}
 
