@@ -123,6 +123,7 @@ pre {
 
 .download { margin: 6px 0 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .download small { color: var(--muted); font-size: 12px; }
+.os-block { display: block; }
 .btn {
   display: inline-flex;
   align-items: center;

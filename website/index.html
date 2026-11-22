@@ -157,24 +157,33 @@
 
   <h3>必要なもの</h3>
   <ul>
-    <li>Windows (64bit) の PC</li>
+    <li>Windows (64bit) または macOS (Apple シリコン / Intel) の PC</li>
     <li>PS2 の BIOS (PS2 本体から吸い出したもの)</li>
     <li>PlayStation2版 機動戦士ガンダム ガンダムvs.Zガンダム</li>
     <li>Discord アカウント (サインインに使います)</li>
     <li>コントローラー</li>
     <li>PCSX2 for zdxsv</li>
   </ul>
-  <div class="download">
+  <div class="download" data-os="windows">
     <a id="pcsx2-download" class="btn" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-windows-x64.zip">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
       PCSX2 for zdxsv をダウンロード (Windows 64bit)</a>
-    <small id="pcsx2-file">pcsx2-zdxsv-windows-x64.zip (最新版)</small>
+    <small id="pcsx2-file">pcsx2-zdxsv-windows-x64.zip</small>
+  </div>
+  <div class="download" data-os="darwin">
+    <a id="pcsx2-download-mac" class="btn" href="https://github.com/inada-s/pcsx2/releases/latest/download/pcsx2-zdxsv-macos.tar.xz">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7 1h2v7.6l2.3-2.3 1.4 1.4L8 12.4 3.3 7.7l1.4-1.4L7 8.6zM2 13h12v2H2z"/></svg>
+      PCSX2 for zdxsv をダウンロード (macOS)</a>
+    <small id="pcsx2-file-mac">pcsx2-zdxsv-macos.tar.xz</small>
+  </div>
+  <div class="download">
     <small><a id="pcsx2-release" href="https://github.com/inada-s/pcsx2/releases/latest">最新版のリリースページ (GitHub Releases)</a></small>
   </div>
 
   <h3>使い方</h3>
   <ol>
-    <li>zip を解凍して中の pcsx2-qt.exe を実行します</li>
+    <li><span data-os="windows" class="os-block">Windows: zip を解凍して中の pcsx2-qt.exe を実行します</span>
+      <span data-os="darwin" class="os-block">macOS: tar.xz をダブルクリックで展開し、出てきた PCSX2-zdxsv の app を「アプリケーション」など書き込みできるフォルダに移して開きます。初回は macOS が開くのを拒否するので、システム設定 &gt; プライバシーとセキュリティ で PCSX2-zdxsv の横の「このまま開く」を押してください (最初の 1 回だけです)</span></li>
     <li>初回起動時のセットアップで BIOS とゲームの場所を設定します</li>
     <li>セットアップの「zdxsv アカウント」で「Discord でサインイン」を押します。ブラウザに「ZDXSV にサインイン」の画面が開くので、もう一度「Discord でサインイン」を押し、Discord の画面で認証してください。終わったら PCSX2 に戻ります</li>
     <li>ゲームを起動し、通信対戦を選択します</li>
@@ -290,6 +299,13 @@ function zproxyPlatform(arch) {
   if (/Linux/.test(p) && !/Android/.test(ua)) return {os: "linux", arch: arch || "amd64", label: "Linux"};
   return null;
 }
+// PCSX2 downloads and steps: only the visitor's OS when it is Windows or macOS, else both.
+(function() {
+  var pf = zproxyPlatform();
+  if (!pf || (pf.os != "windows" && pf.os != "darwin")) return;
+  var els = document.querySelectorAll("#pcsx2 [data-os]");
+  for (var i = 0; i < els.length; i++) if (els[i].dataset.os != pf.os) els[i].style.display = "none";
+})();
 function zproxyArchLabel(a) { return {amd64: "64bit", "386": "32bit", arm64: "Apple Silicon / ARM64", arm: "ARM"}[a] || a; }
 function setZproxyDownload(arch) {
   var want = zproxyPlatform(arch);
