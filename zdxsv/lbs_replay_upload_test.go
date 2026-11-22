@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"context"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -133,5 +135,53 @@ func TestAPIReplayUpload(t *testing.T) {
 	off.ServeHTTP(w, httptest.NewRequest("GET", "/lbs/replays/C1234.pb", nil))
 	if b, _ := io.ReadAll(w.Body); w.Code != http.StatusNotFound {
 		t.Errorf("no dir store: code %d body %q", w.Code, b)
+	}
+}
+
+func TestCopyGzip(t *testing.T) {
+	pb := bytes.Repeat([]byte{0x2a, 0x09, 'z', 'd', 'x', 's', 'v', '-', 'p', 's', '2'}, 1000)
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write(pb)
+	zw.Close()
+
+	var plain bytes.Buffer
+	if err := copyGzip(&plain, bytes.NewReader(pb)); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := gzip.NewReader(&plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := io.ReadAll(zr); err != nil || !bytes.Equal(got, pb) {
+		t.Errorf("a plain file stored as %d bytes that do not decode to it (%v)", len(got), err)
+	}
+
+	var kept bytes.Buffer
+	if err := copyGzip(&kept, bytes.NewReader(gz.Bytes())); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(kept.Bytes(), gz.Bytes()) {
+		t.Errorf("a gzip file stored as %d bytes, want it unchanged (%d bytes)", kept.Len(), gz.Len())
+	}
+}
+
+func TestDirReplayStoreGzip(t *testing.T) {
+	pb := bytes.Repeat([]byte{0x2a, 0x09, 'z', 'd', 'x', 's', 'v'}, 1000)
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write(pb)
+	zw.Close()
+	s := &DirReplayStore{Dir: t.TempDir(), URL: "http://x/"}
+	for _, in := range []struct {
+		name string
+		data []byte
+	}{{"plain.pb", pb}, {"gzip.pb", gz.Bytes()}} {
+		if _, err := s.Put(context.Background(), in.name, bytes.NewReader(in.data)); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := os.ReadFile(filepath.Join(s.Dir, in.name)); err != nil || !bytes.Equal(got, pb) {
+			t.Errorf("%s stored as %d bytes, want the plain file (%v)", in.name, len(got), err)
+		}
 	}
 }

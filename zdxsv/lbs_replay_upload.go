@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -21,7 +22,7 @@ import (
 
 // POST /lbs/replay_upload?battle_code=&session_id= (session_id = the battle's ggpo_session, else 403;
 // checked before the body is read): an emulator posts a battle's replay as a multipart file
-// named <battle_code>.pb after the battle. It is stored as replays/<battle_code>.pb and its
+// named <battle_code>.pb (plain or gzip encoded) after the battle. It is stored gzip encoded as replays/<battle_code>.pb and its
 // url is recorded on the battle (served by /lbs/replay). 409 when that replay is already there.
 // The form field used_ms (JSON, per round, by position: the MS id + 1, 0: unknown, e.g.
 // [[3,7,0,12],[3,9,0,12]]) sets used_ms on the battle's records once the replay is stored.
@@ -69,14 +70,9 @@ func (s *GCSReplayStore) Put(ctx context.Context, name string, r io.Reader) (str
 	w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
 	w.ContentEncoding = "gzip"
 	w.CacheControl = "no-transform"
-	gw := gzip.NewWriter(w)
-	if _, err := io.Copy(gw, r); err != nil {
+	if err := copyGzip(w, r); err != nil {
 		w.Close()
-		return "", fmt.Errorf("copy: %w", err)
-	}
-	if err := gw.Close(); err != nil {
-		w.Close()
-		return "", fmt.Errorf("gzip close: %w", err)
+		return "", err
 	}
 	if err := w.Close(); err != nil {
 		return "", fmt.Errorf("writer close: %w", err)
@@ -84,7 +80,33 @@ func (s *GCSReplayStore) Put(ctx context.Context, name string, r io.Reader) (str
 	return url, nil
 }
 
-// DirReplayStore writes plain files under Dir; their urls are URL + name (for local tests,
+// isGzip tells whether br starts with the gzip magic 1f 8b; a .pb file never does.
+func isGzip(br *bufio.Reader) bool {
+	head, _ := br.Peek(2)
+	return len(head) == 2 && head[0] == 0x1f && head[1] == 0x8b
+}
+
+// copyGzip writes r gzip encoded to w: a gzip stream as it is (a client compressed it), else
+// compressed.
+func copyGzip(w io.Writer, r io.Reader) error {
+	br := bufio.NewReader(r)
+	if isGzip(br) {
+		if _, err := io.Copy(w, br); err != nil {
+			return fmt.Errorf("copy: %w", err)
+		}
+		return nil
+	}
+	gw := gzip.NewWriter(w)
+	if _, err := io.Copy(gw, br); err != nil {
+		return fmt.Errorf("copy: %w", err)
+	}
+	if err := gw.Close(); err != nil {
+		return fmt.Errorf("gzip close: %w", err)
+	}
+	return nil
+}
+
+// DirReplayStore writes plain files (a gzip upload decoded) under Dir; their urls are URL + name (for local tests,
 // served by APIHandler at /lbs/replays/).
 type DirReplayStore struct {
 	Dir string
@@ -104,7 +126,18 @@ func (s *DirReplayStore) Put(_ context.Context, name string, r io.Reader) (strin
 	if err != nil {
 		return "", err
 	}
-	if _, err := io.Copy(f, r); err != nil {
+	br := bufio.NewReader(r)
+	var src io.Reader = br
+	if isGzip(br) {
+		zr, err := gzip.NewReader(br)
+		if err != nil {
+			f.Close()
+			os.Remove(path)
+			return "", err
+		}
+		src = io.LimitReader(zr, replayUploadMaxSize)
+	}
+	if _, err := io.Copy(f, src); err != nil {
 		f.Close()
 		os.Remove(path)
 		return "", err
