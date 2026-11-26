@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,14 +19,16 @@ import (
 
 	"cloud.google.com/go/storage"
 	"go.uber.org/zap"
+	"google.golang.org/api/googleapi"
 )
 
 // POST /lbs/replay_upload?battle_code=&session_id= (session_id = the battle's ggpo_session, else 403;
 // checked before the body is read): an emulator posts a battle's replay as a multipart file
-// named <battle_code>.pb (plain or gzip encoded) after the battle. It is stored gzip encoded as replays/<battle_code>.pb and its
-// url is recorded on the battle (served by /lbs/replay). 409 when that replay is already there.
+// named <battle_code>.pb (plain or gzip encoded) after the battle. 400 unless it is a replay of that battle
+// (checkReplay). It is stored gzip encoded as replays/<battle_code>.pb and its url is recorded on the battle
+// (served by /lbs/replay). 409 when that replay is already there and recorded.
 // The form field used_ms (JSON, per round, by position: the MS id + 1, 0: unknown, e.g.
-// [[3,7,0,12],[3,9,0,12]]) sets used_ms on the battle's records once the replay is stored.
+// [[3,7,0,12],[3,9,0,12]]; at most the replay's rounds) sets used_ms on the battle's records once the replay is stored.
 
 const (
 	replayUploadPrefix  = "replays/"
@@ -67,17 +70,107 @@ func (s *GCSReplayStore) Put(ctx context.Context, name string, r io.Reader) (str
 	}
 
 	// DoesNotExist: a second upload racing this one fails instead of overwriting.
-	w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+	// Cancelling wctx before Close aborts the upload: no partial object is created.
+	wctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	w := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(wctx)
 	w.ContentEncoding = "gzip"
 	w.CacheControl = "no-transform"
 	if err := copyGzip(w, r); err != nil {
+		cancel()
 		w.Close()
+		if gcsPreconditionFailed(err) {
+			return url, errReplayExists
+		}
 		return "", err
 	}
 	if err := w.Close(); err != nil {
+		if gcsPreconditionFailed(err) {
+			return url, errReplayExists
+		}
 		return "", fmt.Errorf("writer close: %w", err)
 	}
 	return url, nil
+}
+
+func gcsPreconditionFailed(err error) bool {
+	var gerr *googleapi.Error
+	return errors.As(err, &gerr) && gerr.Code == http.StatusPreconditionFailed
+}
+
+var errNotReplay = errors.New("not a replay")
+
+// checkReplay reads a whole upload, plain or gzip encoded, and returns its round_data (field 18) count. It fails
+// unless the upload decodes to at most replayUploadMaxSize bytes of protobuf fields whose first one is
+// battle_code (field 3) = battleCode, the way a replay is written.
+func checkReplay(r io.Reader, battleCode string) (int, error) {
+	br := bufio.NewReader(r)
+	var src io.Reader = br
+	if isGzip(br) {
+		zr, err := gzip.NewReader(br)
+		if err != nil {
+			return 0, fmt.Errorf("gzip: %w", err)
+		}
+		src = zr
+	}
+	lr := &io.LimitedReader{R: src, N: replayUploadMaxSize + 1}
+	rounds, err := walkReplay(bufio.NewReader(lr), battleCode)
+	if lr.N <= 0 {
+		return 0, fmt.Errorf("decoded size over %d bytes", replayUploadMaxSize)
+	}
+	return rounds, err
+}
+
+func walkReplay(pr *bufio.Reader, battleCode string) (int, error) {
+	rounds := 0
+	for i := 0; ; i++ {
+		tag, err := binary.ReadUvarint(pr)
+		if err == io.EOF && i > 0 {
+			return rounds, nil
+		}
+		if err != nil {
+			return 0, fmt.Errorf("field %d tag: %w", i, err)
+		}
+		field, wire := tag>>3, tag&7
+		if field == 0 || i == 0 && (field != 3 || wire != 2) {
+			return 0, errNotReplay
+		}
+		switch wire {
+		case 0:
+			_, err = binary.ReadUvarint(pr)
+		case 1:
+			_, err = pr.Discard(8)
+		case 5:
+			_, err = pr.Discard(4)
+		case 2:
+			var n uint64
+			if n, err = binary.ReadUvarint(pr); err != nil {
+				break
+			}
+			if n > replayUploadMaxSize {
+				return 0, errNotReplay
+			}
+			if i == 0 {
+				if n != uint64(len(battleCode)) {
+					return 0, errNotReplay
+				}
+				b := make([]byte, n)
+				if _, err = io.ReadFull(pr, b); err == nil && string(b) != battleCode {
+					return 0, errNotReplay
+				}
+				break
+			}
+			_, err = pr.Discard(int(n))
+			if field == 18 {
+				rounds++
+			}
+		default:
+			return 0, errNotReplay
+		}
+		if err != nil {
+			return 0, fmt.Errorf("field %d: %w", field, err)
+		}
+	}
 }
 
 // isGzip tells whether br starts with the gzip magic 1f 8b; a .pb file never does.
@@ -166,7 +259,6 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	usedMs, usedMsErr := parseUsedMs(r.MultipartForm.Value["used_ms"])
 
 	// the first file of the form, whatever its field name
 	var fh *multipart.FileHeader
@@ -189,15 +281,33 @@ func (h *APIHandler) serveReplayUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to open file", http.StatusBadRequest)
 		return
 	}
+	defer file.Close()
+	rounds, err := checkReplay(file, battleCode)
+	if err != nil {
+		floodLog.Warn("replay_upload: not a replay", zap.Any("battle_code", battleCode), zap.Error(err))
+		http.Error(w, "Not a replay", http.StatusBadRequest)
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "Unable to read file", http.StatusInternalServerError)
+		return
+	}
+	usedMs, usedMsErr := parseUsedMs(r.MultipartForm.Value["used_ms"], rounds)
 	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 	url, err := h.ReplayStore.Put(ctx, replayUploadPrefix+fh.Filename, file)
 	cancel()
-	file.Close()
 	if errors.Is(err, errReplayExists) {
-		http.Error(w, "Already uploaded", http.StatusConflict)
-		return
-	}
-	if err != nil {
+		// stored by an upload whose url was not recorded (a failure, or it is racing this one): record it here
+		recorded, rerr := replayRecorded(battleCode)
+		if rerr != nil {
+			http.Error(w, "Failed to find the battle", http.StatusInternalServerError)
+			return
+		}
+		if recorded {
+			http.Error(w, "Already uploaded", http.StatusConflict)
+			return
+		}
+	} else if err != nil {
 		logger.Warn("replay_upload: store failure", zap.Any("battle_code", battleCode), zap.Error(err))
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
@@ -275,13 +385,44 @@ func saveUsedMs(battleCode string, rounds [][]int) {
 	}
 }
 
-func parseUsedMs(values []string) ([][]int, error) {
+func replayRecorded(battleCode string) (bool, error) {
+	records, err := DefaultDB.GetBattleRecords(battleCode)
+	if err != nil {
+		logger.Warn("replay_upload: GetBattleRecords failure", zap.Any("battle_code", battleCode), zap.Error(err))
+		return false, err
+	}
+	for _, rec := range records {
+		if rec.ReplayURL != "" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// parseUsedMs takes at most maxRounds rounds (the replay's round results) of at most the most players a rule allows.
+func parseUsedMs(values []string, maxRounds int) ([][]int, error) {
 	if len(values) == 0 {
 		return nil, errors.New("no used_ms field")
 	}
 	var rounds [][]int
 	if err := json.Unmarshal([]byte(values[0]), &rounds); err != nil {
-		return nil, fmt.Errorf("used_ms %q: %w", values[0], err)
+		return nil, fmt.Errorf("used_ms: %w", err)
+	}
+	if len(rounds) > maxRounds {
+		return nil, fmt.Errorf("used_ms of %d rounds, the replay has %d", len(rounds), maxRounds)
+	}
+	for _, rd := range rounds {
+		if len(rd) > maxRulePlayers() {
+			return nil, fmt.Errorf("used_ms round of %d players", len(rd))
+		}
 	}
 	return rounds, nil
+}
+
+func maxRulePlayers() int {
+	n := 0
+	for _, e := range ruleList[rulePlayerCount].List {
+		n = max(n, int(e.Value))
+	}
+	return n
 }

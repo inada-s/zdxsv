@@ -774,7 +774,7 @@ func TestReplayUploadUsedMsSearch(t *testing.T) {
 	h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
 	upload := func(code string, wantCode int, fields ...string) {
 		w := httptest.NewRecorder()
-		h.ServeHTTP(w, replayUploadRequest(t, "battle_code="+code+"&session_id=7", code+".pb", []byte("replay"), fields...))
+		h.ServeHTTP(w, replayUploadRequest(t, "battle_code="+code+"&session_id=7", code+".pb", testReplay(code, 3), fields...))
 		if w.Code != wantCode {
 			t.Errorf("upload %s %v: code %d body %s", code, fields, w.Code, w.Body.String())
 		}
