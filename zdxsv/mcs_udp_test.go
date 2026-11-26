@@ -343,3 +343,86 @@ func TestWireNotStun(t *testing.T) {
 		t.Errorf("Ping % x taken for a battle packet", ping)
 	}
 }
+
+func TestUDPAckOutOfWindowIgnored(t *testing.T) {
+	s, addr := startUDPServer(t)
+	c1 := newUDPClient(t, addr, "U1")
+	c2 := newUDPClient(t, addr, "U2")
+	if !c1.hello("12345678") || !c2.hello("87654321") {
+		t.Fatal("hello rejected")
+	}
+	c1.send(udpJoin("0123505679"))
+	c2.send(udpJoin("0876604322"))
+	waitJoined(t, s.mcs, 2)
+	c2.send([]byte("b1"))
+	wantBodies(t, c1.receive(1, 2*time.Second), "U2:b1")
+
+	c1.write(AppendBattle(nil, uint32(len(c1.sent)), c1.ack+1000, c1.sent))
+	c2.send([]byte("b2"))
+	buf := make([]byte, 64<<10)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		c1.conn.SetReadDeadline(deadline)
+		n, err := c1.conn.Read(buf)
+		if err != nil {
+			t.Fatal("b2 not received:", err)
+		}
+		pkt, err := ParsePacket(buf[:n])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pkt.Messages) > 2 {
+			t.Fatalf("%d messages after an ack past the sent seq, want at most 2", len(pkt.Messages))
+		}
+		if len(pkt.Messages) == 2 && string(pkt.Messages[1].Body) == "b2" {
+			return
+		}
+	}
+}
+
+func TestUDPHelloLimit(t *testing.T) {
+	_, addr := startUDPServer(t)
+	c := newUDPClient(t, addr, "U1")
+	c.conn.SetReadBuffer(1 << 20)
+	for i := 0; i < udpHellosPerIP+10; i++ {
+		c.write(AppendHello(nil, "99999999"))
+	}
+	if got := len(c.readAll(500 * time.Millisecond)); got != udpHellosPerIP {
+		t.Errorf("%d hello answers, want %d", got, udpHellosPerIP)
+	}
+}
+
+func TestUDPPeersPerUser(t *testing.T) {
+	s, addr := startUDPServer(t)
+	for i := 1; i <= udpPeersPerUser+1; i++ {
+		c := newUDPClient(t, addr, "U1")
+		if !c.hello("12345678") {
+			t.Fatal("hello rejected")
+		}
+		c.send()
+		if i <= udpPeersPerUser {
+			waitPeerCount(t, s, i)
+			continue
+		}
+		if pkts := c.readAll(300 * time.Millisecond); len(pkts) != 0 {
+			t.Errorf("peer %d answered: %v", i, pkts)
+		}
+		if n := s.peerCount(); n != udpPeersPerUser {
+			t.Errorf("peer count = %d, want %d", n, udpPeersPerUser)
+		}
+	}
+}
+
+func TestUDPPeerMustJoin(t *testing.T) {
+	s, addr := startUDPServer(t)
+	s.Lock()
+	s.joinTimeout = 100 * time.Millisecond
+	s.Unlock()
+	c := newUDPClient(t, addr, "U1")
+	if !c.hello("12345678") {
+		t.Fatal("hello rejected")
+	}
+	c.send()
+	waitPeerCount(t, s, 1)
+	waitPeerCount(t, s, 0)
+}

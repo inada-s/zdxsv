@@ -242,15 +242,6 @@ func (r *McsRoom) SendMessage(peer McsPeer, msg McsMessage) {
 	r.RUnlock()
 }
 
-func (r *McsRoom) Clear() {
-	r.Lock()
-	for i := 0; i < len(r.peers); i++ {
-		r.peers[i] = nil
-	}
-	r.peers = r.peers[:0]
-	r.Unlock()
-}
-
 func (r *McsRoom) Join(p McsPeer) {
 	p.SetRoomID(r.id)
 	r.Lock()
@@ -273,9 +264,11 @@ func (r *McsRoom) Leave(p McsPeer) {
 			break
 		}
 	}
+	if empty {
+		r.peers = r.peers[:0]
+	}
 	r.Unlock()
 	if empty {
-		r.Clear()
 		if r.onEmpty != nil {
 			r.onEmpty(r)
 		}
