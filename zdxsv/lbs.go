@@ -54,7 +54,6 @@ type LbsPeer struct {
 	Platform          string
 	PlatformInfo      map[string]string
 
-	proxyHost         net.IP
 	proxyIP           net.IP
 	proxyPort         uint16
 	proxyUDPAddrs     []string
@@ -105,6 +104,7 @@ type Lbs struct {
 	relayProv          *relayProvisioning
 	relayPeers         map[*LbsPeer]*RegionalRelay
 	carryCode          func(loginKey string) string
+	proxyLimit         *ipLimiter
 }
 
 const (
@@ -124,6 +124,7 @@ func NewLbs() *Lbs {
 		chEvent:            make(chan interface{}, 64),
 		chQuit:             make(chan interface{}),
 		aliveCheckInterval: 10 * time.Second,
+		proxyLimit:         &ipLimiter{window: 10 * time.Second, perIP: proxyRegistersPerIP},
 	}
 	app.getLobby(PlatformConsole, 0)
 	app.getLobby(PlatformEmu, 0)

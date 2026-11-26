@@ -356,7 +356,7 @@ func (s *LbsServer) ServeUDPStun(addr string) error {
 // serveUDPStun answers Pings.
 func serveUDPStun(conn, test *net.UDPConn) {
 	buf := make([]byte, 64<<10)
-	limit := stunLimiter{}
+	limit := ipLimiter{window: 10 * time.Second, perIP: 20}
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -377,25 +377,28 @@ func serveUDPStun(conn, test *net.UDPConn) {
 	}
 }
 
-const (
-	stunWindow        = 10 * time.Second
-	stunAnswersPerIP  = 20
-	stunTrackedIPsMax = 100000
-)
+const limiterTrackedIPsMax = 100000
 
-type stunLimiter struct {
+// ipLimiter allows perIP calls per IP in each window.
+type ipLimiter struct {
+	window time.Duration
+	perIP  int
+
+	mu    sync.Mutex
 	start time.Time
 	count map[string]int
 }
 
-func (l *stunLimiter) allow(ip net.IP, now time.Time) bool {
-	if l.count == nil || now.Sub(l.start) >= stunWindow {
+func (l *ipLimiter) allow(ip net.IP, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.count == nil || now.Sub(l.start) >= l.window {
 		l.start = now
 		l.count = map[string]int{}
 	}
 	k := string(ip.To16())
 	c, ok := l.count[k]
-	if c >= stunAnswersPerIP || (!ok && len(l.count) >= stunTrackedIPsMax) {
+	if c >= l.perIP || (!ok && len(l.count) >= limiterTrackedIPsMax) {
 		return false
 	}
 	l.count[k] = c + 1
