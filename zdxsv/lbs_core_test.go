@@ -510,6 +510,69 @@ func TestLobbyWaitsForLogin(t *testing.T) {
 	})
 }
 
+// A logged-in client that sends a login command again, from the lobby or from a room, is
+// closed and leaves no user, lobby member or room behind.
+func TestLoginCommandsFromLoggedInPeer(t *testing.T) {
+	UseTestDB(t)
+	addr, app := startLobbyApp(t, NewMcs())
+	const lobbyID, roomID = 4, 1
+
+	for _, cmd := range []uint16{0x6101, 0x6103, 0x6132} {
+		for _, inRoom := range []bool{false, true} {
+			name := fmt.Sprintf("0x%04x in room %v", cmd, inRoom)
+			c := dialLobby(t, addr)
+			id, _, _ := c.login(registerAccount(t), "******", "pilot")
+			c.ask(0x6305, u16(lobbyID))
+			if inRoom {
+				c.ask(0x6407, u16(roomID))
+				q := NewClientQuestion(0x660A)
+				q.Writer().Write(encryptString(q.Seq, "room"))
+				c.send(q)
+				c.expect(0x660A, CategoryAnswer)
+				c.ask(0x660C, nil)
+			}
+
+			other := registerAccount(t)
+			var m *LbsMessage
+			switch cmd {
+			case 0x6101:
+				m = NewClientAnswer(NewServerQuestion(0x6101))
+				m.Writer().WriteString(keyPairKey1(other.SessionID)).Write(encryptString(m.Seq, other.LoginKey))
+			case 0x6103:
+				m = NewClientAnswer(NewServerQuestion(0x6103))
+			case 0x6132:
+				m = NewClientQuestion(0x6132)
+				m.Writer().Write(append(encryptString(m.Seq, "******"), encryptString(m.Seq, "twin")...))
+			}
+			c.send(m)
+			c.expect(0x6003, CategoryNotice)
+
+			app.Locked(func(a *Lbs) {
+				if len(a.users) != 0 {
+					t.Errorf("%s: logged in users %d, want 0", name, len(a.users))
+				}
+				for _, p := range a.peers {
+					if p.UserID == id {
+						t.Errorf("%s: peer of %s still open", name, id)
+					}
+				}
+				for platform := range a.lobbys {
+					l, _ := a.getLobby(platform, lobbyID)
+					if len(l.Users) != 0 || len(l.EntryUsers) != 0 {
+						t.Errorf("%s: lobby users %d entries %d", name, len(l.Users), len(l.EntryUsers))
+					}
+					if r := l.Rooms[roomID]; r != nil && (r.Status != RoomStateEmpty || len(r.Users) != 0) {
+						t.Errorf("%s: room status %d users %d", name, r.Status, len(r.Users))
+					}
+				}
+			})
+			if users, err := DefaultDB.GetUserList(other.LoginKey); err != nil || len(users) != 0 {
+				t.Errorf("%s: users of the other account %d %v", name, len(users), err)
+			}
+		}
+	}
+}
+
 // say sends a chat line. The lobby does not answer it.
 func (c *testClient) say(line string) {
 	c.t.Helper()
