@@ -60,37 +60,28 @@ func TestUDPStunFixture(t *testing.T) {
 }
 
 func TestUDPStunServer(t *testing.T) {
-	// a free port whose port + 1 is free too
-	var port int
-	for i := 0; i < 20 && port == 0; i++ {
+	var conn, testConn *net.UDPConn
+	for i := 0; i < 20 && testConn == nil; i++ {
 		a, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		p := a.LocalAddr().(*net.UDPAddr).Port
-		a.Close()
 		if b, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p + 1}); err == nil {
-			b.Close()
-			port = p
+			conn, testConn = a, b
+		} else {
+			a.Close()
 		}
 	}
-	srv := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}
-	go (&LbsServer{}).ServeUDPStunServer(srv.String())
-	test := &net.UDPAddr{IP: srv.IP, Port: port + 1}
-
-	// a client bound to port + 1 before the server would take its test socket
-	waitFor(t, "the stun test socket", func() bool {
-		probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer probe.Close()
-		if probe.LocalAddr().(*net.UDPAddr).Port == test.Port {
-			return false
-		}
-		stunPing(t, probe, test, "AAAAAA")
-		return len(stunPongs(t, probe, 20*time.Millisecond)) > 0
-	})
+	if testConn == nil {
+		t.Fatal("no free port pair")
+	}
+	defer conn.Close()
+	defer testConn.Close()
+	srv := conn.LocalAddr().(*net.UDPAddr)
+	port := srv.Port
+	go ServeUDPStun(conn, testConn)
+	go ServeUDPStun(testConn, nil)
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +89,7 @@ func TestUDPStunServer(t *testing.T) {
 	defer c.Close()
 	me := c.LocalAddr().String()
 
-	// plain Ping: one Pong, from the main socket
+	// plain Ping: one Pong, from the conn socket
 	stunPing(t, c, srv, "AAAAAA")
 	if got := stunPongs(t, c, 500*time.Millisecond); len(got) != 1 || got[port] != me {
 		t.Fatalf("plain ping: %v want only {%d:%s}", got, port, me)
@@ -109,7 +100,7 @@ func TestUDPStunServer(t *testing.T) {
 		t.Fatalf("udptest ping: %v want {%d:%s %d:%s}", got, port, me, port+1, me)
 	}
 	// the test socket answers Pings itself (the second mapping for the NAT type)
-	stunPing(t, c, test, "AAAAAA")
+	stunPing(t, c, testConn.LocalAddr().(*net.UDPAddr), "AAAAAA")
 	if got := stunPongs(t, c, 500*time.Millisecond); len(got) != 1 || got[port+1] != me {
 		t.Fatalf("test socket ping: %v want only {%d:%s}", got, port+1, me)
 	}

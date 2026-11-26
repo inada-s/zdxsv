@@ -64,18 +64,6 @@ func (s *LbsServer) releaseConn(ip string) {
 	}
 }
 
-func (s *LbsServer) ListenAndServe(addr string) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return err
-	}
-	listner, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		return err
-	}
-	return s.Serve(listner)
-}
-
 // Serve accepts connections on l until l is closed.
 func (s *LbsServer) Serve(l net.Listener) error {
 	for {
@@ -307,54 +295,11 @@ func (c *LbsConn) dispatchLoop(ctx context.Context, cancel func()) {
 // UPnP, full/address-restricted cone NAT).
 const UDPTestUserID = "udptest"
 
-// ServeUDPStunServer answers Ping with Pong (the sender's public address) on addr, and
-// on addr's port + 1 (the test socket). Clients compare both public addresses to tell
-// a cone NAT (same mapped port) from a symmetric one.
-func (s *LbsServer) ServeUDPStunServer(addr string) error {
-	logger.Info("start UDPStun", zap.Any("addr", addr))
-	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.ListenUDP("udp4", udpAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	testAddr := &net.UDPAddr{IP: udpAddr.IP, Port: udpAddr.Port + 1}
-	test, err := net.ListenUDP("udp4", testAddr)
-	if err != nil {
-		logger.Error("UDPStun test socket failed", zap.Error(err))
-		test = nil
-	} else {
-		logger.Info("start UDPStun test", zap.Any("addr", testAddr))
-		defer test.Close()
-		go serveUDPStun(test, nil)
-	}
-
-	serveUDPStun(conn, test)
-	return nil
-}
-
-// ServeUDPStun answers Ping with Pong on addr, without the test socket.
-func (s *LbsServer) ServeUDPStun(addr string) error {
-	logger.Info("start UDPStun", zap.Any("addr", addr))
-	udpAddr, err := net.ResolveUDPAddr("udp4", addr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.ListenUDP("udp4", udpAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	serveUDPStun(conn, nil)
-	return nil
-}
-
-// serveUDPStun answers Pings.
-func serveUDPStun(conn, test *net.UDPConn) {
+// ServeUDPStun answers Ping with Pong (the sender's public address) on conn until a
+// read fails for good. Pongs that ask for the reachability test are also sent from test,
+// the socket on conn's port + 1, which needs its own ServeUDPStun(test, nil). Clients
+// compare both public addresses to tell a cone NAT (same mapped port) from a symmetric one.
+func ServeUDPStun(conn, test *net.UDPConn) error {
 	buf := make([]byte, 64<<10)
 	limit := stunLimiter{}
 	for {
@@ -362,7 +307,7 @@ func serveUDPStun(conn, test *net.UDPConn) {
 		if err != nil {
 			floodLog.Error("UDPStun read failed", zap.Error(err))
 			if ne, ok := err.(net.Error); ok && !ne.Timeout() && !ne.Temporary() {
-				return
+				return err
 			}
 			continue
 		}
