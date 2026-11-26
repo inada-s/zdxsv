@@ -249,7 +249,7 @@ func parseBattleResult(m *LbsMessage) *BattleResult {
 var _ = register(0x6138, "AnswerBattleResult", func(p *LbsPeer, m *LbsMessage) {
 	result := parseBattleResult(m)
 	js, _ := json.MarshalIndent(result, "", "  ")
-	logger.Info("battle result", zap.String("user_id", p.LbsUser.UserID), zap.String("name", p.LbsUser.Name), zap.String("result", string(js)))
+	floodLog.Info("battle result", zap.String("user_id", p.LbsUser.UserID), zap.String("name", p.LbsUser.Name), zap.String("result", string(js)))
 
 	p.app.OnGetBattleResult(p, result)
 })

@@ -219,7 +219,7 @@ func (c *LbsConn) writeLoop(ctx context.Context, cancel func()) {
 			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 			n, err := c.conn.Write(buf[sum:])
 			if err != nil {
-				logger.Error("tcp write error", zap.Any("addr", c.Address()), zap.Error(err))
+				floodLog.Error("tcp write error", zap.Any("addr", c.Address()), zap.Error(err))
 				break
 			}
 			sum += n

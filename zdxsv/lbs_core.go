@@ -79,12 +79,12 @@ func (a *Lbs) OnKeePair(p *LbsPeer, loginKey, sessionID string) {
 		logger.Error("FindBan failure", zap.Error(err))
 	}
 	if ban != nil {
-		logger.Info("banned login refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
+		floodLog.Info("banned login refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("ip", ip), zap.Any("machine_id", machineID), zap.Any("ban_key", ban.Key), zap.Any("until", ban.Until))
 		SendBanned(p)
 		return
 	}
 	if pcsx2NeedsUpdate(p.PlatformInfo, ac.LoginKey, machineID) {
-		logger.Info("outdated client refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
+		floodLog.Info("outdated client refused", zap.String("login_key", maskKey(ac.LoginKey)), zap.Any("machine_id", machineID), zap.String("pcsx2", p.PlatformInfo["pcsx2"]))
 		SendPleaseUpdate(p)
 		return
 	}
@@ -131,7 +131,7 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 	if userID == "******" {
 		u, err := DefaultDB.RegisterUser(p.LoginKey)
 		if err != nil {
-			logger.Error("login failed", zap.Error(err))
+			floodLog.Error("login failed", zap.Error(err))
 			return false
 		}
 		p.LbsUser.DBUser = *u
@@ -159,7 +159,7 @@ func (a *Lbs) OnDecideUserID(p *LbsPeer, userID, name string) bool {
 	} else if 0 < len(userID) && 0 < len(name) {
 		u, err := DefaultDB.GetAccountUser(p.LoginKey, userID)
 		if err != nil {
-			logger.Error("login failed", zap.Error(err))
+			floodLog.Error("login failed", zap.Error(err))
 			return false
 		}
 		p.LbsUser.DBUser = *u
@@ -202,7 +202,7 @@ func (a *Lbs) OnGetBattleResult(p *LbsPeer, result *BattleResult) {
 
 	record, err := DefaultDB.GetBattleRecordUser(result.BattleCode, p.UserID)
 	if err != nil {
-		logger.Error("failed to load battle record", zap.Error(err), zap.String("record", string(js)))
+		floodLog.Error("failed to load battle record", zap.Error(err), zap.String("record", string(js)))
 		return
 	}
 

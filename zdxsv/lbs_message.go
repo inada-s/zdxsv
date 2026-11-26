@@ -324,7 +324,7 @@ func (m *MessageBodyWriter) Write32LE(v uint32) *MessageBodyWriter {
 func (m *MessageBodyWriter) WriteString(v string) *MessageBodyWriter {
 	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(v), japanese.ShiftJIS.NewEncoder()))
 	if err != nil {
-		logger.Error("write encstr failed", zap.Error(err))
+		floodLog.Error("write encstr failed", zap.Error(err))
 	}
 	binary.Write(m.buf, binary.BigEndian, uint16(len(ret)))
 	m.buf.Write(ret)

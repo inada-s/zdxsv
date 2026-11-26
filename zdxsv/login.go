@@ -82,7 +82,7 @@ func wrapHandler(f http.Handler) http.HandlerFunc {
 		if r.Method == "POST" {
 			r.ParseForm()
 		}
-		logger.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("query", logForm(r.URL.Query())), zap.Any("form", logForm(r.Form)), zap.String("ua", r.UserAgent()))
+		floodLog.Info("login http", zap.Any("status", m.status), zap.String("addr", r.RemoteAddr), zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Any("query", logForm(r.URL.Query())), zap.Any("form", logForm(r.Form)), zap.String("ua", r.UserAgent()))
 
 	}
 }
@@ -175,7 +175,7 @@ func HandleTopPage(w http.ResponseWriter, r *http.Request) {
 func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	p := commonParam{}
 	r.ParseForm()
-	logger.Info("login form", zap.Any("form", logForm(r.Form)))
+	floodLog.Info("login form", zap.Any("form", logForm(r.Form)))
 	loginKey := r.FormValue("login_key")
 
 	// An account made for a sign-in identity logs in by token only: no client ever holds its key.
@@ -192,7 +192,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 	a, err := loginAccount(loginKey)
 	if err != nil {
-		logger.Error("login page failed", zap.Error(err))
+		floodLog.Error("login page failed", zap.Error(err))
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, messageLoginFail)
@@ -270,11 +270,11 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if e != nil {
-			logger.Error("token login: new account failed", zap.Error(e))
+			floodLog.Error("token login: new account failed", zap.Error(e))
 			http.Error(w, "login failed", http.StatusForbidden)
 			return
 		}
-		logger.Info("token login: new account", zap.String("login_key", maskKey(a.LoginKey)))
+		floodLog.Info("token login: new account", zap.String("login_key", maskKey(a.LoginKey)))
 		loginKey, keys = a.LoginKey, append(keys, a.LoginKey)
 	} else if err == nil && n != "" {
 		if i, e := strconv.Atoi(n); e == nil && 1 <= i && i <= len(keys) {
@@ -298,7 +298,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := loginAccount(loginKey)
 	if err != nil {
-		logger.Error("login page failed", zap.Error(err))
+		floodLog.Error("login page failed", zap.Error(err))
 		http.Error(w, "login failed", http.StatusForbidden)
 		return
 	}
@@ -322,7 +322,7 @@ func HandleAPILogin(w http.ResponseWriter, r *http.Request) {
 func HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
 	a, err := DefaultDB.RegisterAccount(requestIP(r))
 	if err != nil {
-		logger.Error("login page failed", zap.Error(err))
+		floodLog.Error("login page failed", zap.Error(err))
 		w.Header().Set("Content-Type", "text/html; charset=cp932")
 		w.WriteHeader(200)
 		writeMessagePage(w, r, "登録に失敗しました")

@@ -158,7 +158,7 @@ func (c *tlsConn) readHandshake(buf *[]byte) (byte, []byte, error) {
 			return 0, nil, err
 		}
 		if typ != recHandshake {
-			return 0, nil, fmt.Errorf("want handshake record, got %d %x", typ, body)
+			return 0, nil, fmt.Errorf("want handshake record, got %d (%d bytes)", typ, len(body))
 		}
 		*buf = append(*buf, body...)
 	}
@@ -182,14 +182,14 @@ func (c *tlsConn) handshake() error {
 		return err
 	}
 	if h2[0]&0x80 == 0 {
-		return fmt.Errorf("not an SSLv2 hello: %x", h2)
+		return fmt.Errorf("not an SSLv2 hello: first byte %d", h2[0])
 	}
 	body := make([]byte, int(h2[0]&0x7f)<<8|int(h2[1]))
 	if _, err := io.ReadFull(c.Conn, body); err != nil {
 		return err
 	}
 	if len(body) < 9 || body[0] != 1 {
-		return fmt.Errorf("bad v2 hello %x", body)
+		return fmt.Errorf("bad v2 hello (%d bytes)", len(body))
 	}
 	csl := int(binary.BigEndian.Uint16(body[3:]))
 	sidl := int(binary.BigEndian.Uint16(body[5:]))
@@ -212,7 +212,7 @@ func (c *tlsConn) handshake() error {
 	case offered[suiteRC4SHA]:
 		c.suite = suiteRC4SHA
 	default:
-		return fmt.Errorf("no common suite in %x", cs)
+		return fmt.Errorf("no common suite in %d offered", len(cs)/3)
 	}
 	clientRandom := make([]byte, 32)
 	copy(clientRandom[32-chl:], challenge)
@@ -265,7 +265,7 @@ func (c *tlsConn) handshake() error {
 	cKey, sKey := kb[2*macLen:2*macLen+16], kb[2*macLen+16:2*macLen+32]
 
 	if t, b, err := c.readRecord(); err != nil || t != recCCS {
-		return fmt.Errorf("want CCS: %d %x %v", t, b, err)
+		return fmt.Errorf("want CCS: %d (%d bytes) %v", t, len(b), err)
 	}
 	ci, _ := rc4.NewCipher(cKey)
 	c.in = &halfConn{rc4: ci, macKey: cMac, newMac: newMac}
@@ -275,7 +275,7 @@ func (c *tlsConn) handshake() error {
 		return err
 	}
 	if typ != 20 || !bytes.Equal(fin, want) {
-		return fmt.Errorf("bad client Finished %d %x want %x", typ, fin, want)
+		return fmt.Errorf("bad client Finished: type %d, %d bytes", typ, len(fin))
 	}
 	sfin := hsMsg(20, c.finished(master, "server finished"))
 	if err := c.writeRecord(recCCS, []byte{1}); err != nil {
