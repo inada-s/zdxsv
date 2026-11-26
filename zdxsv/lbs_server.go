@@ -32,35 +32,44 @@ type LbsServer struct {
 	conn net.Conn
 	pf   LbsPeerFactory
 
-	mConns  sync.Mutex
-	nConns  int
-	ipConns map[string]int
+	conns connLimiter
 }
 
 func NewLbsServer(pf LbsPeerFactory) *LbsServer {
 	return &LbsServer{
-		pf:      pf,
-		ipConns: make(map[string]int),
+		pf:    pf,
+		conns: connLimiter{max: lbsMaxConns, perIP: lbsMaxConnsPerIP},
 	}
 }
 
-func (s *LbsServer) acquireConn(ip string) bool {
-	s.mConns.Lock()
-	defer s.mConns.Unlock()
-	if s.nConns >= lbsMaxConns || s.ipConns[ip] >= lbsMaxConnsPerIP {
+type connLimiter struct {
+	max, perIP int
+
+	mu  sync.Mutex
+	n   int
+	ips map[string]int
+}
+
+func (l *connLimiter) acquire(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.n >= l.max || l.ips[ip] >= l.perIP {
 		return false
 	}
-	s.nConns++
-	s.ipConns[ip]++
+	if l.ips == nil {
+		l.ips = map[string]int{}
+	}
+	l.n++
+	l.ips[ip]++
 	return true
 }
 
-func (s *LbsServer) releaseConn(ip string) {
-	s.mConns.Lock()
-	defer s.mConns.Unlock()
-	s.nConns--
-	if s.ipConns[ip]--; s.ipConns[ip] <= 0 {
-		delete(s.ipConns, ip)
+func (l *connLimiter) release(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.n--
+	if l.ips[ip]--; l.ips[ip] <= 0 {
+		delete(l.ips, ip)
 	}
 }
 
@@ -84,14 +93,14 @@ func (s *LbsServer) Serve(l net.Listener) error {
 			return err
 		}
 		ip, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
-		if !s.acquireConn(ip) {
+		if !s.conns.acquire(ip) {
 			floodLog.Warn("tcp connection refused: too many connections", zap.Stringer("addr", tcpConn.RemoteAddr()))
 			tcpConn.Close()
 			continue
 		}
 		floodLog.Info("a new tcp connection open", zap.Stringer("addr", tcpConn.RemoteAddr()))
 		go func() {
-			defer s.releaseConn(ip)
+			defer s.conns.release(ip)
 			s.ServeConn(tcpConn)
 		}()
 	}

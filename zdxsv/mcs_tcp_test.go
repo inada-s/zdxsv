@@ -142,3 +142,71 @@ func TestTCPZeroSizeFrameCloses(t *testing.T) {
 	c.Write([]byte{0})
 	expectServerClose(t, c)
 }
+
+// greeted reads the battle greeting: false when the server closed c instead.
+func greeted(c net.Conn) bool {
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, err := io.ReadFull(c, make([]byte, 12))
+	return err == nil
+}
+
+func TestTCPConnCaps(t *testing.T) {
+	setCaps(t, &tcpMaxConns, &tcpMaxConnsPerIP, 3, 2)
+	ln := listenLoopback(t)
+	go NewTCPServer(NewMcs()).Serve(ln)
+
+	a1 := dialFrom(t, "127.0.0.1", ln)
+	if !greeted(a1) || !greeted(dialFrom(t, "127.0.0.1", ln)) {
+		t.Fatal("first two connections from one IP refused")
+	}
+	if greeted(dialFrom(t, "127.0.0.1", ln)) {
+		t.Error("third connection from one IP accepted")
+	}
+	if !greeted(dialFrom(t, "127.0.0.2", ln)) {
+		t.Fatal("connection from a second IP refused")
+	}
+	if greeted(dialFrom(t, "127.0.0.3", ln)) {
+		t.Error("connection over the total cap accepted")
+	}
+	a1.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for !greeted(dialFrom(t, "127.0.0.1", ln)) {
+		if time.Now().After(deadline) {
+			t.Fatal("closed connection's slot not released")
+		}
+	}
+}
+
+func TestTCPJoinDeadline(t *testing.T) {
+	old := tcpJoinTimeout
+	tcpJoinTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { tcpJoinTimeout = old })
+	ln := listenLoopback(t)
+	go NewTCPServer(NewMcs()).Serve(ln)
+
+	c := dialFrom(t, "127.0.0.1", ln)
+	if !greeted(c) {
+		t.Fatal("no greeting")
+	}
+	start := time.Now()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+				c.Write([]byte{0})
+			}
+		}
+	}()
+	if serverOpen(c, 2*time.Second) {
+		t.Fatal("a connection dripping bytes without a session id was kept 2 s")
+	}
+	if d := time.Since(start); d > 1500*time.Millisecond {
+		t.Errorf("closed after %v, want about %v", d, tcpJoinTimeout)
+	}
+}
