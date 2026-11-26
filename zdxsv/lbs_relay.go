@@ -25,6 +25,9 @@ import (
 //   - Players join a session with a 28-byte ping carrying the session id (ggpo_session),
 //     peer id and the battle's token (relay_0 in the battle info); only bound members of
 //     the same session can relay to each other.
+//   - Before the battle, a player that reaches no other directly still sends its RTTs (ping
+//     test packets of type pingTestTypeRtts) to the others through the relay, unchanged; the
+//     relay checks the header only.
 const (
 	relayPingMagic   = 0x594c4552 // "RELY"
 	relayPingSize    = 28
@@ -37,6 +40,10 @@ const (
 	ggpoHeaderSize   = 12
 	ggpoMinType      = 1 // SyncRequest
 	ggpoMaxType      = 8 // AppData
+	pingTestMagic    = 2205246188
+	pingTestTypeRtts = 3
+	pingTestMinSize  = 44
+	pingTestMaxSize  = 256
 	relayIdleTimeout = 2 * time.Minute
 	relayMaxLifetime = 3 * time.Hour
 
@@ -49,7 +56,8 @@ type relaySession struct {
 	peers      [relayMaxPeers]relayPeer
 	created    time.Time
 	lastActive time.Time
-	forwarded  uint64
+	forwarded  uint64 // GGPO packets
+	rtts       uint64 // ping test packets
 }
 
 type relayPeer struct {
@@ -194,7 +202,7 @@ func newTestRelay(id uint32, token uint64) (*Relay, func()) {
 	return r, func() {
 		r.mtx.Lock()
 		if s, ok := r.sessions[id]; ok {
-			logger.Info("relay test session", zap.Any("session_id", id), zap.Any("forwarded", s.forwarded))
+			logger.Info("relay test session", zap.Any("session_id", id), zap.Any("forwarded", s.forwarded), zap.Any("rtts", s.rtts))
 		}
 		r.mtx.Unlock()
 		r.RemoveStaleSessions()
@@ -211,7 +219,7 @@ func (r *Relay) removeSessionLocked(s *relaySession) {
 		}
 	}
 	delete(r.sessions, s.id)
-	logger.Info("relay session removed", zap.Any("session_id", s.id), zap.Any("forwarded", s.forwarded))
+	logger.Info("relay session removed", zap.Any("session_id", s.id), zap.Any("forwarded", s.forwarded), zap.Any("rtts", s.rtts))
 }
 
 func (r *Relay) RemoveStaleSessions() {
@@ -251,6 +259,9 @@ func (r *Relay) handle(p []byte, from netip.AddrPort) (netip.AddrPort, []byte) {
 		p[7] == ggpoTypeRelay &&
 		binary.LittleEndian.Uint16(p[8:]) == ggpoRelayMagic {
 		return r.handleGgpo(p, from)
+	}
+	if pingTestMinSize <= len(p) && len(p) <= pingTestMaxSize && binary.LittleEndian.Uint32(p[0:]) == pingTestMagic {
+		return r.handlePingTest(p, from)
 	}
 	return netip.AddrPort{}, nil
 }
@@ -297,6 +308,31 @@ func (r *Relay) handlePing(p []byte, from netip.AddrPort) (netip.AddrPort, []byt
 
 	p[4] = relayTypePong
 	return from, p
+}
+
+// Ping test packet: magic u32, session u32, type u8, from peer u8, to peer u8, then what only the
+// players read. Sent unchanged to the to peer of the sender's session. Only pingTestTypeRtts: a
+// ping or pong through the relay would make an older client take the relay for the peer.
+func (r *Relay) handlePingTest(p []byte, from netip.AddrPort) (netip.AddrPort, []byte) {
+	sessionID := binary.LittleEndian.Uint32(p[4:])
+	typ, fromPeer, to := p[8], p[9], p[10]
+	if typ != pingTestTypeRtts || relayMaxPeers <= to {
+		return netip.AddrPort{}, nil
+	}
+
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	b, ok := r.bindings[from]
+	if !ok || b.session.id != sessionID || fromPeer != b.peer || to == b.peer {
+		return netip.AddrPort{}, nil
+	}
+	dst := b.session.peers[to].active
+	if !dst.IsValid() {
+		return netip.AddrPort{}, nil
+	}
+	b.session.lastActive = r.now()
+	b.session.rtts++
+	return dst, p
 }
 
 // GGPO relay header: magic u16, sequence_number u16, ack u16 (unused), hdr.type u8 = 99,
