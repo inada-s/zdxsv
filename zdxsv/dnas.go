@@ -277,6 +277,7 @@ func (s *DnasServer) serveHTTP(c net.Conn) {
 			}
 			return
 		}
+		req.RemoteAddr = c.RemoteAddr().String()
 		logger.Info("dnas https request", zap.Stringer("addr", c.RemoteAddr()), zap.String("method", req.Method), zap.Stringer("url", req.URL), zap.String("ua", req.UserAgent()))
 		rw := &respWriter{h: http.Header{}}
 		s.mux.ServeHTTP(rw, req)

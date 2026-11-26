@@ -328,6 +328,9 @@ func tableColumns(tx *sql.Tx, table string) ([]string, error) {
 }
 
 func (db SQLiteDB) RegisterAccount(ip string) (*DBAccount, error) {
+	if ip == "" {
+		return nil, ErrNoClientIP
+	}
 	key := GenLoginKey()
 	now := time.Now()
 	res, err := db.Exec(`
