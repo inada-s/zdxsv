@@ -29,7 +29,7 @@ func NewUDPServer(mcs *Mcs) *McsUDPServer {
 		peers:       make(map[string]*McsUDPPeer),
 		pending:     make(map[string]*udpPending),
 		mcs:         mcs,
-		hellos:      ipLimiter{max: udpHellosPerIP},
+		hellos:      ipLimiter{window: 10 * time.Second, perIP: udpHellosPerIP},
 		joinTimeout: udpJoinTimeout,
 	}
 }
