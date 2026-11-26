@@ -139,3 +139,7 @@ func (r *LbsRoom) StartBattleUsers() (active []*LbsUser, inactive []*LbsUser) {
 	}
 	return active, inactive
 }
+
+func (r *LbsRoom) OwnedBy(userID string) bool {
+	return r != nil && r.Owner == userID
+}

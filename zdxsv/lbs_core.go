@@ -918,6 +918,7 @@ func (a *Lbs) OnRequestCreateRoom(p *LbsPeer, roomID uint16) bool {
 			a.OnExitRoom(p)
 		}
 		r.Status = RoomStatePrepare
+		r.Owner = p.UserID
 		p.Room = r
 
 		for id := range p.Lobby.Users {
@@ -972,21 +973,21 @@ func (a *Lbs) OnGetRuleElementCount(_ *LbsPeer, _ uint16, ruleID byte) byte {
 }
 
 func (a *Lbs) OnDecideRoomName(p *LbsPeer, name string) {
-	if p.Room == nil {
+	if !p.Room.OwnedBy(p.UserID) {
 		return
 	}
 	p.Room.Name = name
 }
 
 func (a *Lbs) OnDecideRoomPassword(p *LbsPeer, pass string) {
-	if p.Room == nil {
+	if !p.Room.OwnedBy(p.UserID) {
 		return
 	}
 	p.Room.Password = pass
 }
 
 func (a *Lbs) OnDecideRule(p *LbsPeer, ruleID, elemID byte) (nazo byte) {
-	if p.Room == nil {
+	if !p.Room.OwnedBy(p.UserID) {
 		return
 	}
 	p.Room.Rule.Set(ruleID, elemID)
@@ -994,7 +995,7 @@ func (a *Lbs) OnDecideRule(p *LbsPeer, ruleID, elemID byte) (nazo byte) {
 	return
 }
 func (a *Lbs) OnDecideRuleFinish(p *LbsPeer) {
-	if p.Room == nil || p.Lobby == nil {
+	if !p.Room.OwnedBy(p.UserID) || p.Lobby == nil {
 		return
 	}
 	r := p.Room
@@ -1088,7 +1089,7 @@ func (a *Lbs) OnEnterRoom(p *LbsPeer, roomID uint16) bool {
 		floodLog.Error("not found")
 		return false
 	}
-	if r.Status == RoomStateFull {
+	if r.Status != RoomStateRecruit {
 		return false
 	}
 	if p.Room != r {
@@ -1177,23 +1178,37 @@ func (a *Lbs) OnGetRoomMatchEntryUserCount(p *LbsPeer, roomID uint16) (aeug uint
 }
 
 func (a *Lbs) OnNoticeRoomBattleStart(p *LbsPeer) {
-	if p.Room == nil {
+	r := p.Room
+	if !r.OwnedBy(p.UserID) || !r.CanBattleStart() {
 		return
 	}
-	if !p.Room.CanBattleStart() {
-		return
-	}
-	active, inactive := p.Room.StartBattleUsers()
-	ok := a.startBattle(p.Platform, p.Room.LobbyID, active, p.Room.Rule)
-	if ok {
-		for _, u := range inactive {
-			peer, ok := a.users[u.UserID]
-			if ok {
-				NoticeRemoveRoom(peer)
-			}
-		}
-	} else {
+	active, inactive := r.StartBattleUsers()
+	if !a.startBattle(p.Platform, r.LobbyID, active, r.Rule.Clone()) {
 		logger.Error("failed to start battle")
+		return
+	}
+	if len(inactive) == 0 {
+		return
+	}
+	for _, u := range inactive {
+		r.Exit(u.UserID)
+		if peer, ok := a.users[u.UserID]; ok {
+			NoticeRemoveRoom(peer)
+			peer.Room = nil
+			peer.Entry = EntryNone
+		}
+	}
+	if !slices.ContainsFunc(r.Users, func(u *LbsUser) bool { return u.UserID == r.Owner }) && len(r.Users) > 0 {
+		r.Owner = r.Users[0].UserID
+	}
+	if p.Lobby == nil {
+		return
+	}
+	for id := range p.Lobby.Users {
+		if peer, ok := a.users[id]; ok {
+			NoticeRoomStatus(peer, r.ID, r.Status)
+			NoticeRoomUserCount(peer, r.ID, uint16(len(r.Users)))
+		}
 	}
 }
 

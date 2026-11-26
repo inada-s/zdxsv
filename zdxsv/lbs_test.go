@@ -662,6 +662,97 @@ func TestLobbyRoomBattle(t *testing.T) {
 	}
 }
 
+func roomUserCount(c *testClient, roomID uint16) uint16 {
+	r := c.ask(0x6403, u16(roomID)).Reader()
+	r.Read16()
+	return r.Read16()
+}
+
+func waitingBattles(m *Mcs) int {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	return len(m.waiting)
+}
+
+// Members other than the owner cannot enter a room being prepared, change its
+// settings or start its battle; a battle keeps the rule it started with and
+// members without a side leave the room.
+func TestLobbyRoomOwner(t *testing.T) {
+	UseTestDB(t)
+	brpc := NewMcs()
+	addr := startLobby(t, brpc)
+
+	const lobbyID, roomID = 4, 1
+	var cs []*testClient
+	for i := 0; i < 3; i++ {
+		c := dialLobby(t, addr)
+		c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
+		c.ask(0x6305, u16(lobbyID))
+		cs = append(cs, c)
+	}
+	owner, guest, watcher := cs[0], cs[1], cs[2]
+	decide := func(c *testClient, command uint16, s string) {
+		q := NewClientQuestion(command)
+		q.Writer().Write(encryptString(q.Seq, s))
+		c.send(q)
+		c.expect(command, CategoryAnswer)
+	}
+
+	owner.ask(0x6407, u16(roomID))
+	enterRoom(guest, roomID, "")
+	if n := roomUserCount(owner, roomID); n != 0 {
+		t.Errorf("entered a room being prepared: %d users", n)
+	}
+	decide(guest, 0x6609, "hijack")
+	decide(owner, 0x6609, "testroom")
+	const battleTime = 3
+	owner.ask(0x660B, []byte{battleTime, 1})
+	owner.ask(0x660C, nil)
+	enterRoom(guest, roomID, "")
+	enterRoom(watcher, roomID, "")
+	if n := roomUserCount(owner, roomID); n != 3 {
+		t.Fatalf("room users %d", n)
+	}
+
+	decide(guest, 0x6609, "hijack")
+	if b := guest.ask(0x660B, []byte{battleTime, 2}).Body; !bytes.Equal(b, []byte{0}) {
+		t.Errorf("guest rule change answer % x", b)
+	}
+	decide(guest, 0x660A, "gp03")
+	if b := guest.ask(0x6405, u16(roomID)).Body; !bytes.Equal(b, []byte{0, roomID, 0}) {
+		t.Errorf("guest locked the room: % x", b)
+	}
+	if name := guest.ask(0x6402, u16(roomID)).Reader(); name.Read16() != roomID || name.ReadString() != "testroom" {
+		t.Errorf("guest renamed the room")
+	}
+	owner.ask(0x6504, []byte{EntryAeug})
+	guest.ask(0x6504, []byte{EntryTitans})
+	guest.send(NewClientNotice(0x6508))
+	roomUserCount(guest, roomID)
+	if n := waitingBattles(brpc); n != 0 {
+		t.Fatalf("guest started %d battles", n)
+	}
+
+	owner.send(NewClientNotice(0x6508))
+	owner.ask(0x660B, []byte{battleTime, 2})
+	want := NewRule()
+	want.Set(battleTime, 1)
+	for i, c := range cs[:2] {
+		c.expect(0x6910, CategoryNotice)
+		if rule := c.ask(0x6914, nil).Body; !bytes.Equal(rule, want.Serialize()) {
+			t.Errorf("player %d battle rule % x\nwant % x", i, rule, want.Serialize())
+		}
+	}
+	watcher.expect(0x6505, CategoryNotice)
+	if n := roomUserCount(watcher, roomID); n != 2 {
+		t.Errorf("room users after start %d, want 2", n)
+	}
+	decide(watcher, 0x6609, "hijack")
+	if name := watcher.ask(0x6402, u16(roomID)).Reader(); name.Read16() != roomID || name.ReadString() != "testroom" {
+		t.Errorf("removed member renamed the room")
+	}
+}
+
 func enterRoom(c *testClient, roomID uint16, pass string) *LbsMessage {
 	q := NewClientQuestion(0x6406)
 	q.Writer().Write(append(u16(roomID), encryptString(q.Seq, pass)...))

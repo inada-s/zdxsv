@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"maps"
 )
 
 const (
@@ -56,6 +57,12 @@ func NewRule() *Rule {
 	r := defaultRule
 	r.selected = make(map[byte]byte)
 	return &r
+}
+
+func (r *Rule) Clone() *Rule {
+	c := *r
+	c.selected = maps.Clone(r.selected)
+	return &c
 }
 
 func (r *Rule) Serialize() []byte {
