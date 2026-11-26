@@ -80,7 +80,7 @@ func encryptString(seq uint16, s string) []byte {
 	masks := [...]byte{0x33, 0x30, 0x3c, 0x34, 0x2d, 0x30, 0x3c, 0x34}
 	for j, x := range plain {
 		i := byte(j)
-		enc[i] = x ^ (fixval[i&7] - (i & 0xf8) - p + ((p-9+i)&masks[i&7])*2)
+		enc[j] = x ^ (fixval[i&7] - (i & 0xf8) - p + ((p-9+i)&masks[i&7])*2)
 		sum += uint16(x)
 	}
 	buf := make([]byte, 4, 4+len(enc))

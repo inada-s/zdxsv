@@ -198,14 +198,14 @@ var _ = register(0x6607, "GetRuleElementCount", func(p *LbsPeer, m *LbsMessage) 
 
 var _ = register(0x6609, "DecideRoomName", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
-	name := r.ReadEncryptedString()
+	name := r.ReadEncryptedStringMax(maxRoomNameLen)
 	p.app.OnDecideRoomName(p, name)
 	p.SendMessage(NewServerAnswer(m))
 })
 
 var _ = register(0x660A, "DecideRoomPassword", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
-	pass := r.ReadEncryptedString()
+	pass := r.ReadEncryptedStringMax(maxRoomPasswordLen)
 	p.app.OnDecideRoomPassword(p, pass)
 	p.SendMessage(NewServerAnswer(m))
 })
@@ -275,7 +275,7 @@ var _ = register(0x6504, "EntryRoomMatch", func(p *LbsPeer, m *LbsMessage) {
 var _ = register(0x6406, "EnterRoom", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
 	roomID := r.Read16()
-	pass := r.ReadEncryptedString()
+	pass := r.ReadEncryptedStringMax(maxRoomPasswordLen)
 	a := NewServerAnswer(m)
 	if !p.app.CheckRoomPassword(p, roomID, pass) {
 		a.Status = StatusError

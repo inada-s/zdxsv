@@ -925,3 +925,29 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 		}
 	}
 }
+
+func TestClientStringsCappedAtGameFieldSize(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+	c := dialLobby(t, addr)
+	sjis := func(s string) string {
+		b, _ := japanese.ShiftJIS.NewEncoder().Bytes([]byte(s))
+		return string(b)
+	}
+	userID, _, _ := c.login(registerAccount(t), "******", sjis(strings.Repeat("あ", 9)))
+	q := NewClientQuestion(0x6190)
+	q.Writer().Write(encryptString(q.Seq, sjis(strings.Repeat("い", 33))))
+	c.send(q)
+	c.expect(0x6190, CategoryAnswer)
+
+	u, err := DefaultDB.GetUser(userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.Repeat("あ", 8); u.Name != want {
+		t.Errorf("name %q, want %q", u.Name, want)
+	}
+	if want := strings.Repeat("い", 32); u.Team != want {
+		t.Errorf("team %q, want %q", u.Team, want)
+	}
+}
