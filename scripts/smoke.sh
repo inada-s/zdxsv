@@ -80,6 +80,19 @@ stat=$(curl -sf http://127.0.0.1:8203/lbs/status)
 echo "lbs/status: $stat"
 check "lobby status api" sh -c "echo '$stat' | grep -q '\"platforms\":{.*\"console\".*\"emu\"'"
 
+# a second server on free ports but one the first holds exits 1 (systemd restarts it)
+free="ZDXSV_DNS_ADDR=127.0.0.1:0 ZDXSV_DNAS_ADDR=127.0.0.1:0 ZDXSV_LOBBY_ADDR=:0 ZDXSV_LOBBY_TLS_ADDR=:0
+	ZDXSV_LOBBY_STUN_ADDR=:0 ZDXSV_LOBBY_ZPROXY_STUN_ADDR=:0 ZDXSV_BATTLE_ADDR=:0 ZDXSV_LOBBY_API_ADDR=127.0.0.1:0"
+busy() { # env assignment of the port in use
+	env $free "$1" timeout 20 "$bin" -profile=0 > busy.log 2>&1
+	local rc=$?
+	[ $rc = 1 ] && grep -q "listen failed" busy.log || { echo "exit $rc"; tail -3 busy.log; return 1; }
+}
+for a in ZDXSV_LOBBY_ADDR=:8200 ZDXSV_LOBBY_ZPROXY_STUN_ADDR=:8201 ZDXSV_LOBBY_API_ADDR=127.0.0.1:8203 ZDXSV_BATTLE_ADDR=:8210; do
+	check "exit 1 when $a is in use" busy "$a"
+done
+rm -f busy.log
+
 # zproxy (built from zproxy, or $ZPROXY_BIN) against this server: STUN gives it a public
 # address, it registers, and a PS2 connection makes it ask for battle info. No user is logged
 # in, so both answers are refusals.
