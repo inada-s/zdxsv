@@ -15,8 +15,6 @@
   "user_id": "BBBBBB",
   "result": "ggpo",
   "cut_reason": "sync",
-  "sync": "0123456789abcdef",
-  "sync_differ": "0",
   "answered": 1,
   "relay_count": 1,
   "ping_error": "timeout",
@@ -32,5 +30,8 @@
   "rollback_budget_used": 1.25,
   "total_timesync": 17,
   "input_block_count": 42,
+  "desync_checks": 3,
+  "desync_frame": 1200,
+  "log_tail": ["first", "last"],
   "fps_history": [60, 59, 60]
 }
