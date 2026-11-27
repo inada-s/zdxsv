@@ -555,12 +555,24 @@ func ParsePatchCodes(codes string) ([]GamePatchCode, error) {
 	return out, nil
 }
 
-// lobbyPatches is the GamePatch list of a lobby setting's patches; a missing or bad one is skipped.
+// Emulators refuse a whole 0x9953 notice past these limits.
+const (
+	gamePatchMax       = 16
+	gamePatchCodeMax   = 256
+	gamePatchStringMax = 256
+)
+
+// lobbyPatches is the GamePatch list of a lobby setting's patches; a missing or bad one, or one
+// past the emulator limits, is skipped.
 func lobbyPatches(s *MLobbySetting) []GamePatch {
 	var patches []GamePatch
 	for _, name := range strings.Split(s.Patches, ",") {
 		name = strings.TrimSpace(name)
 		if name == "" {
+			continue
+		}
+		if len(patches) == gamePatchMax {
+			logger.Warn("m_lobby_setting patches past the emulator limit", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("patch", name), zap.Int("max", gamePatchMax))
 			continue
 		}
 		p, err := DefaultDB.GetPatch(s.Platform, name)
@@ -571,6 +583,10 @@ func lobbyPatches(s *MLobbySetting) []GamePatch {
 		codes, err := ParsePatchCodes(p.Codes)
 		if err != nil {
 			logger.Warn("m_patch codes", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Error(err))
+			continue
+		}
+		if len(codes) > gamePatchCodeMax || len(p.Name) > gamePatchStringMax || len(p.Game) > gamePatchStringMax {
+			logger.Warn("m_patch past the emulator limits", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Int("codes", len(codes)))
 			continue
 		}
 		patches = append(patches, GamePatch{Name: p.Name, Game: p.Game, WriteOnce: p.WriteOnce, Codes: codes})

@@ -9,7 +9,9 @@ Rules for agents working in this repository.
   zproxy is its own module in `zproxy/` (one `package main`) and
   imports no server code.
 - Wire messages to and from clients are JSON with snake_case keys;
-  `testdata/wire/` holds the fixtures both sides test against.
+  `testdata/wire/` holds the fixtures both sides test against. It is
+  the source: the pcsx2 client keeps a copy, its CI fails on any
+  difference. A wire change lands here first.
 - `lbs_msg_*.go`: decode the message, call a `Lbs` method, encode the
   answer. A fixed answer needs no `Lbs` call. Decisions and state
   changes live in `Lbs`, and `Lbs` stays unit-testable. No package
