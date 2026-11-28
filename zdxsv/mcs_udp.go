@@ -15,8 +15,10 @@ import (
 
 type McsUDPServer struct {
 	sync.Mutex
-	peers   map[string]*McsUDPPeer
-	pending map[string]*udpPending
+	peers       map[string]*McsUDPPeer
+	pending     map[string]*udpPending
+	hellos      ipLimiter
+	joinTimeout time.Duration
 
 	conn *net.UDPConn
 	mcs  *Mcs
@@ -24,9 +26,11 @@ type McsUDPServer struct {
 
 func NewUDPServer(mcs *Mcs) *McsUDPServer {
 	return &McsUDPServer{
-		peers:   make(map[string]*McsUDPPeer),
-		pending: make(map[string]*udpPending),
-		mcs:     mcs,
+		peers:       make(map[string]*McsUDPPeer),
+		pending:     make(map[string]*udpPending),
+		mcs:         mcs,
+		hellos:      ipLimiter{window: 10 * time.Second, perIP: udpHellosPerIP},
+		joinTimeout: udpJoinTimeout,
 	}
 }
 
@@ -61,6 +65,10 @@ func (s *McsUDPServer) readLoop() error {
 
 		switch pkt.Kind {
 		case KindHello:
+			if !s.hellos.allow(addr.IP, time.Now()) {
+				floodLog.Warn("udp hello limit", zap.Any("addr", key))
+				continue
+			}
 			// The client repeats its hello until it gets an answer.
 			user, valid := s.mcs.FindWaitingUser(pkt.SessionID)
 			if !found && valid {
@@ -83,6 +91,13 @@ const (
 	udpPendingMax = 1024
 	udpPendingTTL = 10 * time.Second
 	udpPeerMax    = 4 * MaxRoom
+	// A reconnecting client has a new peer before the old one times out.
+	udpPeersPerUser = 2
+	// zproxy sends up to 10 hellos per battle; many players can share an IP
+	// (carrier NAT). A session id has 8 digits, so this still makes probing
+	// them slow.
+	udpHellosPerIP = 200
+	udpJoinTimeout = 10 * time.Second
 )
 
 // udpPending is an address that sent a valid hello. It becomes a peer once it
@@ -144,8 +159,14 @@ func (s *McsUDPServer) onPendingBattle(key string, addr *net.UDPAddr, pkt Packet
 		floodLog.Warn("udp peers full", zap.Any("addr", key))
 		return
 	}
+	if s.userPeers(p.userID) >= udpPeersPerUser {
+		s.Unlock()
+		floodLog.Warn("udp peers of user full", zap.Any("addr", key))
+		return
+	}
 	delete(s.pending, key)
 	peer := NewUDPPeer(s.conn, addr, p.userID, p.cookie)
+	peer.joinTimeout = s.joinTimeout
 	s.peers[key] = peer
 	s.Unlock()
 
@@ -161,6 +182,16 @@ func (s *McsUDPServer) onPendingBattle(key string, addr *net.UDPAddr, pkt Packet
 		s.Unlock()
 	}()
 	peer.OnReceive(pkt)
+}
+
+func (s *McsUDPServer) userPeers(userID string) int {
+	n := 0
+	for _, p := range s.peers {
+		if p.rudp.ID() == userID {
+			n++
+		}
+	}
+	return n
 }
 
 func (s *McsUDPServer) ListenAndServe(addr string) error {
@@ -187,12 +218,13 @@ type McsUDPPeer struct {
 	BaseMcsPeer
 	room *McsRoom
 
-	addr    *net.UDPAddr
-	conn    *net.UDPConn
-	rudp    *BattleBuffer
-	filter  *MessageFilter
-	chFlush chan struct{}
-	chRecv  chan struct{}
+	addr        *net.UDPAddr
+	conn        *net.UDPConn
+	rudp        *BattleBuffer
+	filter      *MessageFilter
+	chFlush     chan struct{}
+	chRecv      chan struct{}
+	joinTimeout time.Duration
 
 	readingMtx sync.Mutex
 	reading    []McsMessage
@@ -203,12 +235,13 @@ type McsUDPPeer struct {
 
 func NewUDPPeer(conn *net.UDPConn, addr *net.UDPAddr, userID string, firstSeq uint32) *McsUDPPeer {
 	return &McsUDPPeer{
-		addr:    addr,
-		conn:    conn,
-		chFlush: make(chan struct{}, 1),
-		chRecv:  make(chan struct{}, 1),
-		rudp:    newBattleBufferAt(userID, firstSeq),
-		filter:  NewMessageFilter([]string{userID}),
+		addr:        addr,
+		conn:        conn,
+		chFlush:     make(chan struct{}, 1),
+		chRecv:      make(chan struct{}, 1),
+		rudp:        newBattleBufferAt(userID, firstSeq),
+		filter:      NewMessageFilter([]string{userID}),
+		joinTimeout: udpJoinTimeout,
 	}
 }
 
@@ -234,8 +267,9 @@ func (u *McsUDPPeer) Serve(mcs *Mcs) {
 
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
-	lastRecv := time.Now()
-	lastSend := time.Now()
+	start := time.Now()
+	lastRecv := start
+	lastSend := start
 
 	for {
 		select {
@@ -245,6 +279,10 @@ func (u *McsUDPPeer) Serve(mcs *Mcs) {
 			timeout := time.Since(lastRecv).Seconds() > 5.0
 			if timeout {
 				logger.Info("udp peer timeout", zap.Any("addr", u.Address()))
+				return
+			}
+			if u.room == nil && time.Since(start) > u.joinTimeout {
+				floodLog.Info("udp peer did not join", zap.Any("addr", u.Address()))
 				return
 			}
 			if time.Since(lastSend).Seconds() >= 0.016 {
@@ -498,8 +536,12 @@ func (b *BattleBuffer) AppendPacket(dst []byte) []byte {
 func (b *BattleBuffer) ApplySeqAck(seq, ack uint32) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-	b.begin = ack + 1
 	b.ack = seq
+	// Only acks of sent messages, wrap included: a later ack would make the
+	// ring window wrap and send thousands of stale messages.
+	if ack+1-b.begin <= b.end-b.begin {
+		b.begin = ack + 1
+	}
 }
 
 // MessageFilter numbers the messages a user sends and passes each received

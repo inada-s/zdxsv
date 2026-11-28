@@ -101,6 +101,22 @@ func TestRoomRelay(t *testing.T) {
 	}
 }
 
+func TestRoomJoinWhileLastLeaves(t *testing.T) {
+	for i := 0; i < 20000; i++ {
+		r := newMcsRoom(1)
+		a, b := &fakePeer{addr: "a"}, &fakePeer{addr: "b"}
+		r.Join(a)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { r.Leave(a); wg.Done() }()
+		go func() { r.Join(b); wg.Done() }()
+		wg.Wait()
+		if pos := b.Position(); pos >= len(r.peers) || r.peers[pos] != b {
+			t.Fatalf("try %d: joined peer lost from the room", i)
+		}
+	}
+}
+
 func TestMcsJoin(t *testing.T) {
 	l := NewMcs()
 	for _, g := range [][]McsUser{

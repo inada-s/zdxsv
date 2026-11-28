@@ -169,8 +169,12 @@ func (b *BattleBuffer) AppendPacket(dst []byte) []byte {
 func (b *BattleBuffer) ApplySeqAck(seq, ack uint32) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-	b.begin = ack + 1
 	b.ack = seq
+	// Only acks of sent messages, wrap included: a later ack would make the
+	// ring window wrap and send thousands of stale messages.
+	if ack+1-b.begin <= b.end-b.begin {
+		b.begin = ack + 1
+	}
 }
 
 // MessageFilter numbers the messages a user sends and passes each received

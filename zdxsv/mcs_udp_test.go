@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -67,7 +68,12 @@ type udpClient struct {
 
 func newUDPClient(t *testing.T, server *net.UDPAddr, userID string) *udpClient {
 	t.Helper()
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	return newUDPClientAt(t, server, userID, net.IPv4(127, 0, 0, 1))
+}
+
+func newUDPClientAt(t *testing.T, server *net.UDPAddr, userID string, ip net.IP) *udpClient {
+	t.Helper()
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,4 +348,123 @@ func TestWireNotStun(t *testing.T) {
 	if IsWirePacket(ping) {
 		t.Errorf("Ping % x taken for a battle packet", ping)
 	}
+}
+
+func TestUDPAckOutOfWindowIgnored(t *testing.T) {
+	s, addr := startUDPServer(t)
+	c1 := newUDPClient(t, addr, "U1")
+	c2 := newUDPClient(t, addr, "U2")
+	if !c1.hello("12345678") || !c2.hello("87654321") {
+		t.Fatal("hello rejected")
+	}
+	c1.send(udpJoin("0123505679"))
+	c2.send(udpJoin("0876604322"))
+	waitJoined(t, s.mcs, 2)
+	c2.send([]byte("b1"))
+	wantBodies(t, c1.receive(1, 2*time.Second), "U2:b1")
+
+	c1.write(AppendBattle(nil, uint32(len(c1.sent)), c1.ack+1000, c1.sent))
+	c2.send([]byte("b2"))
+	buf := make([]byte, 64<<10)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		c1.conn.SetReadDeadline(deadline)
+		n, err := c1.conn.Read(buf)
+		if err != nil {
+			t.Fatal("b2 not received:", err)
+		}
+		pkt, err := ParsePacket(buf[:n])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pkt.Messages) > 2 {
+			t.Fatalf("%d messages after an ack past the sent seq, want at most 2", len(pkt.Messages))
+		}
+		if len(pkt.Messages) == 2 && string(pkt.Messages[1].Body) == "b2" {
+			return
+		}
+	}
+}
+
+// served waits until the server answers a hello from another address, so it
+// has read every packet sent before; then whatever it sent c is already queued.
+func served(t *testing.T, addr *net.UDPAddr, ip net.IP) {
+	t.Helper()
+	m := newUDPClientAt(t, addr, "M", ip)
+	m.write(AppendHello(nil, "99999999"))
+	if pkt := m.read(2 * time.Second); pkt == nil || pkt.Kind != KindHelloAnswer {
+		t.Fatalf("marker hello reply = %v", pkt)
+	}
+}
+
+func TestUDPHelloLimit(t *testing.T) {
+	s, addr := startUDPServer(t)
+	const perIP = 5
+	s.hellos.mu.Lock()
+	s.hellos.perIP = perIP
+	s.hellos.mu.Unlock()
+	c := newUDPClient(t, addr, "U1")
+	for i := 0; i < perIP+3; i++ {
+		c.write(AppendHello(nil, "99999999"))
+	}
+	for i := 0; i < perIP; i++ {
+		if pkt := c.read(2 * time.Second); pkt == nil || pkt.Kind != KindHelloAnswer {
+			t.Fatalf("hello answer %d = %v", i+1, pkt)
+		}
+	}
+	served(t, addr, net.IPv4(127, 0, 0, 2))
+	if pkt := c.read(time.Millisecond); pkt != nil {
+		t.Errorf("hello answered past the limit of %d: %v", perIP, pkt)
+	}
+}
+
+func TestUDPHelloAnsweredWhenLimiterFull(t *testing.T) {
+	s, addr := startUDPServer(t)
+	s.hellos.mu.Lock()
+	s.hellos.start = time.Now()
+	s.hellos.count = make(map[string]int, limiterTrackedIPsMax)
+	for i := 0; i < limiterTrackedIPsMax; i++ {
+		s.hellos.count[strconv.Itoa(i)] = 1
+	}
+	s.hellos.mu.Unlock()
+	c := newUDPClient(t, addr, "U1")
+	if !c.hello("12345678") {
+		t.Fatal("hello rejected")
+	}
+}
+
+func TestUDPPeersPerUser(t *testing.T) {
+	s, addr := startUDPServer(t)
+	for i := 1; i <= udpPeersPerUser+1; i++ {
+		c := newUDPClient(t, addr, "U1")
+		if !c.hello("12345678") {
+			t.Fatal("hello rejected")
+		}
+		c.send()
+		if i <= udpPeersPerUser {
+			waitPeerCount(t, s, i)
+			continue
+		}
+		served(t, addr, net.IPv4(127, 0, 0, 1))
+		if pkt := c.read(time.Millisecond); pkt != nil {
+			t.Errorf("peer %d answered: %v", i, pkt)
+		}
+		if n := s.peerCount(); n != udpPeersPerUser {
+			t.Errorf("peer count = %d, want %d", n, udpPeersPerUser)
+		}
+	}
+}
+
+func TestUDPPeerMustJoin(t *testing.T) {
+	s, addr := startUDPServer(t)
+	s.Lock()
+	s.joinTimeout = 100 * time.Millisecond
+	s.Unlock()
+	c := newUDPClient(t, addr, "U1")
+	if !c.hello("12345678") {
+		t.Fatal("hello rejected")
+	}
+	c.send()
+	waitPeerCount(t, s, 1)
+	waitPeerCount(t, s, 0)
 }
