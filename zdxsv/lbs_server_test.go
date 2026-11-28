@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -115,6 +116,79 @@ func (p *recordingPeer) OnOpen()                      {}
 func (p *recordingPeer) OnMessage(m *LbsMessage)      { p.msgs <- m }
 func (p *recordingPeer) OnClose()                     { close(p.closed) }
 func (p *recordingPeer) NewPeer(*LbsConn) LbsConnPeer { return p }
+
+type idlePeer struct{}
+
+func (idlePeer) OnOpen()                      {}
+func (idlePeer) OnMessage(*LbsMessage)        {}
+func (idlePeer) OnClose()                     {}
+func (idlePeer) NewPeer(*LbsConn) LbsConnPeer { return idlePeer{} }
+
+func setCaps(t *testing.T, max, perIP *int, m, p int) {
+	t.Helper()
+	oldMax, oldPerIP := *max, *perIP
+	*max, *perIP = m, p
+	t.Cleanup(func() { *max, *perIP = oldMax, oldPerIP })
+}
+
+func listenLoopback(t *testing.T) net.Listener {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	return ln
+}
+
+func dialFrom(t *testing.T, ip string, ln net.Listener) net.Conn {
+	t.Helper()
+	d := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(ip)}}
+	c, err := d.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
+
+// serverOpen is false once the server closed c, true while c stays open for d.
+func serverOpen(c net.Conn, d time.Duration) bool {
+	c.SetReadDeadline(time.Now().Add(d))
+	_, err := io.ReadFull(c, make([]byte, 1))
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		return true
+	}
+	return err == nil
+}
+
+func TestLbsConnCaps(t *testing.T) {
+	setCaps(t, &lbsMaxConns, &lbsMaxConnsPerIP, 3, 2)
+	ln := listenLoopback(t)
+	go NewLbsServer(idlePeer{}).Serve(ln)
+
+	open := func(ip string) bool { return serverOpen(dialFrom(t, ip, ln), 300*time.Millisecond) }
+	a1 := dialFrom(t, "127.0.0.1", ln)
+	if !serverOpen(a1, 300*time.Millisecond) || !open("127.0.0.1") {
+		t.Fatal("first two connections from one IP refused")
+	}
+	if open("127.0.0.1") {
+		t.Error("third connection from one IP accepted")
+	}
+	if !open("127.0.0.2") {
+		t.Fatal("connection from a second IP refused")
+	}
+	if open("127.0.0.3") {
+		t.Error("connection over the total cap accepted")
+	}
+	a1.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for !open("127.0.0.1") {
+		if time.Now().After(deadline) {
+			t.Fatal("closed connection's slot not released")
+		}
+	}
+}
 
 func TestLbsConnMessageSplitAcrossReads(t *testing.T) {
 	server, client := net.Pipe()
