@@ -17,6 +17,8 @@ var ErrUserLimit = errors.New("account already has the maximum number of users")
 
 var ErrTooManyAccounts = errors.New("too many accounts made from this IP")
 
+var ErrNoClientIP = errors.New("no client IP to count new accounts by")
+
 const (
 	AccountsPerIP       = 5
 	AccountsPerIPWindow = 24 * time.Hour
@@ -109,8 +111,9 @@ type MLobbySetting struct {
 	Patches string `db:"patches"`
 }
 
-// MPatch is a game memory patch an emulator applies during a battle. Codes: one
-// "size,address,original,changed" line per code (size 8, 16 or 32), "#" lines are comments.
+// MPatch is a game memory patch an emulator applies during a battle to the disc serial Game
+// (required). Codes: one "size,address,original,changed" line per code (size 8, 16 or 32,
+// address in [GamePatchRAMBegin, GamePatchRAMEnd)), "#" lines are comments.
 type MPatch struct {
 	Platform  string `db:"platform"`
 	Game      string `db:"game"`

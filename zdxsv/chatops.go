@@ -354,10 +354,10 @@ func parseSheetBool(name, cell string) (bool, error) {
 	}
 }
 
-// ParsePatches checks the m_patch table (header first): platform, name and codes are
-// required, game and write_once (parseSheetBool) optional.
+// ParsePatches checks the m_patch table (header first): platform, game, name and codes are
+// required (CheckPatch), write_once (parseSheetBool) optional.
 func ParsePatches(table [][]string) ([]*MPatch, error) {
-	col, errs := columns(table, []string{"platform", "name", "codes"}, []string{"game", "write_once"})
+	col, errs := columns(table, []string{"platform", "game", "name", "codes"}, []string{"write_once"})
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -383,8 +383,8 @@ func ParsePatches(table [][]string) ([]*MPatch, error) {
 			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
 		p.WriteOnce = writeOnce
-		if _, err := ParsePatchCodes(p.Codes); err != nil {
-			errs = append(errs, fmt.Errorf("row %d: codes: %w", line, err))
+		if _, err := CheckPatch(p); err != nil {
+			errs = append(errs, fmt.Errorf("row %d: %w", line, err))
 		}
 		patches = append(patches, p)
 	}

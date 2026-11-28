@@ -515,6 +515,24 @@ type GamePatchCode struct {
 	Changed  uint32 `json:"changed"`
 }
 
+// EE main RAM above the kernel's 512 KB. Emulators refuse a whole 0x9953 notice with a code
+// address outside it or a patch without a game serial.
+const (
+	GamePatchRAMBegin = 0x80000
+	GamePatchRAMEnd   = 0x2000000
+)
+
+func CheckPatch(p *MPatch) ([]GamePatchCode, error) {
+	if p.Game == "" {
+		return nil, fmt.Errorf("no game serial")
+	}
+	codes, err := ParsePatchCodes(p.Codes)
+	if err != nil {
+		return nil, fmt.Errorf("codes: %w", err)
+	}
+	return codes, nil
+}
+
 // ParsePatchCodes reads MPatch.Codes: address in hex ("0x" optional), values in decimal or
 // "0x" hex. Blank lines are skipped.
 func ParsePatchCodes(codes string) ([]GamePatchCode, error) {
@@ -539,6 +557,9 @@ func ParsePatchCodes(codes string) ([]GamePatchCode, error) {
 		if err != nil || addr%uint64(size/8) != 0 {
 			return nil, fmt.Errorf("line %d: address %q is not a hex address aligned to the size", n+1, f[1])
 		}
+		if addr < GamePatchRAMBegin || addr >= GamePatchRAMEnd {
+			return nil, fmt.Errorf("line %d: address %q is outside EE main RAM 0x%x-0x%x", n+1, f[1], GamePatchRAMBegin, GamePatchRAMEnd-1)
+		}
 		c := GamePatchCode{Size: size, Address: uint32(addr)}
 		for i, v := range []*uint32{&c.Original, &c.Changed} {
 			x, err := strconv.ParseUint(f[2+i], 0, size)
@@ -555,7 +576,15 @@ func ParsePatchCodes(codes string) ([]GamePatchCode, error) {
 	return out, nil
 }
 
-// lobbyPatches is the GamePatch list of a lobby setting's patches; a missing or bad one is skipped.
+// Emulators refuse a whole 0x9953 notice past these limits.
+const (
+	gamePatchMax       = 16
+	gamePatchCodeMax   = 256
+	gamePatchStringMax = 256
+)
+
+// lobbyPatches is the GamePatch list of a lobby setting's patches; a missing or bad one, or one
+// past the emulator limits, is skipped.
 func lobbyPatches(s *MLobbySetting) []GamePatch {
 	var patches []GamePatch
 	for _, name := range strings.Split(s.Patches, ",") {
@@ -563,14 +592,22 @@ func lobbyPatches(s *MLobbySetting) []GamePatch {
 		if name == "" {
 			continue
 		}
+		if len(patches) == gamePatchMax {
+			logger.Warn("m_lobby_setting patches past the emulator limit", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("patch", name), zap.Int("max", gamePatchMax))
+			continue
+		}
 		p, err := DefaultDB.GetPatch(s.Platform, name)
 		if err != nil || p == nil {
 			logger.Warn("m_lobby_setting patch", zap.Any("platform", s.Platform), zap.Any("no", s.No), zap.Any("patch", name), zap.Error(err))
 			continue
 		}
-		codes, err := ParsePatchCodes(p.Codes)
+		codes, err := CheckPatch(p)
 		if err != nil {
-			logger.Warn("m_patch codes", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Error(err))
+			logger.Warn("m_patch refused", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Error(err))
+			continue
+		}
+		if len(codes) > gamePatchCodeMax || len(p.Name) > gamePatchStringMax || len(p.Game) > gamePatchStringMax {
+			logger.Warn("m_patch past the emulator limits", zap.Any("platform", p.Platform), zap.Any("name", p.Name), zap.Int("codes", len(codes)))
 			continue
 		}
 		patches = append(patches, GamePatch{Name: p.Name, Game: p.Game, WriteOnce: p.WriteOnce, Codes: codes})

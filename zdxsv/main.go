@@ -190,9 +190,9 @@ func main() {
 // mainAll (`zdxsv all`, or `zdxsv` with no command) runs every server in this process:
 // dns, dnas (the 443 router with the login pages behind /00000020/), lobby and battle.
 // The login pages and the lobby share the login sessions in memory, so they run only
-// here; Lbs drives Mcs directly. A listener that cannot bind ends
-// the process.
-// With ZDXSV_TLS_CERT_FILE set, dnas, lobby and battle also serve their TLS ports.
+// here; Lbs drives Mcs directly. Every listener is bound before any serves; one that
+// cannot bind, or a server that stops, ends the process with exit status 1.
+// With ZDXSV_TLS_CERT_FILE set, the lobby also serves its TLS port.
 func mainAll() {
 	prepareDB()
 	if err := DefaultDB.(SQLiteDB).CheckSchema(); err != nil {
@@ -207,23 +207,49 @@ func mainAll() {
 	if err != nil {
 		logger.Fatal("dnas", zap.Error(err))
 	}
-	serve := func(name string, f func() error) {
-		go func() { logger.Fatal("server stopped", zap.String("name", name), zap.Error(f())) }()
-	}
-	logger.Info("dns listen", zap.String("addr", Conf.DNS.Addr))
-	serve("dns", dnsServer.ListenAndServe)
-	logger.Info("dnas listen", zap.String("addr", Conf.DNAS.Addr), zap.String("https_backend", Conf.DNAS.HTTPSBackend))
-	serve("dnas", func() error { return dnasRouter.ListenAndServe(Conf.DNAS.Addr) })
-
+	dnsServer.PacketConn = listenUDP("dns", "udp", Conf.DNS.Addr)
+	dnasListener := listenTCP("dnas", Conf.DNAS.Addr)
+	logger.Info("dnas", zap.String("https_backend", Conf.DNAS.HTTPSBackend))
 	mcs := NewMcs()
 	battleAddr := stripHost(Conf.Battle.Addr)
-	logger.Info("battle listen", zap.Any("addr", battleAddr))
-	serve("battle udp", func() error { return NewUDPServer(mcs).ListenAndServe(battleAddr) })
-	serve("battle tcp", func() error { return NewTCPServer(mcs).ListenAndServe(battleAddr) })
+	battleUDP := listenUDP("battle udp", "udp", battleAddr)
+	battleTCP := listenTCP("battle tcp", battleAddr)
 
 	app := NewLbs()
 	app.SetBattleServer(mcs)
-	serveLbs(app)
+	serveLbs(app, []server{
+		{"dns", dnsServer.ActivateAndServe},
+		{"dnas", func() error { return dnasRouter.Serve(dnasListener) }},
+		{"battle udp", func() error { return NewUDPServer(mcs).Serve(battleUDP) }},
+		{"battle tcp", func() error { return NewTCPServer(mcs).Serve(battleTCP) }},
+	})
+}
+
+type server struct {
+	name  string
+	serve func() error
+}
+
+func listenTCP(name, addr string) net.Listener {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.Fatal("listen failed", zap.String("name", name), zap.String("addr", addr), zap.Error(err))
+	}
+	logger.Info("listen", zap.String("name", name), zap.String("addr", addr))
+	return l
+}
+
+func listenUDP(name, network, addr string) *net.UDPConn {
+	a, err := net.ResolveUDPAddr(network, addr)
+	var c *net.UDPConn
+	if err == nil {
+		c, err = net.ListenUDP(network, a)
+	}
+	if err != nil {
+		logger.Fatal("listen failed", zap.String("name", name), zap.String("addr", addr), zap.Error(err))
+	}
+	logger.Info("listen", zap.String("name", name), zap.String("addr", addr))
+	return c
 }
 
 // prepareLogin readies the login pages and returns their handler.
@@ -234,8 +260,9 @@ func prepareLogin() http.Handler {
 	return newLoginHandler()
 }
 
-// serveLbs runs app and its listeners until SIGINT/SIGTERM, then shuts the lobby down.
-func serveLbs(app *Lbs) {
+// serveLbs binds the lobby's listeners, then runs app, servers and the lobby's own
+// until SIGINT/SIGTERM, then shuts the lobby down.
+func serveLbs(app *Lbs, servers []server) {
 	if c := Conf.Lobby; c.RelayRegions != "" {
 		if !GceAllocEnabled() || c.RelaySecret == "" {
 			logger.Fatal("ZDXSV_LOBBY_RELAY_REGIONS needs ZDXSV_GCE_ONDEMAND, ZDXSV_GCP_PROJECT_ID and ZDXSV_RELAY_SECRET")
@@ -253,54 +280,59 @@ func serveLbs(app *Lbs) {
 	if authServer != nil {
 		app.SetCarryCodeIssuer(authServer.IssueCarryCode)
 	}
-	go app.Serve()
 	sv := NewLbsServer(app)
-	go sv.ListenAndServe(stripHost(Conf.Lobby.Addr))
+	lobby := listenTCP("lobby", stripHost(Conf.Lobby.Addr))
+	servers = append(servers, server{"lobby", func() error { return sv.Serve(lobby) }})
 	if l := tlsListen("lobby", Conf.TLS.LobbyAddr); l != nil {
-		go sv.Serve(l)
+		servers = append(servers, server{"lobby tls", func() error { return sv.Serve(l) }})
 	}
-	go sv.ServeUDPStunServer(stripHost(Conf.Lobby.StunAddr))
-	go sv.ServeUDPStun(stripHost(Conf.Lobby.ZproxyStunAddr))
-	go Spectators.Run(nil)
+	stun := listenUDP("stun", "udp4", stripHost(Conf.Lobby.StunAddr))
+	a := stun.LocalAddr().(*net.UDPAddr)
+	stunTest := listenUDP("stun test", "udp4", (&net.UDPAddr{IP: a.IP, Port: a.Port + 1}).String())
+	zproxyStun := listenUDP("zproxy stun", "udp4", stripHost(Conf.Lobby.ZproxyStunAddr))
+	servers = append(servers,
+		server{"stun", func() error { return ServeUDPStun(stun, stunTest) }},
+		server{"stun test", func() error { return ServeUDPStun(stunTest, nil) }},
+		server{"zproxy stun", func() error { return ServeUDPStun(zproxyStun, nil) }},
+	)
 	if c := Conf.Lobby; c.RelayAddr != "" {
 		public := c.RelayPublicAddr
 		if public == "" {
 			host, _, _ := net.SplitHostPort(c.PublicAddr)
 			public = net.JoinHostPort(host, strings.TrimPrefix(stripHost(c.RelayAddr), ":"))
 		}
-		go func() {
-			if err := ServeRelay(c.RelayAddr, public, c.RelayPublicAddr6); err != nil {
-				logger.Error("relay failure", zap.Error(err))
-			}
-		}()
+		relay := listenUDP("relay", "udp", c.RelayAddr)
+		servers = append(servers, server{"relay", func() error { return ServeRelay(relay, public, c.RelayPublicAddr6) }})
 	}
 	// The HTTP API binds the host given in its address,
 	// unlike the game ports, whose host part is only advertised.
 	if c := Conf.Lobby; c.APIAddr != "" {
-		go func() {
-			logger.Info("start public api", zap.Any("addr", c.APIAddr))
-			api := &APIHandler{Status: app.Status, RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}
-			api.LiveUploadEnded = func(code string) { app.Locked(func(a *Lbs) { a.LiveUploadEnded(code) }) }
-			if authServer != nil {
-				api.Auth = authServer
+		api := &APIHandler{Status: app.Status, RegisterProxy: app.RegisterProxy, BattleInfo: app.BattleInfo}
+		api.LiveUploadEnded = func(code string) { app.Locked(func(a *Lbs) { a.LiveUploadEnded(code) }) }
+		if authServer != nil {
+			api.Auth = authServer
+		}
+		if discord != nil {
+			api.Discord = discord
+		}
+		if c.ReplayBucket != "" {
+			store, err := NewGCSReplayStore(context.Background(), c.ReplayBucket)
+			if err != nil {
+				logger.Fatal("replay bucket client", zap.Any("bucket", c.ReplayBucket), zap.Error(err))
 			}
-			if discord != nil {
-				api.Discord = discord
-			}
-			if c.ReplayBucket != "" {
-				store, err := NewGCSReplayStore(context.Background(), c.ReplayBucket)
-				if err != nil {
-					logger.Fatal("replay bucket client", zap.Any("bucket", c.ReplayBucket), zap.Error(err))
-				}
-				api.ReplayStore = store
-			} else if c.ReplayDir != "" {
-				api.ReplayStore = &DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
-			}
-			srv := &http.Server{Addr: c.APIAddr, Handler: api, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-			if err := srv.ListenAndServe(); err != nil {
-				logger.Error("public api stopped", zap.Error(err))
-			}
-		}()
+			api.ReplayStore = store
+		} else if c.ReplayDir != "" {
+			api.ReplayStore = &DirReplayStore{Dir: c.ReplayDir, URL: "http://" + c.APIAddr + "/lbs/"}
+		}
+		l := listenTCP("api", c.APIAddr)
+		srv := &http.Server{Handler: api, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+		servers = append(servers, server{"api", func() error { return srv.Serve(l) }})
+	}
+
+	go app.Serve()
+	go Spectators.Run(nil)
+	for _, s := range servers {
+		go func() { logger.Fatal("server stopped", zap.String("name", s.name), zap.Error(s.serve())) }()
 	}
 
 	c := make(chan os.Signal, 1)
