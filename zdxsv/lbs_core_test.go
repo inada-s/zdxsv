@@ -891,10 +891,14 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 		{"no lobby", func(*LbsPeer) {}},
 		{"in lobby", func(p *LbsPeer) { p.app.OnEnterLobby(p, 4) }},
 	}
-	bodies := [][]byte{
-		nil,
-		{0, 1, 0xFF, 0xFF, 0xFF, 0xFF},
-		bytes.Repeat([]byte{0xFF}, 16),
+	fixed := func(b []byte) func(uint16) []byte { return func(uint16) []byte { return b } }
+	// The last two pass the string checksum and end in a lone Shift-JIS lead byte.
+	bodies := []func(seq uint16) []byte{
+		fixed(nil),
+		fixed([]byte{0, 1, 0xFF, 0xFF, 0xFF, 0xFF}),
+		fixed(bytes.Repeat([]byte{0xFF}, 16)),
+		func(seq uint16) []byte { return encryptString(seq, "\x81") },
+		func(seq uint16) []byte { return append([]byte{0, 1}, encryptString(seq, "\x81")...) },
 	}
 	var cmds []int
 	for cmd, name := range defaultHandlers.handlerNames {
@@ -913,7 +917,7 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 					p := newRobustPeer(t)
 					s.setup(p)
 					m := NewClientQuestion(uint16(cmd))
-					m.Writer().Write(body)
+					m.Writer().Write(body(m.Seq))
 					defer func() {
 						if r := recover(); r != nil {
 							t.Errorf("%s: panic: %v", name, r)

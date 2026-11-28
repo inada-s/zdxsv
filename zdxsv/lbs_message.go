@@ -301,7 +301,7 @@ func truncateShiftJIS(b []byte, max int) []byte {
 		if c := b[n]; 0x81 <= c && c <= 0x9F || 0xE0 <= c && c <= 0xFC {
 			w = 2
 		}
-		if n+w > max {
+		if n+w > max || n+w > len(b) {
 			break
 		}
 		n += w
