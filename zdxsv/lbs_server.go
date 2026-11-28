@@ -398,7 +398,12 @@ func (l *ipLimiter) allow(ip net.IP, now time.Time) bool {
 	}
 	k := string(ip.To16())
 	c, ok := l.count[k]
-	if c >= l.perIP || (!ok && len(l.count) >= limiterTrackedIPsMax) {
+	if !ok && len(l.count) >= limiterTrackedIPsMax {
+		// Forged UDP sources can fill the table; refusing untracked IPs then
+		// would refuse everyone.
+		return true
+	}
+	if c >= l.perIP {
 		return false
 	}
 	l.count[k] = c + 1

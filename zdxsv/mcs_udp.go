@@ -93,8 +93,10 @@ const (
 	udpPeerMax    = 4 * MaxRoom
 	// A reconnecting client has a new peer before the old one times out.
 	udpPeersPerUser = 2
-	// zproxy sends up to 10 hellos per battle; players can share an IP.
-	udpHellosPerIP = 40
+	// zproxy sends up to 10 hellos per battle; many players can share an IP
+	// (carrier NAT). A session id has 8 digits, so this still makes probing
+	// them slow.
+	udpHellosPerIP = 200
 	udpJoinTimeout = 10 * time.Second
 )
 
