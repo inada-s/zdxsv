@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 func TestMessageBodyReader_ReadEncryptedString(t *testing.T) {
@@ -245,5 +247,61 @@ func TestString(t *testing.T) {
 		if got := c.m.String(); !strings.HasPrefix(got, c.want) {
 			t.Errorf("String() = %q, want prefix %q", got, c.want)
 		}
+	}
+}
+
+func TestDeserializeMaxBodySize(t *testing.T) {
+	for _, size := range []int{0xFFF3, 0xFFF4, 0xFFF8, MaxBodySize} {
+		body := bytes.Repeat([]byte{0xAB}, size)
+		data := (&LbsMessage{Direction: ClientToServer, Command: 0x6701, Body: body}).Serialize()
+		if got := len(data); got != HeaderSize+size {
+			t.Fatalf("size %#x: Serialize gave %d bytes", size, got)
+		}
+		if n, m := Deserialize(data[:len(data)-1]); n != 0 || m != nil {
+			t.Errorf("size %#x: short data gave n=%d", size, n)
+		}
+		n, m := Deserialize(append(data, 0x18))
+		if n != HeaderSize+size || m == nil || len(m.Body) != size {
+			t.Errorf("size %#x: n=%d", size, n)
+		}
+	}
+}
+
+func TestSerializeRefusesOversizeBody(t *testing.T) {
+	m := &LbsMessage{Direction: ServerToClient, Command: 0x6801, Body: make([]byte, MaxBodySize+1)}
+	if got := m.Serialize(); got != nil {
+		t.Errorf("Serialize gave %d bytes, want nil", len(got))
+	}
+}
+
+func TestReadEncryptedStringMax(t *testing.T) {
+	sjis := func(s string) string {
+		b, _ := japanese.ShiftJIS.NewEncoder().Bytes([]byte(s))
+		return string(b)
+	}
+	a8 := strings.Repeat("あ", 8)
+	for _, c := range []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"pilot", 16, "pilot"},
+		{strings.Repeat("x", 40), 16, strings.Repeat("x", 16)},
+		{sjis(a8 + "あ"), 16, a8},
+		{sjis("a" + a8), 16, "a" + strings.Repeat("あ", 7)},
+		{sjis(a8) + "\x00\x00\x00", 16, a8},
+	} {
+		m := &LbsMessage{Seq: 405, Body: encryptString(405, c.in)}
+		if got := m.Reader().ReadEncryptedStringMax(c.max); got != c.want {
+			t.Errorf("ReadEncryptedStringMax(%q, %d) = %q, want %q", c.in, c.max, got, c.want)
+		}
+	}
+}
+
+func TestReadEncryptedStringPast256Bytes(t *testing.T) {
+	want := strings.Repeat("0123456789", 30)
+	m := &LbsMessage{Seq: 77, Body: encryptString(77, want)}
+	if got := m.Reader().ReadEncryptedString(); got != want {
+		t.Errorf("ReadEncryptedString = %q", got)
 	}
 }

@@ -25,6 +25,18 @@ const (
 	CategoryCustom   = 0xFF
 	StatusError      = 0xFFFFFFFF
 	StatusSuccess    = 0x00FFFFFF
+	MaxBodySize      = 0xFFFF
+)
+
+// Shift-JIS bytes the game keeps of each client string.
+const (
+	maxUserIDLen       = 8
+	maxUserNameLen     = 0x10
+	maxTeamLen         = 0x40
+	maxUserBinLen      = 110
+	maxRoomNameLen     = 40
+	maxRoomPasswordLen = 16
+	maxChatLen         = 0x100
 )
 
 func sequenceGenerator() func() uint16 {
@@ -83,7 +95,13 @@ func (m *LbsMessage) String() string {
 	return b.String()
 }
 
+// Serialize returns nil for a body the 16-bit size field cannot hold: sending
+// it would make the receiver parse the rest of the body as new messages.
 func (m *LbsMessage) Serialize() []byte {
+	if len(m.Body) > MaxBodySize {
+		logger.Error("message body too large", zap.Uint16("command", m.Command), zap.Int("size", len(m.Body)))
+		return nil
+	}
 	w := new(bytes.Buffer)
 	m.BodySize = uint16(len(m.Body))
 	binary.Write(w, binary.BigEndian, m.Direction)
@@ -113,9 +131,10 @@ func Deserialize(data []byte) (int, *LbsMessage) {
 	if len(data) < HeaderSize+int(m.BodySize) {
 		return 0, nil
 	}
-	m.Body = data[HeaderSize : HeaderSize+m.BodySize]
+	n := HeaderSize + int(m.BodySize)
+	m.Body = data[HeaderSize:n]
 
-	return int(HeaderSize + m.BodySize), &m
+	return n, &m
 }
 
 func NewServerQuestion(command uint16) *LbsMessage {
@@ -223,6 +242,16 @@ func (m *MessageBodyReader) ReadString() string {
 }
 
 func (m *MessageBodyReader) ReadEncryptedString() string {
+	return m.readEncryptedString(-1)
+}
+
+// ReadEncryptedStringMax cuts the Shift-JIS text to at most max bytes, the
+// size of the field the game keeps it in.
+func (m *MessageBodyReader) ReadEncryptedStringMax(max int) string {
+	return m.readEncryptedString(max)
+}
+
+func (m *MessageBodyReader) readEncryptedString(max int) string {
 	if m.r.Len() == 0 {
 		return ""
 	}
@@ -247,12 +276,15 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 	masks := [...]byte{0x33, 0x30, 0x3c, 0x34, 0x2d, 0x30, 0x3c, 0x34}
 	for j, x := range buf {
 		i := byte(j)
-		buf[i] = x ^ (fixval[i&7] - (i & 0xf8) - p + ((p-9+i)&masks[i&7])*2)
-		sum += uint16(buf[i])
+		buf[j] = x ^ (fixval[i&7] - (i & 0xf8) - p + ((p-9+i)&masks[i&7])*2)
+		sum += uint16(buf[j])
 	}
 	if sum != chksum {
 		floodLog.Error("decrypt failed: mismatch checksum")
 		return ""
+	}
+	if max >= 0 {
+		buf = truncateShiftJIS(bytes.TrimRight(buf, "\x00"), max)
 	}
 
 	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(buf), japanese.ShiftJIS.NewDecoder()))
@@ -260,6 +292,21 @@ func (m *MessageBodyReader) ReadEncryptedString() string {
 		floodLog.Error("decode encstr failed", zap.Error(err))
 	}
 	return string(bytes.Trim(ret, "\x00"))
+}
+
+func truncateShiftJIS(b []byte, max int) []byte {
+	n := 0
+	for n < len(b) {
+		w := 1
+		if c := b[n]; 0x81 <= c && c <= 0x9F || 0xE0 <= c && c <= 0xFC {
+			w = 2
+		}
+		if n+w > max || n+w > len(b) {
+			break
+		}
+		n += w
+	}
+	return b[:n]
 }
 
 type MessageBodyWriter struct {

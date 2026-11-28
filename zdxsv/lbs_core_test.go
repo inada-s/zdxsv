@@ -912,10 +912,14 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 		{"no lobby", func(*LbsPeer) {}},
 		{"in lobby", func(p *LbsPeer) { p.app.OnEnterLobby(p, 4) }},
 	}
-	bodies := [][]byte{
-		nil,
-		{0, 1, 0xFF, 0xFF, 0xFF, 0xFF},
-		bytes.Repeat([]byte{0xFF}, 16),
+	fixed := func(b []byte) func(uint16) []byte { return func(uint16) []byte { return b } }
+	// The last two pass the string checksum and end in a lone Shift-JIS lead byte.
+	bodies := []func(seq uint16) []byte{
+		fixed(nil),
+		fixed([]byte{0, 1, 0xFF, 0xFF, 0xFF, 0xFF}),
+		fixed(bytes.Repeat([]byte{0xFF}, 16)),
+		func(seq uint16) []byte { return encryptString(seq, "\x81") },
+		func(seq uint16) []byte { return append([]byte{0, 1}, encryptString(seq, "\x81")...) },
 	}
 	var cmds []int
 	for cmd, name := range defaultHandlers.handlerNames {
@@ -934,7 +938,7 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 					p := newRobustPeer(t)
 					s.setup(p)
 					m := NewClientQuestion(uint16(cmd))
-					m.Writer().Write(body)
+					m.Writer().Write(body(m.Seq))
 					defer func() {
 						if r := recover(); r != nil {
 							t.Errorf("%s: panic: %v", name, r)
@@ -944,5 +948,31 @@ func TestHandlersSurviveBadInput(t *testing.T) {
 				}()
 			}
 		}
+	}
+}
+
+func TestClientStringsCappedAtGameFieldSize(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+	c := dialLobby(t, addr)
+	sjis := func(s string) string {
+		b, _ := japanese.ShiftJIS.NewEncoder().Bytes([]byte(s))
+		return string(b)
+	}
+	userID, _, _ := c.login(registerAccount(t), "******", sjis(strings.Repeat("あ", 9)))
+	q := NewClientQuestion(0x6190)
+	q.Writer().Write(encryptString(q.Seq, sjis(strings.Repeat("い", 33))))
+	c.send(q)
+	c.expect(0x6190, CategoryAnswer)
+
+	u, err := DefaultDB.GetUser(userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.Repeat("あ", 8); u.Name != want {
+		t.Errorf("name %q, want %q", u.Name, want)
+	}
+	if want := strings.Repeat("い", 32); u.Team != want {
+		t.Errorf("team %q, want %q", u.Team, want)
 	}
 }

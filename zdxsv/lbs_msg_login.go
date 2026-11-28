@@ -116,8 +116,8 @@ func NoticeUserIDList(p *LbsPeer, users []*DBUser) {
 
 var _ = register(0x6132, "DecideUserID", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
-	userID := r.ReadEncryptedString()
-	name := r.ReadEncryptedString()
+	userID := r.ReadEncryptedStringMax(maxUserIDLen)
+	name := r.ReadEncryptedStringMax(maxUserNameLen)
 	if !p.app.OnDecideUserID(p, userID, name) {
 		return
 	}
@@ -128,7 +128,7 @@ var _ = register(0x6132, "DecideUserID", func(p *LbsPeer, m *LbsMessage) {
 })
 
 var _ = register(0x6190, "DecideTeam", func(p *LbsPeer, m *LbsMessage) {
-	team := m.Reader().ReadEncryptedString()
+	team := m.Reader().ReadEncryptedStringMax(maxTeamLen)
 	p.app.OnDecideTeam(p, team)
 	p.SendMessage(NewServerAnswer(m))
 })
@@ -205,7 +205,7 @@ var _ = register(0x6146, "GetParsonalRecordVide", func(p *LbsPeer, m *LbsMessage
 
 var _ = register(0x6143, "SetUserBinary", func(p *LbsPeer, m *LbsMessage) {
 	r := m.Reader()
-	bin := r.ReadEncryptedString()
+	bin := r.ReadEncryptedStringMax(maxUserBinLen)
 	p.app.OnSetUserBinary(p, bin)
 	p.SendMessage(NewServerAnswer(m))
 })

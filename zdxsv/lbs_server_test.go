@@ -221,3 +221,30 @@ func TestLbsConnMessageSplitAcrossReads(t *testing.T) {
 		}
 	}
 }
+
+func TestLbsConnBodySizeNearLimit(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	peer := &recordingPeer{msgs: make(chan *LbsMessage, 4), closed: make(chan struct{})}
+	go NewLbsServer(peer).ServeConn(server)
+
+	big := (&LbsMessage{Direction: ClientToServer, Category: CategoryCustom, Command: 0x9952, Body: make([]byte, 0xFFF8)}).Serialize()
+	small := (&LbsMessage{Direction: ClientToServer, Category: CategoryCustom, Command: 0x9950, Body: []byte("a=1\n")}).Serialize()
+	go client.Write(append(big, small...))
+
+	for _, want := range []struct {
+		cmd  uint16
+		size int
+	}{{0x9952, 0xFFF8}, {0x9950, 4}} {
+		select {
+		case m := <-peer.msgs:
+			if m.Command != want.cmd || len(m.Body) != want.size {
+				t.Fatalf("got command %#x with %d bytes, want %#x with %d", m.Command, len(m.Body), want.cmd, want.size)
+			}
+		case <-peer.closed:
+			t.Fatalf("connection closed before command %#x", want.cmd)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no command %#x", want.cmd)
+		}
+	}
+}

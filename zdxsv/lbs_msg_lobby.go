@@ -145,7 +145,7 @@ var _ = register(0x6704, "SendMailMessage", func(p *LbsPeer, m *LbsMessage) {
 })
 
 var _ = register(0x6701, "SendChatMessage", func(p *LbsPeer, m *LbsMessage) {
-	p.app.OnSendChatMessage(p, m.Reader().ReadEncryptedString())
+	p.app.OnSendChatMessage(p, m.Reader().ReadEncryptedStringMax(maxChatLen))
 })
 
 func NoticeBothPlazaJoinUser(p *LbsPeer, id uint16, count uint16) {
