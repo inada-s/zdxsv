@@ -483,14 +483,17 @@ func TestReloadPatch(t *testing.T) {
 		patches, lobbies [][]string
 		want             string
 	}{
-		{[][]string{patchHeader, {"emu", "", "bad", "", "24,003080a0,0,1"}}, nil, `row 1: codes: line 1: size "24" is not 8, 16 or 32`},
-		{[][]string{patchHeader, {"emu", "", "a,b", "", codes}}, nil, `row 1: name "a,b" is empty or has a comma`},
-		{[][]string{patchHeader, {"emu", "", "x", "yes", codes}}, nil, `row 1: write_once "yes" is not TRUE, FALSE, 1 or 0`},
-		{[][]string{patchHeader, {"emu", "", "x", "", codes}, {"emu", "", "x", "", codes}}, nil, `row 2: patch emu x is also on row 1`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "bad", "", "24,003080a0,0,1"}}, nil, `row 1: codes: line 1: size "24" is not 8, 16 or 32`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "bad", "", "32,10003000,0,1"}}, nil, `row 1: codes: line 1: address "10003000" is outside EE main RAM 0x80000-0x1ffffff`},
+		{[][]string{patchHeader, {"emu", "", "once", "", codes}}, nil, `row 1: no game serial`},
+		{[][]string{{"platform", "name", "codes"}, {"emu", "once", codes}}, nil, `no column game`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "a,b", "", codes}}, nil, `row 1: name "a,b" is empty or has a comma`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "x", "yes", codes}}, nil, `row 1: write_once "yes" is not TRUE, FALSE, 1 or 0`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "x", "", codes}, {"emu", "SLPS-25419", "x", "", codes}}, nil, `row 2: patch emu x is also on row 1`},
 		{nil, [][]string{lobbyHeader, {"emu", "4", "nosuch"}}, `lobby emu 4: patch "nosuch" is not in m_patch`},
 		{nil, [][]string{lobbyHeader, {"console", "4", "once"}}, `lobby console 4: patch "once" is not in m_patch`},
 		{nil, [][]string{lobbyHeader, {"emu", "4", "once, once"}}, `lobby emu 4: patch "once" appears twice`},
-		{[][]string{patchHeader, {"emu", "", "frame", "", codes}}, nil, `lobby emu 2: patch "once" is not in m_patch`},
+		{[][]string{patchHeader, {"emu", "SLPS-25419", "frame", "", codes}}, nil, `lobby emu 2: patch "once" is not in m_patch`},
 	} {
 		r.sheets.sheets = sheets(c.patches, c.lobbies)
 		if msg := r.run("ops-user"); !strings.Contains(msg, c.want) {
@@ -554,7 +557,7 @@ func TestParseLobbySettingsShuffle(t *testing.T) {
 
 func TestParsePatchesWriteOnceNumbers(t *testing.T) {
 	codes := "32,003080a0,00000000,00000001"
-	got, err := ParsePatches([][]string{{"platform", "name", "write_once", "codes"}, {"emu", "a", "1", codes}, {"emu", "b", "0", codes}})
+	got, err := ParsePatches([][]string{{"platform", "game", "name", "write_once", "codes"}, {"emu", "SLPS-25419", "a", "1", codes}, {"emu", "SLPS-25419", "b", "0", codes}})
 	if err != nil {
 		t.Fatal(err)
 	}

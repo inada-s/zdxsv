@@ -109,8 +109,9 @@ type MLobbySetting struct {
 	Patches string `db:"patches"`
 }
 
-// MPatch is a game memory patch an emulator applies during a battle. Codes: one
-// "size,address,original,changed" line per code (size 8, 16 or 32), "#" lines are comments.
+// MPatch is a game memory patch an emulator applies during a battle to the disc serial Game
+// (required). Codes: one "size,address,original,changed" line per code (size 8, 16 or 32,
+// address in [GamePatchRAMBegin, GamePatchRAMEnd)), "#" lines are comments.
 type MPatch struct {
 	Platform  string `db:"platform"`
 	Game      string `db:"game"`

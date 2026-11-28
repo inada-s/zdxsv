@@ -848,10 +848,12 @@ func TestBattleGetUserByPosOutOfRange(t *testing.T) {
 func TestGamePatchNotice(t *testing.T) {
 	conn := UseTestDB(t)
 	for _, q := range []string{
-		`INSERT INTO m_lobby_setting (platform, no, start, patches) VALUES ('emu', 2, '1v1', 'once, frame'), ('console', 2, '1v1', 'once')`,
+		`INSERT INTO m_lobby_setting (platform, no, start, patches) VALUES ('emu', 2, '1v1', 'once, nogame, frame, kernel'), ('console', 2, '1v1', 'once')`,
 		`INSERT INTO m_patch (platform, game, name, write_once, codes) VALUES
 			('emu', 'SLPS-25419', 'once', 1, '# test' || char(10) || '32,0x003080a0,0x24020001,0x24020002' || char(10) || '8,1f0003,0,255'),
 			('emu', 'SLPS-25419', 'frame', 0, '16,00400000,0x1234,0xabcd'),
+			('emu', '', 'nogame', 0, '16,00400000,0,1'),
+			('emu', 'SLPS-25419', 'kernel', 0, '32,10003000,0,1'),
 			('console', 'SLPS-25419', 'once', 1, '32,003080a0,0,1')`,
 	} {
 		if _, err := conn.Exec(q); err != nil {
@@ -942,6 +944,13 @@ func TestParsePatchCodes(t *testing.T) {
 		{"32,zz,0,1", false},
 		{"32,003080a0,0,1,2", false},
 		{"32,0x100000000,0,1", false},
+		{"32,00080000,0,1", true},
+		{"8,01ffffff,0,1", true},
+		{"32,0007fffc,0,1", false},
+		{"8,02000000,0,1", false},
+		{"32,10003000,0,1", false},
+		{"32,80100000,0,1", false},
+		{"32,20100000,0,1", false},
 	} {
 		if _, err := ParsePatchCodes(c.codes); (err == nil) != c.ok {
 			t.Errorf("%q: error %v", c.codes, err)
