@@ -372,6 +372,27 @@ func TestLobbyOutdatedClient(t *testing.T) {
 	allowed(emu + "pcsx2=zdxsv-1.1.9\n")
 }
 
+// The version check runs on the platform info sent before the 0x6101 answer; platform info sent
+// after it is ignored.
+func TestPlatformInfoAfterLogin(t *testing.T) {
+	conn := UseTestDB(t)
+	if _, err := conn.Exec(`INSERT INTO m_server_setting (key, value) VALUES ('min_pcsx2_version', 'zdxsv-1.2.0')`); err != nil {
+		t.Fatal(err)
+	}
+	addr, app := startLobbyApp(t, NewMcs())
+	c := dialLobby(t, addr)
+	userID, _, _ := c.login(registerAccount(t), "******", "pilot")
+	c.sendCustom(0x9950, []byte("emulator=pcsx2\npcsx2=zdxsv-1.1.9\n"))
+	c.ask(0x6305, u16(1))
+	platform := map[string]string{}
+	for _, u := range app.Status().LobbyUsers {
+		platform[u.UserID] = u.Platform
+	}
+	if platform[userID] != PlatformConsole {
+		t.Fatalf("platforms after late platform info: %v", platform)
+	}
+}
+
 func TestCarryCodeCommand(t *testing.T) {
 	conn := UseTestDB(t)
 	if _, err := conn.Exec(`INSERT INTO m_lobby_setting (platform, no, start, explain, rule_id, hack) VALUES ('console', 1, '', '', '', 'chat_command')`); err != nil {
