@@ -120,7 +120,8 @@ func apiBodyMax(path string) int64 {
 }
 
 func readBody(w http.ResponseWriter, r *http.Request, max int64) bool {
-	http.NewResponseController(w).SetReadDeadline(time.Now().Add(apiReadTimeout))
+	rc := http.NewResponseController(w)
+	rc.SetReadDeadline(time.Now().Add(apiReadTimeout))
 	if r.ContentLength > max {
 		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return false
@@ -134,6 +135,9 @@ func readBody(w http.ResponseWriter, r *http.Request, max int64) bool {
 		}
 		return false
 	}
+	// A deadline left set expires in the connection's background read and cancels the
+	// context of every later request on the connection.
+	rc.SetReadDeadline(time.Time{})
 	r.Body = io.NopCloser(bytes.NewReader(b))
 	return true
 }
