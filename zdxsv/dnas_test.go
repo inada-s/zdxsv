@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -261,4 +262,53 @@ func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+type addrConn struct {
+	net.Conn
+	remote net.Addr
+}
+
+func (c addrConn) RemoteAddr() net.Addr { return c.remote }
+
+func registerOver443(t *testing.T, s *DnasServer, ip string) bool {
+	t.Helper()
+	cl, sv := net.Pipe()
+	defer cl.Close()
+	go func() {
+		s.serveHTTP(addrConn{Conn: sv, remote: &net.TCPAddr{IP: net.ParseIP(ip), Port: 40000}})
+		sv.Close()
+	}()
+	if _, err := io.WriteString(cl, "GET /00000020/register HTTP/1.0\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := io.ReadAll(cl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Contains(string(b), "<!--INPUT-IDS")
+}
+
+// TestServerRegisterPerClientIP: new accounts on the login pages are counted per client IP.
+func TestServerRegisterPerClientIP(t *testing.T) {
+	UseTestDB(t)
+	d, err := loadDnasData(fakeDnasData(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewDnasServer(d, "jp", newLoginHandler())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < AccountsPerIP; i++ {
+		if !registerOver443(t, s, "198.51.100.7") {
+			t.Fatalf("registration %d from the first IP refused", i+1)
+		}
+	}
+	if registerOver443(t, s, "198.51.100.7") {
+		t.Errorf("registration %d from the first IP accepted", AccountsPerIP+1)
+	}
+	if !registerOver443(t, s, "203.0.113.9") {
+		t.Error("registration from a second IP refused")
+	}
 }

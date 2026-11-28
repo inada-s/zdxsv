@@ -548,8 +548,8 @@ func (a *Lbs) noticeLobbyUserCountAll(platform string, lobbyID uint16) {
 }
 
 func (a *Lbs) OnPlatformInfo(p *LbsPeer, info map[string]string) {
-	if p.Lobby != nil || p.Room != nil || p.Battle != nil {
-		floodLog.Warn("platform info after lobby entry ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
+	if p.LoginKey != "" || p.Lobby != nil || p.Room != nil || p.Battle != nil {
+		floodLog.Warn("platform info after login ignored", zap.String("user_id", p.UserID), zap.Any("info", info))
 		return
 	}
 	p.PlatformInfo = info

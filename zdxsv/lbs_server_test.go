@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -60,37 +61,28 @@ func TestUDPStunFixture(t *testing.T) {
 }
 
 func TestUDPStunServer(t *testing.T) {
-	// a free port whose port + 1 is free too
-	var port int
-	for i := 0; i < 20 && port == 0; i++ {
+	var conn, testConn *net.UDPConn
+	for i := 0; i < 20 && testConn == nil; i++ {
 		a, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		p := a.LocalAddr().(*net.UDPAddr).Port
-		a.Close()
 		if b, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p + 1}); err == nil {
-			b.Close()
-			port = p
+			conn, testConn = a, b
+		} else {
+			a.Close()
 		}
 	}
-	srv := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}
-	go (&LbsServer{}).ServeUDPStunServer(srv.String())
-	test := &net.UDPAddr{IP: srv.IP, Port: port + 1}
-
-	// a client bound to port + 1 before the server would take its test socket
-	waitFor(t, "the stun test socket", func() bool {
-		probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer probe.Close()
-		if probe.LocalAddr().(*net.UDPAddr).Port == test.Port {
-			return false
-		}
-		stunPing(t, probe, test, "AAAAAA")
-		return len(stunPongs(t, probe, 20*time.Millisecond)) > 0
-	})
+	if testConn == nil {
+		t.Fatal("no free port pair")
+	}
+	defer conn.Close()
+	defer testConn.Close()
+	srv := conn.LocalAddr().(*net.UDPAddr)
+	port := srv.Port
+	go ServeUDPStun(conn, testConn)
+	go ServeUDPStun(testConn, nil)
 	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +90,7 @@ func TestUDPStunServer(t *testing.T) {
 	defer c.Close()
 	me := c.LocalAddr().String()
 
-	// plain Ping: one Pong, from the main socket
+	// plain Ping: one Pong, from the conn socket
 	stunPing(t, c, srv, "AAAAAA")
 	if got := stunPongs(t, c, 500*time.Millisecond); len(got) != 1 || got[port] != me {
 		t.Fatalf("plain ping: %v want only {%d:%s}", got, port, me)
@@ -109,7 +101,7 @@ func TestUDPStunServer(t *testing.T) {
 		t.Fatalf("udptest ping: %v want {%d:%s %d:%s}", got, port, me, port+1, me)
 	}
 	// the test socket answers Pings itself (the second mapping for the NAT type)
-	stunPing(t, c, test, "AAAAAA")
+	stunPing(t, c, testConn.LocalAddr().(*net.UDPAddr), "AAAAAA")
 	if got := stunPongs(t, c, 500*time.Millisecond); len(got) != 1 || got[port+1] != me {
 		t.Fatalf("test socket ping: %v want only {%d:%s}", got, port+1, me)
 	}
@@ -124,6 +116,79 @@ func (p *recordingPeer) OnOpen()                      {}
 func (p *recordingPeer) OnMessage(m *LbsMessage)      { p.msgs <- m }
 func (p *recordingPeer) OnClose()                     { close(p.closed) }
 func (p *recordingPeer) NewPeer(*LbsConn) LbsConnPeer { return p }
+
+type idlePeer struct{}
+
+func (idlePeer) OnOpen()                      {}
+func (idlePeer) OnMessage(*LbsMessage)        {}
+func (idlePeer) OnClose()                     {}
+func (idlePeer) NewPeer(*LbsConn) LbsConnPeer { return idlePeer{} }
+
+func setCaps(t *testing.T, max, perIP *int, m, p int) {
+	t.Helper()
+	oldMax, oldPerIP := *max, *perIP
+	*max, *perIP = m, p
+	t.Cleanup(func() { *max, *perIP = oldMax, oldPerIP })
+}
+
+func listenLoopback(t *testing.T) net.Listener {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	return ln
+}
+
+func dialFrom(t *testing.T, ip string, ln net.Listener) net.Conn {
+	t.Helper()
+	d := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(ip)}}
+	c, err := d.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
+
+// serverOpen is false once the server closed c, true while c stays open for d.
+func serverOpen(c net.Conn, d time.Duration) bool {
+	c.SetReadDeadline(time.Now().Add(d))
+	_, err := io.ReadFull(c, make([]byte, 1))
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		return true
+	}
+	return err == nil
+}
+
+func TestLbsConnCaps(t *testing.T) {
+	setCaps(t, &lbsMaxConns, &lbsMaxConnsPerIP, 3, 2)
+	ln := listenLoopback(t)
+	go NewLbsServer(idlePeer{}).Serve(ln)
+
+	open := func(ip string) bool { return serverOpen(dialFrom(t, ip, ln), 300*time.Millisecond) }
+	a1 := dialFrom(t, "127.0.0.1", ln)
+	if !serverOpen(a1, 300*time.Millisecond) || !open("127.0.0.1") {
+		t.Fatal("first two connections from one IP refused")
+	}
+	if open("127.0.0.1") {
+		t.Error("third connection from one IP accepted")
+	}
+	if !open("127.0.0.2") {
+		t.Fatal("connection from a second IP refused")
+	}
+	if open("127.0.0.3") {
+		t.Error("connection over the total cap accepted")
+	}
+	a1.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for !open("127.0.0.1") {
+		if time.Now().After(deadline) {
+			t.Fatal("closed connection's slot not released")
+		}
+	}
+}
 
 func TestLbsConnMessageSplitAcrossReads(t *testing.T) {
 	server, client := net.Pipe()

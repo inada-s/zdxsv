@@ -38,14 +38,6 @@ func (r *Router) helloTimeout() time.Duration {
 	return r.HelloTimeout
 }
 
-func (r *Router) ListenAndServe(addr string) error {
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("create listener: %s", err)
-	}
-	return r.Serve(l)
-}
-
 func (r *Router) Serve(l net.Listener) error {
 	for {
 		c, err := accept(l, "router")

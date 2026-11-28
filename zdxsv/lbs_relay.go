@@ -110,23 +110,14 @@ var (
 	RelayPublicAddr6 string
 )
 
-// ServeRelay runs the lobby's relay on addr (both IP families when addr has no host).
-func ServeRelay(addr, publicAddr, publicAddr6 string) error {
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
+// ServeRelay runs the lobby's relay on conn until it is closed.
+func ServeRelay(conn *net.UDPConn, publicAddr, publicAddr6 string) error {
 	r := NewRelay()
 	RelayPublicAddr, RelayPublicAddr6 = publicAddr, publicAddr6
 	LobbyRelay = r
-	logger.Info("start relay", zap.Any("addr", addr), zap.Any("public", publicAddr), zap.Any("public6", publicAddr6))
+	logger.Info("start relay", zap.Any("public", publicAddr), zap.Any("public6", publicAddr6))
 	r.serveMaintained(conn, relayMaintainInterval, r.RemoveStaleSessions)
-	return nil
+	return errors.New("relay stopped")
 }
 
 func (r *Relay) serveMaintained(conn *net.UDPConn, interval time.Duration, maintain func()) {
