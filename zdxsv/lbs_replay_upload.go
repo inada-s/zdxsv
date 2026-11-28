@@ -399,7 +399,8 @@ func replayRecorded(battleCode string) (bool, error) {
 	return false, nil
 }
 
-// parseUsedMs takes at most maxRounds rounds (the replay's round results) of at most the most players a rule allows.
+// parseUsedMs takes at most maxRounds rounds (the replay's round results, at most the longest series a rule
+// allows) of at most the most players a rule allows.
 func parseUsedMs(values []string, maxRounds int) ([][]int, error) {
 	if len(values) == 0 {
 		return nil, errors.New("no used_ms field")
@@ -411,17 +412,22 @@ func parseUsedMs(values []string, maxRounds int) ([][]int, error) {
 	if len(rounds) > maxRounds {
 		return nil, fmt.Errorf("used_ms of %d rounds, the replay has %d", len(rounds), maxRounds)
 	}
+	if len(rounds) > maxRuleValue(ruleBattleCount) {
+		return nil, fmt.Errorf("used_ms of %d rounds, a rule allows %d", len(rounds), maxRuleValue(ruleBattleCount))
+	}
 	for _, rd := range rounds {
-		if len(rd) > maxRulePlayers() {
+		if len(rd) > maxRuleValue(rulePlayerCount) {
 			return nil, fmt.Errorf("used_ms round of %d players", len(rd))
 		}
 	}
 	return rounds, nil
 }
 
-func maxRulePlayers() int {
+// maxRuleValue is the highest value of a rule. For ruleBattleCount it is also the series length of 任意 (0),
+// which ends after 10 battles.
+func maxRuleValue(ruleID int) int {
 	n := 0
-	for _, e := range ruleList[rulePlayerCount].List {
+	for _, e := range ruleList[ruleID].List {
 		n = max(n, int(e.Value))
 	}
 	return n

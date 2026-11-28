@@ -175,6 +175,23 @@ func TestAPIReplayUpload(t *testing.T) {
 		t.Errorf("upload after the retry: code %d", w.Code)
 	}
 
+	// used_ms of more rounds than a series can have is dropped, however many round_data the replay has
+	for rounds, want := range map[int]string{10: "3,3,3,3,3,3,3,3,3,3", 11: ""} {
+		os.RemoveAll(filepath.Join(dir, "replays"))
+		DefaultDB.SetReplayURL("C5678", "")
+		DefaultDB.SetUsedMs("C5678", "u1", 0, "")
+		usedMs := "[[3]"
+		for range rounds - 1 {
+			usedMs += ",[3]"
+		}
+		if w := do(replayUploadRequest(t, ok2, "C5678.pb", testReplay("C5678", 1000), "used_ms", usedMs+"]")); w.Code != 200 {
+			t.Errorf("used_ms of %d rounds: code %d %s", rounds, w.Code, w.Body.String())
+		}
+		if rs, _ := DefaultDB.GetBattleRecords("C5678"); rs[0].UsedMsList != want {
+			t.Errorf("used_ms of %d rounds saved as %q", rounds, rs[0].UsedMsList)
+		}
+	}
+
 	if w := do(httptest.NewRequest("GET", "/lbs/replay_upload", nil)); w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("GET code %d", w.Code)
 	}
