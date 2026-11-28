@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -30,6 +32,24 @@ func replayUploadRequest(t *testing.T, query, filename string, content []byte, f
 	req := httptest.NewRequest("POST", "/lbs/replay_upload?"+query, &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	return req
+}
+
+// testReplay: battle_code first, as a replay starts, then a varint, a fixed32 and rounds round_data entries.
+func testReplay(code string, rounds int) []byte {
+	b := append([]byte{0x1a, byte(len(code))}, code...)
+	b = append(b, 0x20, 0x96, 0x01, 0x2d, 1, 2, 3, 4)
+	for range rounds {
+		b = append(b, 0x92, 0x01, 2, 0x08, 0x01)
+	}
+	return b
+}
+
+func gzipped(b []byte) []byte {
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write(b)
+	zw.Close()
+	return gz.Bytes()
 }
 
 func TestAPIReplayUpload(t *testing.T) {
@@ -82,10 +102,30 @@ func TestAPIReplayUpload(t *testing.T) {
 		t.Fatalf("a refused upload was stored: %v %q", entries, replayURL("C1234"))
 	}
 
-	if w := do(replayUploadRequest(t, ok, "C1234.pb", []byte("replay-bytes"), "used_ms", "[[3,7]]")); w.Code != 200 {
+	pb := testReplay("C1234", 1)
+	huge := append(testReplay("C1234", 0), 0x3a)
+	huge = binary.AppendUvarint(huge, replayUploadMaxSize)
+	huge = append(huge, make([]byte, replayUploadMaxSize)...)
+	for name, body := range map[string][]byte{
+		"not a pb":           []byte("replay-bytes"),
+		"other battle":       testReplay("C5678", 1),
+		"truncated field":    append(testReplay("C1234", 1), 0x3a, 0x05, 'a'),
+		"truncated gzip":     gzipped(pb)[:len(gzipped(pb))-4],
+		"gzip trailing junk": append(gzipped(pb), 'x', 'x'),
+		"decoded over limit": gzipped(huge),
+	} {
+		if w := do(replayUploadRequest(t, ok, "C1234.pb", body, "used_ms", "[[3,7]]")); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: code %d %s", name, w.Code, w.Body.String())
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dir, "replays")); len(entries) != 0 || replayURL("C1234") != "" {
+		t.Fatalf("an invalid replay was stored: %v %q", entries, replayURL("C1234"))
+	}
+
+	if w := do(replayUploadRequest(t, ok, "C1234.pb", pb, "used_ms", "[[3,7]]")); w.Code != 200 {
 		t.Fatalf("code %d body %s", w.Code, w.Body.String())
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "replays", "C1234.pb")); string(b) != "replay-bytes" {
+	if b, _ := os.ReadFile(filepath.Join(dir, "replays", "C1234.pb")); !bytes.Equal(b, pb) {
 		t.Errorf("stored %q", b)
 	}
 	if u := replayURL("C1234"); u != "http://127.0.0.1:9881/lbs/replays/C1234.pb" {
@@ -95,15 +135,15 @@ func TestAPIReplayUpload(t *testing.T) {
 		t.Errorf("used_ms %q %q", rs[0].UsedMsList, rs[1].UsedMsList)
 	}
 	// the stored file is served at the recorded url's path
-	if w := do(httptest.NewRequest("GET", "/lbs/replays/C1234.pb", nil)); w.Code != 200 || w.Body.String() != "replay-bytes" {
+	if w := do(httptest.NewRequest("GET", "/lbs/replays/C1234.pb", nil)); w.Code != 200 || w.Body.String() != string(pb) {
 		t.Errorf("GET stored: code %d body %q", w.Code, w.Body.String())
 	}
 
 	// the same replay again: 409, kept as first stored (the client treats it as success)
-	if w := do(replayUploadRequest(t, ok, "C1234.pb", []byte("other"))); w.Code != http.StatusConflict {
+	if w := do(replayUploadRequest(t, ok, "C1234.pb", testReplay("C1234", 0))); w.Code != http.StatusConflict {
 		t.Errorf("second upload code %d", w.Code)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "replays", "C1234.pb")); string(b) != "replay-bytes" {
+	if b, _ := os.ReadFile(filepath.Join(dir, "replays", "C1234.pb")); !bytes.Equal(b, pb) {
 		t.Errorf("stored after the second upload %q", b)
 	}
 
@@ -111,8 +151,44 @@ func TestAPIReplayUpload(t *testing.T) {
 	for _, s := range []string{"-268435455", "4026531841"} {
 		os.RemoveAll(filepath.Join(dir, "replays"))
 		DefaultDB.SetReplayURL("C5678", "")
-		if w := do(replayUploadRequest(t, "battle_code=C5678&session_id="+s, "C5678.pb", []byte("y"))); w.Code != 200 || replayURL("C5678") == "" {
+		if w := do(replayUploadRequest(t, "battle_code=C5678&session_id="+s, "C5678.pb", testReplay("C5678", 0))); w.Code != 200 || replayURL("C5678") == "" {
 			t.Errorf("session %s: code %d %s", s, w.Code, w.Body.String())
+		}
+	}
+
+	// stored but its url not recorded: a retry records it (used_ms of more rounds than the replay is dropped)
+	os.RemoveAll(filepath.Join(dir, "replays"))
+	DefaultDB.SetReplayURL("C5678", "")
+	const ok2 = "battle_code=C5678&session_id=4026531841"
+	h.SetReplayURL = func(string, string) error { return errors.New("db down") }
+	if w := do(replayUploadRequest(t, ok2, "C5678.pb", testReplay("C5678", 1))); w.Code != http.StatusInternalServerError {
+		t.Errorf("SetReplayURL failure: code %d", w.Code)
+	}
+	h.SetReplayURL = nil
+	if w := do(replayUploadRequest(t, ok2, "C5678.pb", testReplay("C5678", 1), "used_ms", "[[3],[4]]")); w.Code != 200 || replayURL("C5678") == "" {
+		t.Errorf("retry after a SetReplayURL failure: code %d %s, url %q", w.Code, w.Body.String(), replayURL("C5678"))
+	}
+	if rs, _ := DefaultDB.GetBattleRecords("C5678"); rs[0].UsedMsList != "" {
+		t.Errorf("used_ms of 2 rounds for a 1 round replay saved as %q", rs[0].UsedMsList)
+	}
+	if w := do(replayUploadRequest(t, ok2, "C5678.pb", testReplay("C5678", 1))); w.Code != http.StatusConflict {
+		t.Errorf("upload after the retry: code %d", w.Code)
+	}
+
+	// used_ms of more rounds than a series can have is dropped, however many round_data the replay has
+	for rounds, want := range map[int]string{10: "3,3,3,3,3,3,3,3,3,3", 11: ""} {
+		os.RemoveAll(filepath.Join(dir, "replays"))
+		DefaultDB.SetReplayURL("C5678", "")
+		DefaultDB.SetUsedMs("C5678", "u1", 0, "")
+		usedMs := "[[3]"
+		for range rounds - 1 {
+			usedMs += ",[3]"
+		}
+		if w := do(replayUploadRequest(t, ok2, "C5678.pb", testReplay("C5678", 1000), "used_ms", usedMs+"]")); w.Code != 200 {
+			t.Errorf("used_ms of %d rounds: code %d %s", rounds, w.Code, w.Body.String())
+		}
+		if rs, _ := DefaultDB.GetBattleRecords("C5678"); rs[0].UsedMsList != want {
+			t.Errorf("used_ms of %d rounds saved as %q", rounds, rs[0].UsedMsList)
 		}
 	}
 

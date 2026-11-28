@@ -545,7 +545,7 @@ func battleRoundTrip(t *testing.T, lobbyID uint16, sides []byte, counted bool, s
 		h := &APIHandler{ReplayStore: &DirReplayStore{Dir: t.TempDir(), URL: "http://127.0.0.1/lbs/"}}
 		w := httptest.NewRecorder()
 		query := fmt.Sprintf("battle_code=%s&session_id=%d", battleCode, session)
-		h.ServeHTTP(w, replayUploadRequest(t, query, battleCode+".pb", []byte("replay"), "used_ms", string(ms)))
+		h.ServeHTTP(w, replayUploadRequest(t, query, battleCode+".pb", testReplay(battleCode, len(usedMs)), "used_ms", string(ms)))
 		if w.Code != 200 {
 			t.Fatalf("replay upload code %d body %s", w.Code, w.Body.String())
 		}
