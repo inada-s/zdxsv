@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -99,7 +101,51 @@ func (h *APIHandler) firstPlay(ip, battleCode string, now time.Time) bool {
 	return true
 }
 
+const apiFormBodyMax = 8 << 10
+
+var apiReadTimeout = 10 * time.Second
+
+// apiBodyMax is the largest body read in full for path; 0 for the streaming endpoints,
+// which bound their own bodies and have no read deadline.
+func apiBodyMax(path string) int64 {
+	switch path {
+	case "/lbs/live_stream", "/lbs/replay_upload":
+		return 0
+	case "/discord/interactions":
+		return interactionBodyMax
+	case RegisterProxyPath, BattleInfoPath:
+		return maxZproxyRequestBytes
+	}
+	return apiFormBodyMax
+}
+
+func readBody(w http.ResponseWriter, r *http.Request, max int64) bool {
+	rc := http.NewResponseController(w)
+	rc.SetReadDeadline(time.Now().Add(apiReadTimeout))
+	if r.ContentLength > max {
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		return false
+	}
+	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, max))
+	if err != nil {
+		if _, ok := err.(*http.MaxBytesError); ok {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "", http.StatusBadRequest)
+		}
+		return false
+	}
+	// A deadline left set expires in the connection's background read and cancels the
+	// context of every later request on the connection.
+	rc.SetReadDeadline(time.Time{})
+	r.Body = io.NopCloser(bytes.NewReader(b))
+	return true
+}
+
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if max := apiBodyMax(r.URL.Path); max > 0 && !readBody(w, r, max) {
+		return
+	}
 	if h.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
 		h.Auth.ServeHTTP(w, r)
 		return
