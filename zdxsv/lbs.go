@@ -200,6 +200,12 @@ var preLoginCommands = map[uint16]bool{
 	lbsRelayStatus: true,
 }
 
+var loginCommands = map[uint16]bool{
+	0x6101: true,
+	0x6103: true,
+	0x6132: true,
+}
+
 func (a *Lbs) loggedIn(p *LbsPeer) bool {
 	return p.UserID != "" && a.users[p.UserID] == p
 }
@@ -237,6 +243,11 @@ func (a *Lbs) Serve() {
 					continue
 				}
 				args.peer.lastRecvTime = time.Now()
+				if a.loggedIn(args.peer) && loginCommands[args.msg.Command] {
+					floodLog.Warn("login command from a logged-in peer, closing it", zap.Any("name", symbolMap[args.msg.Command]), zap.String("user_id", args.peer.UserID))
+					a.closePeer(args.peer)
+					continue
+				}
 				if !a.accepts(args.peer, args.msg.Command) {
 					floodLog.Warn("command before login ignored", zap.Any("name", symbolMap[args.msg.Command]), zap.Uint16("command", args.msg.Command), zap.Any("addr", args.peer.conn.Address()))
 					continue
