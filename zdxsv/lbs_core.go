@@ -1187,27 +1187,29 @@ func (a *Lbs) OnNoticeRoomBattleStart(p *LbsPeer) {
 		logger.Error("failed to start battle")
 		return
 	}
-	if len(inactive) == 0 {
-		return
+	for _, u := range active {
+		if peer, ok := a.users[u.UserID]; ok {
+			peer.Room = nil
+			peer.Entry = EntryNone
+		}
 	}
 	for _, u := range inactive {
-		r.Exit(u.UserID)
 		if peer, ok := a.users[u.UserID]; ok {
 			NoticeRemoveRoom(peer)
 			peer.Room = nil
 			peer.Entry = EntryNone
 		}
 	}
-	if !slices.ContainsFunc(r.Users, func(u *LbsUser) bool { return u.UserID == r.Owner }) && len(r.Users) > 0 {
-		r.Owner = r.Users[0].UserID
-	}
+	r.Remove()
 	if p.Lobby == nil {
 		return
 	}
 	for id := range p.Lobby.Users {
 		if peer, ok := a.users[id]; ok {
+			NoticeRoomName(peer, r.ID, r.Name)
 			NoticeRoomStatus(peer, r.ID, r.Status)
 			NoticeRoomUserCount(peer, r.ID, uint16(len(r.Users)))
+			NoticeRoomJoinInfo(peer, r.ID, r.MaxPlayer)
 		}
 	}
 }

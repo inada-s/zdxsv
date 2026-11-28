@@ -699,7 +699,9 @@ func TestLobbyRoomOwner(t *testing.T) {
 	}
 
 	owner.ask(0x6407, u16(roomID))
-	enterRoom(guest, roomID, "")
+	if a := enterRoom(guest, roomID, ""); a.Status != StatusError {
+		t.Errorf("enter a room being prepared: status %x", a.Status)
+	}
 	if n := roomUserCount(owner, roomID); n != 0 {
 		t.Errorf("entered a room being prepared: %d users", n)
 	}
@@ -744,12 +746,56 @@ func TestLobbyRoomOwner(t *testing.T) {
 		}
 	}
 	watcher.expect(0x6505, CategoryNotice)
-	if n := roomUserCount(watcher, roomID); n != 2 {
-		t.Errorf("room users after start %d, want 2", n)
+	if s := roomStatus(watcher, roomID); s != RoomStateEmpty {
+		t.Errorf("room status after start %d", s)
+	}
+	if n := roomUserCount(watcher, roomID); n != 0 {
+		t.Errorf("room users after start %d", n)
 	}
 	decide(watcher, 0x6609, "hijack")
-	if name := watcher.ask(0x6402, u16(roomID)).Reader(); name.Read16() != roomID || name.ReadString() != "testroom" {
+	if name := watcher.ask(0x6402, u16(roomID)).Reader(); name.Read16() != roomID || name.ReadString() == "hijack" {
 		t.Errorf("removed member renamed the room")
+	}
+}
+
+// The owner starts a battle it takes no side in: the room ends, and players on
+// the way to the battle are not told it was removed.
+func TestLobbyRoomStartOwnerWithoutSide(t *testing.T) {
+	UseTestDB(t)
+	addr := startLobby(t, NewMcs())
+
+	const lobbyID, roomID = 4, 1
+	var cs []*testClient
+	for i := 0; i < 3; i++ {
+		c := dialLobby(t, addr)
+		c.login(registerAccount(t), "******", fmt.Sprintf("pilot%d", i))
+		c.ask(0x6305, u16(lobbyID))
+		cs = append(cs, c)
+	}
+	owner, players := cs[0], cs[1:]
+	owner.ask(0x6407, u16(roomID))
+	owner.ask(0x660C, nil)
+	for i, c := range players {
+		if a := enterRoom(c, roomID, ""); a.Status != StatusSuccess {
+			t.Fatalf("player %d enter status %x", i, a.Status)
+		}
+	}
+	players[0].ask(0x6504, []byte{EntryAeug})
+	players[1].ask(0x6504, []byte{EntryTitans})
+	owner.send(NewClientNotice(0x6508))
+	owner.expect(0x6505, CategoryNotice)
+	for _, c := range players {
+		c.expect(0x6910, CategoryNotice)
+	}
+	if s := roomStatus(owner, roomID); s != RoomStateEmpty {
+		t.Errorf("room status after start %d", s)
+	}
+	players[0].ask(0x6002, nil)
+	players[1].ask(0x6914, nil)
+	for _, m := range players[1].queue {
+		if m.Command == 0x6505 {
+			t.Errorf("a player on the way to the battle was told the room was removed")
+		}
 	}
 }
 
