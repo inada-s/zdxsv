@@ -283,7 +283,12 @@ var _ = register(0x6406, "EnterRoom", func(p *LbsPeer, m *LbsMessage) {
 		p.SendMessage(a)
 		return
 	}
-	p.app.OnEnterRoom(p, roomID)
+	if !p.app.OnEnterRoom(p, roomID) {
+		a.Status = StatusError
+		a.Writer().WriteString("<B>入室できません<B>")
+		p.SendMessage(a)
+		return
+	}
 	floodLog.Info("EnterRoom", zap.Any("room_id", roomID))
 	p.SendMessage(a)
 })
