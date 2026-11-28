@@ -12,13 +12,25 @@ import (
 
 const (
 	requiredVersion = 1008
+
+	proxyRegistersPerIP   = 30
+	proxyBattleInfosPerIP = 30
+	maxProxyP2PConnected  = 256
 )
 
-// RegisterProxy registers the zproxy at ip for the lobby user UserID, or for UserID _AUTO_
-// the only lobby user connected from ip. The lobby host's own addresses count as one host.
+// RegisterProxy registers the zproxy at ip for the lobby user connected from the same host:
+// the one with UserID, or for UserID _AUTO_ the only one. The lobby host's own addresses
+// count as one host. The answer carries the user's session ID, the battle server's only
+// credential, so the lobby connection's host is the proof that the caller is the user.
 func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxyResponse {
-	floodLog.Info("RegisterProxyRequest", zap.String("addr", ip), zap.Any("req", req))
+	floodLog.Info("RegisterProxyRequest", zap.String("addr", ip), zap.String("user_id", req.UserID))
 	res := new(RegisterProxyResponse)
+
+	if !a.proxyLimit.allow(net.ParseIP(ip), time.Now()) {
+		res.Result = false
+		res.Message = "登録要求が多すぎます. しばらく待ってください"
+		return res
+	}
 
 	if req.CurrentVersion < requiredVersion {
 		res.Result = false
@@ -47,12 +59,29 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		return res
 	}
 
+	if len(req.P2PConnected) > maxProxyP2PConnected {
+		res.Result = false
+		res.Message = "P2P接続情報が多すぎます"
+		return res
+	}
+
 	a.Locked(func(app *Lbs) {
 		var found []*LbsPeer
+		elsewhere := false
 		for _, peer := range app.users {
-			if peer.UserID == req.UserID || (req.UserID == "_AUTO_" && sameHost(net.ParseIP(peer.IP()), remote)) {
-				found = append(found, peer)
+			if req.UserID != "_AUTO_" && peer.UserID != req.UserID {
+				continue
 			}
+			if !sameHost(net.ParseIP(peer.IP()), remote) {
+				elsewhere = elsewhere || peer.UserID == req.UserID
+				continue
+			}
+			found = append(found, peer)
+		}
+		if elsewhere {
+			res.Result = false
+			res.Message = "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください. PCでVPNを使っている場合はVPNを切ってください"
+			return
 		}
 		if len(found) == 0 {
 			res.Result = false
@@ -66,7 +95,6 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		}
 		userPeer := found[0]
 
-		userPeer.proxyHost = remote
 		userPeer.proxyIP = localIP
 		userPeer.proxyPort = req.Port
 		userPeer.proxyRegTime = time.Now()
@@ -82,8 +110,9 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 				Team:   u.Team,
 				UDP:    time.Since(u.proxyRegTime).Seconds() < 20,
 			}
+			uHost := net.ParseIP(u.IP())
 			for _, addr := range u.proxyUDPAddrs {
-				if lanIP(udpAddrIP(addr)) && !sameHost(u.proxyHost, remote) {
+				if lanIP(udpAddrIP(addr)) && !sameHost(uHost, remote) {
 					continue
 				}
 				user.UDPAddrs = append(user.UDPAddrs, addr)
@@ -91,7 +120,7 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 			res.LobbyUsers = append(res.LobbyUsers, user)
 		}
 		res.Message = "登録成功"
-		logger.Info("register zproxy", zap.String("user_id", userPeer.UserID), zap.Any("session_id", userPeer.SessionID))
+		floodLog.Info("register zproxy", zap.String("user_id", userPeer.UserID))
 	})
 	return res
 }
@@ -167,9 +196,15 @@ func sameHost(a, b net.IP) bool {
 }
 
 // BattleInfo is the battle of the zproxy whose user has session req.SessionID.
-func (a *Lbs) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
-	floodLog.Info("BattleInfoRequest", zap.Any("req", req))
+func (a *Lbs) BattleInfo(ip string, req *BattleInfoRequest) *BattleInfoResponse {
+	floodLog.Info("BattleInfoRequest", zap.String("addr", ip))
 	res := new(BattleInfoResponse)
+
+	if !a.battleInfoLimit.allow(net.ParseIP(ip), time.Now()) {
+		res.Result = false
+		res.Message = "要求が多すぎます. しばらく待ってください"
+		return res
+	}
 
 	if req.SessionID == "" {
 		res.Result = false

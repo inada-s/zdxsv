@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // zproxyAPI is the lobby API as zproxy reaches it: through the reverse proxy on the lobby
@@ -75,6 +76,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 	}
 	addr, app := startLobbyApp(t, NewMcs())
 	api := newZproxyAPI(app)
+	app.proxyLimit = &ipLimiter{window: time.Hour, perIP: 1000}
 
 	type player struct {
 		c      *testClient
@@ -176,25 +178,46 @@ func TestZproxyAPIFlow(t *testing.T) {
 	for _, c := range []struct{ ip, userID, msg string }{
 		{"203.0.113.9", "_AUTO_", "ロビーにユーザが見つかりません"},
 		{"203.0.113.9", "NOUSER", "ロビーにユーザが見つかりません"},
+		{"203.0.113.9", p0.userID, "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください. PCでVPNを使っている場合はVPNを切ってください"},
 		{"2001:db8::1", "_AUTO_", "無効なグローバルIPアドレスです"},
 	} {
 		far.ip = c.ip
 		req := good
 		req.UserID = c.userID
-		if res := far.register(t, &req); res.Result || res.Message != c.msg {
+		req.UDPAddrs = []string{"198.51.100.9:9000"}
+		if res := far.register(t, &req); res.Result || res.Message != c.msg || res.SessionID != "" {
 			t.Errorf("register %s from %s: %+v", c.userID, c.ip, res)
 		}
 	}
-	// A zproxy on another host than its user, behind a NAT whose UDP public IP is not its HTTP one.
-	far.ip = "203.0.113.9"
-	moved := good
-	moved.UDPAddrs = []string{"192.168.0.10:9000", "198.51.100.7:9000"}
-	if res := far.register(t, &moved); !res.Result || res.UserID != p0.userID {
-		t.Fatalf("register from another host: %+v", res)
+	if u := findUser(api.register(t, &second).LobbyUsers, p0.userID); u == nil || !reflect.DeepEqual(u.UDPAddrs, good.UDPAddrs) {
+		t.Errorf("registration from another host changed the user's zproxy: %+v", u)
 	}
-	res = api.register(t, &second)
-	if u := findUser(res.LobbyUsers, p0.userID); !res.Result || u == nil || !reflect.DeepEqual(u.UDPAddrs, []string{"198.51.100.7:9000"}) {
-		t.Errorf("zproxy on another host seen from the lobby host: %+v", res)
+	// Behind a NAT whose UDP public IP is not its HTTP one.
+	stun := good
+	stun.UDPAddrs = []string{"192.168.0.10:9000", "198.51.100.7:9000"}
+	if res := api.register(t, &stun); !res.Result || res.UserID != p0.userID {
+		t.Fatalf("register with a STUN address at another IP: %+v", res)
+	}
+	if u := findUser(api.register(t, &second).LobbyUsers, p0.userID); u == nil || !reflect.DeepEqual(u.UDPAddrs, stun.UDPAddrs) {
+		t.Errorf("STUN address seen from the host: %+v", u)
+	}
+	flood := second
+	flood.P2PConnected = map[string]struct{}{}
+	for i := 0; i <= maxProxyP2PConnected; i++ {
+		flood.P2PConnected[fmt.Sprintf("198.51.100.%d:%d", i%256, 9000+i)] = struct{}{}
+	}
+	if res := api.register(t, &flood); res.Result || res.Message != "P2P接続情報が多すぎます" {
+		t.Errorf("register with %d p2p entries: %+v", len(flood.P2PConnected), res)
+	}
+	app.proxyLimit = &ipLimiter{window: time.Hour, perIP: proxyRegistersPerIP}
+	far.ip = "203.0.113.11"
+	for i := 0; i < proxyRegistersPerIP; i++ {
+		if res := far.register(t, &auto); res.Message != "ロビーにユーザが見つかりません" {
+			t.Fatalf("register %d from one IP: %+v", i, res)
+		}
+	}
+	if res := far.register(t, &auto); res.Result || res.Message != "登録要求が多すぎます. しばらく待ってください" {
+		t.Errorf("register over the limit: %+v", res)
 	}
 
 	st := app.Status()
@@ -228,6 +251,18 @@ func TestZproxyAPIFlow(t *testing.T) {
 		if res := api.battleInfo(t, sid); res.Result {
 			t.Errorf("battle info for session %q: %+v", sid, res)
 		}
+	}
+	app.battleInfoLimit = &ipLimiter{window: time.Hour, perIP: proxyBattleInfosPerIP}
+	for i := 0; i < proxyBattleInfosPerIP; i++ {
+		if res := far.battleInfo(t, fmt.Sprint(1000000+i)); res.Message != "対戦情報が見つかりません." {
+			t.Fatalf("battle info %d from one IP: %+v", i, res)
+		}
+	}
+	if res := far.battleInfo(t, p0.ac.SessionID); res.Result || res.Message != "要求が多すぎます. しばらく待ってください" {
+		t.Errorf("battle info over the limit: %+v", res)
+	}
+	if res := api.battleInfo(t, p0.ac.SessionID); !res.Result {
+		t.Errorf("battle info from another IP while one is limited: %+v", res)
 	}
 
 	st = app.Status()
