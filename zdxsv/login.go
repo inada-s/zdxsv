@@ -36,7 +36,7 @@ func handleAssets(w http.ResponseWriter, r *http.Request) {
 
 	bin, err := Asset(r.URL.Path[1:])
 	if err != nil {
-		logger.Error("login server failure", zap.Error(err))
+		floodLog.Info("login asset not found", zap.String("path", r.URL.Path))
 		w.WriteHeader(404)
 		return
 	}

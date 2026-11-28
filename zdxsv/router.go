@@ -92,6 +92,10 @@ func (c *RouterConn) logf(msg string, args ...interface{}) {
 
 func (c *RouterConn) abort(alert byte, msg string, args ...interface{}) {
 	c.logf(msg, args...)
+	c.sendAlert(alert)
+}
+
+func (c *RouterConn) sendAlert(alert byte) {
 	alertMsg := []byte{21, 3, byte(c.tlsMinor), 0, 2, 2, alert}
 
 	if err := c.SetWriteDeadline(time.Now().Add(c.router.helloTimeout())); err != nil {
@@ -144,7 +148,8 @@ func (c *RouterConn) proxy() {
 
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
 	if err != nil {
-		c.internalError("failed to dial backend %q: %s", c.backend, err)
+		floodLog.Error("router failed to dial backend", zap.Stringer("remote", c.RemoteAddr()), zap.String("backend", c.backend), zap.Error(err))
+		c.sendAlert(80)
 		return
 	}
 	defer backend.Close()

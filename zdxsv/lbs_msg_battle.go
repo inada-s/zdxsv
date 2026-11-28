@@ -152,7 +152,7 @@ var _ = register(0x6916, "GetBattleServerAddress", func(p *LbsPeer, m *LbsMessag
 		p.SendMessage(n)
 	}
 	if n := battleInfoNotice(p.app.OnGetBattleInfo(p)); n != nil {
-		logger.Info("udp bridge battle info", zap.String("user_id", p.UserID))
+		floodLog.Info("udp bridge battle info", zap.String("user_id", p.UserID))
 		p.SendMessage(n)
 	}
 	a := NewServerAnswer(m)
