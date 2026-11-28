@@ -60,10 +60,10 @@ type APIHandler struct {
 	Auth http.Handler
 	// Discord serves POST /discord/interactions (chatops.Discord), off when nil.
 	Discord http.Handler
-	// RegisterProxy and BattleInfo answer zproxy (Lbs methods), off when nil. RegisterProxy
-	// gets the client's IP.
+	// RegisterProxy and BattleInfo answer zproxy (Lbs methods), off when nil. Both get the
+	// client's IP.
 	RegisterProxy func(ip string, req *RegisterProxyRequest) *RegisterProxyResponse
-	BattleInfo    func(req *BattleInfoRequest) *BattleInfoResponse
+	BattleInfo    func(ip string, req *BattleInfoRequest) *BattleInfoResponse
 
 	statusMu   sync.Mutex
 	statusAt   time.Time
@@ -117,7 +117,7 @@ func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.BattleInfo != nil && r.URL.Path == BattleInfoPath {
-		serveJSON(w, r, func(req *BattleInfoRequest) any { return h.BattleInfo(req) })
+		serveJSON(w, r, func(req *BattleInfoRequest) any { return h.BattleInfo(requestIP(r), req) })
 		return
 	}
 	if r.URL.Path == "/lbs/live" {

@@ -105,6 +105,7 @@ type Lbs struct {
 	relayPeers         map[*LbsPeer]*RegionalRelay
 	carryCode          func(loginKey string) string
 	proxyLimit         *ipLimiter
+	battleInfoLimit    *ipLimiter
 }
 
 const (
@@ -125,6 +126,7 @@ func NewLbs() *Lbs {
 		chQuit:             make(chan interface{}),
 		aliveCheckInterval: 10 * time.Second,
 		proxyLimit:         &ipLimiter{window: 10 * time.Second, perIP: proxyRegistersPerIP},
+		battleInfoLimit:    &ipLimiter{window: 10 * time.Second, perIP: proxyBattleInfosPerIP},
 	}
 	app.getLobby(PlatformConsole, 0)
 	app.getLobby(PlatformEmu, 0)

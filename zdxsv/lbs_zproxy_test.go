@@ -178,7 +178,7 @@ func TestZproxyAPIFlow(t *testing.T) {
 	for _, c := range []struct{ ip, userID, msg string }{
 		{"203.0.113.9", "_AUTO_", "ロビーにユーザが見つかりません"},
 		{"203.0.113.9", "NOUSER", "ロビーにユーザが見つかりません"},
-		{"203.0.113.9", p0.userID, "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください"},
+		{"203.0.113.9", p0.userID, "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください. PCでVPNを使っている場合はVPNを切ってください"},
 		{"2001:db8::1", "_AUTO_", "無効なグローバルIPアドレスです"},
 	} {
 		far.ip = c.ip
@@ -251,6 +251,18 @@ func TestZproxyAPIFlow(t *testing.T) {
 		if res := api.battleInfo(t, sid); res.Result {
 			t.Errorf("battle info for session %q: %+v", sid, res)
 		}
+	}
+	app.battleInfoLimit = &ipLimiter{window: time.Hour, perIP: proxyBattleInfosPerIP}
+	for i := 0; i < proxyBattleInfosPerIP; i++ {
+		if res := far.battleInfo(t, fmt.Sprint(1000000+i)); res.Message != "対戦情報が見つかりません." {
+			t.Fatalf("battle info %d from one IP: %+v", i, res)
+		}
+	}
+	if res := far.battleInfo(t, p0.ac.SessionID); res.Result || res.Message != "要求が多すぎます. しばらく待ってください" {
+		t.Errorf("battle info over the limit: %+v", res)
+	}
+	if res := api.battleInfo(t, p0.ac.SessionID); !res.Result {
+		t.Errorf("battle info from another IP while one is limited: %+v", res)
 	}
 
 	st = app.Status()

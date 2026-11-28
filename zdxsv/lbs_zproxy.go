@@ -13,8 +13,9 @@ import (
 const (
 	requiredVersion = 1008
 
-	proxyRegistersPerIP  = 30
-	maxProxyP2PConnected = 256
+	proxyRegistersPerIP   = 30
+	proxyBattleInfosPerIP = 30
+	maxProxyP2PConnected  = 256
 )
 
 // RegisterProxy registers the zproxy at ip for the lobby user connected from the same host:
@@ -79,7 +80,7 @@ func (a *Lbs) RegisterProxy(ip string, req *RegisterProxyRequest) *RegisterProxy
 		}
 		if elsewhere {
 			res.Result = false
-			res.Message = "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください"
+			res.Message = "ユーザは別のIPアドレスからロビーに接続しています. PS2と同じネットワークでプロキシを起動してください. PCでVPNを使っている場合はVPNを切ってください"
 			return
 		}
 		if len(found) == 0 {
@@ -195,9 +196,15 @@ func sameHost(a, b net.IP) bool {
 }
 
 // BattleInfo is the battle of the zproxy whose user has session req.SessionID.
-func (a *Lbs) BattleInfo(req *BattleInfoRequest) *BattleInfoResponse {
-	floodLog.Info("BattleInfoRequest", zap.Any("req", req))
+func (a *Lbs) BattleInfo(ip string, req *BattleInfoRequest) *BattleInfoResponse {
+	floodLog.Info("BattleInfoRequest", zap.String("addr", ip))
 	res := new(BattleInfoResponse)
+
+	if !a.battleInfoLimit.allow(net.ParseIP(ip), time.Now()) {
+		res.Result = false
+		res.Message = "要求が多すぎます. しばらく待ってください"
+		return res
+	}
 
 	if req.SessionID == "" {
 		res.Result = false
