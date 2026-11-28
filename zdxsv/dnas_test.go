@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -18,8 +19,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // query is golden.py's query().
@@ -216,6 +221,47 @@ func TestServer(t *testing.T) {
 	if status != 200 || string(got) != "login /CRS-top.jsp" {
 		t.Errorf("login pages: status %d %q", status, got)
 	}
+}
+
+func TestServerMasksLoginKeyInLog(t *testing.T) {
+	d, err := loadDnasData(fakeDnasData(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf syncBuffer
+	saved, savedFlood := logger, floodLog
+	logger = zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&buf), zap.InfoLevel))
+	floodLog = &logLimiter{counts: map[string]*logCount{}}
+	t.Cleanup(func() { logger, floodLog = saved, savedFlood })
+
+	addr := startServer(t, d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	if status, _ := dialQuery(t, addr, "GET", "/00000020/CRS-top.jsp?login_key=SECRETKEY99", nil); status != 200 {
+		t.Fatalf("status %d", status)
+	}
+	log := buf.String()
+	if strings.Contains(log, "SECRETKEY99") {
+		t.Errorf("login_key in log: %s", log)
+	}
+	if !strings.Contains(log, `"login_key":["SEC********"]`) {
+		t.Errorf("no masked login_key in log: %s", log)
+	}
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }
 
 type addrConn struct {

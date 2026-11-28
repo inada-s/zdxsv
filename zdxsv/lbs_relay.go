@@ -288,7 +288,7 @@ func (r *Relay) handlePing(p []byte, from netip.AddrPort) (netip.AddrPort, []byt
 		}
 		sp.addrs[relayFamily(from)] = from
 		r.bindings[from] = relayBinding{session: s, peer: peer}
-		logger.Info("relay peer bound", zap.Any("session_id", sessionID), zap.Any("peer", peer), zap.Stringer("addr", from))
+		floodLog.Info("relay peer bound", zap.Any("session_id", sessionID), zap.Any("peer", peer), zap.Stringer("addr", from))
 	}
 	// a ping only moves the player while it is not sending game packets yet: a ping over
 	// the other family must not steal the path its game packets use

@@ -218,11 +218,11 @@ func (s *DnasServer) handleDNAS(w http.ResponseWriter, r *http.Request) {
 		ans, note = s.data.Answer(gw, false, q)
 	}
 	if ans == nil {
-		logger.Info("dnas 404", zap.String("method", r.Method), zap.Stringer("url", r.URL))
+		floodLog.Info("dnas 404", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Int("q", len(r.URL.RawQuery)))
 		http.NotFound(w, r)
 		return
 	}
-	logger.Info("dnas request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Int("q", len(q)), zap.Any("note", note), zap.Int("bytes", len(ans)))
+	floodLog.Info("dnas request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Int("q", len(q)), zap.Any("note", note), zap.Int("bytes", len(ans)))
 	w.Header().Set("Content-Type", "image/gif")
 	w.Write(ans)
 }
@@ -245,7 +245,7 @@ func (s *DnasServer) serveConn(c net.Conn) {
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	tc := &tlsConn{Conn: c, cfg: s.tls}
 	if err := tc.handshake(); err != nil {
-		logger.Info("dnas handshake failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
+		floodLog.Info("dnas handshake failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
 		return
 	}
 	c.SetDeadline(time.Time{})
@@ -264,12 +264,12 @@ func (s *DnasServer) serveHTTP(c net.Conn) {
 		req, err := http.ReadRequest(br)
 		if err != nil {
 			if err != io.EOF {
-				logger.Info("dnas read request failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
+				floodLog.Info("dnas read request failed", zap.Stringer("addr", c.RemoteAddr()), zap.Error(err))
 			}
 			return
 		}
 		req.RemoteAddr = c.RemoteAddr().String()
-		logger.Info("dnas https request", zap.Stringer("addr", c.RemoteAddr()), zap.String("method", req.Method), zap.Stringer("url", req.URL), zap.String("ua", req.UserAgent()))
+		floodLog.Info("dnas https request", zap.Stringer("addr", c.RemoteAddr()), zap.String("method", req.Method), zap.String("path", req.URL.Path), zap.Any("query", logForm(req.URL.Query())), zap.String("ua", req.UserAgent()))
 		rw := &respWriter{h: http.Header{}}
 		s.mux.ServeHTTP(rw, req)
 		if _, err := c.Write(rw.bytes()); err != nil || req.Close || req.ProtoMinor == 0 || lr.N <= 0 {

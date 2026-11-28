@@ -62,7 +62,7 @@ func IsGameConsoleHello(r io.Reader) bool {
 		return false
 	}
 
-	logger.Info("router header", zap.Any("hdr", hdr))
+	floodLog.Info("router header", zap.Any("hdr", hdr))
 
 	// FIXME: more strict validation.
 	return hdr.Type == 128 && hdr.Major == 100 && hdr.Minor == 1 && hdr.Length == 769
@@ -79,11 +79,15 @@ type RouterConn struct {
 
 func (c *RouterConn) logf(msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
-	logger.Info("router", zap.Stringer("remote", c.RemoteAddr()), zap.Stringer("local", c.LocalAddr()), zap.Any("msg", msg))
+	floodLog.Info("router", zap.Stringer("remote", c.RemoteAddr()), zap.Stringer("local", c.LocalAddr()), zap.Any("msg", msg))
 }
 
 func (c *RouterConn) abort(alert byte, msg string, args ...interface{}) {
 	c.logf(msg, args...)
+	c.sendAlert(alert)
+}
+
+func (c *RouterConn) sendAlert(alert byte) {
 	alertMsg := []byte{21, 3, byte(c.tlsMinor), 0, 2, 2, alert}
 
 	if err := c.SetWriteDeadline(time.Now().Add(c.router.helloTimeout())); err != nil {
@@ -136,7 +140,8 @@ func (c *RouterConn) proxy() {
 
 	backend, err := net.DialTimeout("tcp", c.backend, 10*time.Second)
 	if err != nil {
-		c.internalError("failed to dial backend %q: %s", c.backend, err)
+		floodLog.Error("router failed to dial backend", zap.Stringer("remote", c.RemoteAddr()), zap.String("backend", c.backend), zap.Error(err))
+		c.sendAlert(80)
 		return
 	}
 	defer backend.Close()
@@ -157,7 +162,7 @@ func (c *RouterConn) proxy() {
 	// Replay the piece of the handshake we had to read to do the
 	// routing, then blindly proxy any other bytes.
 	n, err := io.Copy(backend, &tmpBuf)
-	logger.Info("router written", zap.Int64("bytes", n))
+	floodLog.Info("router written", zap.Int64("bytes", n))
 	if err != nil {
 		c.internalError("failed to replay handshake to %q: %s", c.backend, err)
 		return
@@ -188,7 +193,7 @@ type halfCloser interface {
 func proxy(wg *sync.WaitGroup, a, b net.Conn) {
 	defer wg.Done()
 	if _, err := io.Copy(a, b); err != nil {
-		logger.Info("router pipe closed", zap.Stringer("a_remote", a.RemoteAddr()), zap.Stringer("a_local", a.LocalAddr()), zap.Stringer("b_local", b.LocalAddr()), zap.Stringer("b_remote", b.RemoteAddr()), zap.Error(err))
+		floodLog.Info("router pipe closed", zap.Stringer("a_remote", a.RemoteAddr()), zap.Stringer("a_local", a.LocalAddr()), zap.Stringer("b_local", b.LocalAddr()), zap.Stringer("b_remote", b.RemoteAddr()), zap.Error(err))
 	}
 	if h, ok := a.(halfCloser); ok {
 		h.CloseWrite()
